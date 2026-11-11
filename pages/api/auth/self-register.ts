@@ -8,6 +8,7 @@ import {
   findCourseRun, enrolLearner, logEnrolmentAttempt, ensureSigninRequestTable, SIGNIN_REQUEST_REASONS,
   sendWelcomeSigninEmail, loginUrlFrom,
 } from '@lib/learner/selfEnrolment';
+import { validateRegistrationEmail, validateCourseRunId } from '@lib/learner/registrationValidation';
 
 // POST { fullName, email, courseRunId, phone? }
 // PUBLIC (login screen): a learner who can't get their OTP or can't see their class
@@ -72,11 +73,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (fullName.length < 2 || fullName.length > 120) {
     return res.status(400).json({ success: false, error: 'Please enter your full name as shown on your NRIC / passport.' });
   }
-  if (!email) {
-    return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+  const emailError = validateRegistrationEmail(typeof req.body?.email === 'string' ? req.body.email : '');
+  if (!email || emailError) {
+    return res.status(400).json({ success: false, error: emailError || 'Please enter a valid email address.' });
   }
-  if (!/^[A-Za-z0-9-]{1,100}$/.test(courseRunId)) {
-    return res.status(400).json({ success: false, error: 'Please enter a valid Course Run ID.' });
+  const runIdError = validateCourseRunId(courseRunId);
+  if (runIdError) {
+    return res.status(400).json({ success: false, error: runIdError });
   }
   if (rawPhone && !/^\+?[0-9 ()-]{6,20}$/.test(rawPhone)) {
     return res.status(400).json({ success: false, error: 'Please enter a valid mobile number, or leave it blank.' });

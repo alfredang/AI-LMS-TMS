@@ -226,7 +226,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Useful Links** — SSG API Portal, SSG Developer quick access
 
 ### Learner Support Features
-- **Self-service sign-in fix** — On the login page, a learner who can't get their OTP or can't see their class enters Name, Email and Course Run ID. The system creates their account if needed, enrols them, emails a welcome (OTP-first, with a must-change backup password for new accounts) and sends the OTP straight away. Cases it can't fix (unknown/expired run, inactive account, withdrawn enrolment) go to **Admin → Support Tickets → Sign-in Requests** with one-click *Enrol & notify*. Self-enrolled learners often have no NRIC on file, so their attendance placeholders are keyed to their account; the SSG attendance sync (nightly `auto-sync-attendance` and the trainer's *Sync from SSG*) links each SSG record to the learner enrolled in that run with the same email, backfills their NRIC and replaces the placeholder (`lib/ssg/utils/upsertSsgAttendance.ts`), so the 6:30pm certificate job counts their attendance
+- **Self-service sign-in fix** — On the login page, a learner who can't get their OTP or can't see their class enters Name, Email and Course Run ID. Before submitting, the form (and the API) checks the email format and that the Course Run ID is exactly 7 digits, and flags the common mistake of entering the course code (`TGS-…`) instead (`lib/learner/registrationValidation.ts`). The system creates their account if needed, enrols them, emails a welcome (OTP-first, with a must-change backup password for new accounts) and sends the OTP straight away. Cases it can't fix (unknown/expired run, inactive account, withdrawn enrolment) go to **Admin → Support Tickets → Sign-in Requests** with one-click *Enrol & notify*. Self-enrolled learners often have no NRIC on file, so their attendance placeholders are keyed to their account; the SSG attendance sync (nightly `auto-sync-attendance` and the trainer's *Sync from SSG*) links each SSG record to the learner enrolled in that run with the same email, backfills their NRIC and replaces the placeholder (`lib/ssg/utils/upsertSsgAttendance.ts`), so the 6:30pm certificate job counts their attendance
 - **Help & Support** — Built-in support ticket system where learners can raise new tickets for course, connectivity, session, or payment issues
 - **Contact Information** — Direct access to company address, hotline (+65 6100 0613), support email (enquiry@tertiaryinfotech.com), and opening hours
 
@@ -335,7 +335,7 @@ Orion/OpenClaw certificate tool registration and operating procedure:
 ```
 POST /api/auth/login              # Login (password or OTP) → returns a session token
 POST /api/auth/send-otp           # Send OTP to email
-POST /api/auth/self-register      # Public: learner self-enrols with Name, Email + Course Run ID (+ optional mobile)
+POST /api/auth/self-register      # Public: learner self-enrols with Name, Email + 7-digit Course Run ID (+ optional mobile)
 GET  /api/auth/verify             # Validate the current session token
 POST /api/auth/logout             # Revoke the current session token
 PUT  /api/auth/update-password    # Update password (own account, or admin for any)

@@ -3,6 +3,7 @@ import { UserRole } from '@app-types';
 import { Button } from './ui/Button';
 import { authService, LoginCredentials, User } from '@lib/services/authService';
 import { useLms } from '@contexts/LmsContext';
+import { validateRegistrationEmail, validateCourseRunId } from '@lib/learner/registrationValidation';
 import { trainingProviderService, TrainingProviderData } from '@lib/services/trainingProviderService';
 
 // Helper to get display name for a role
@@ -64,6 +65,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [registerForm, setRegisterForm] = useState({ fullName: '', email: '', courseRunId: '', phone: '' });
   const [registerStatus, setRegisterStatus] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [registerFieldErrors, setRegisterFieldErrors] = useState<{ email?: string; courseRunId?: string }>({});
   const [isRegistering, setIsRegistering] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
@@ -389,8 +391,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
   const handleSelfRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsRegistering(true);
     setRegisterStatus(null);
+    const fieldErrors = {
+      email: validateRegistrationEmail(registerForm.email) || undefined,
+      courseRunId: validateCourseRunId(registerForm.courseRunId) || undefined,
+    };
+    setRegisterFieldErrors(fieldErrors);
+    if (fieldErrors.email || fieldErrors.courseRunId) {
+      document.getElementById(fieldErrors.email ? 'reg-email' : 'reg-run')?.focus();
+      return;
+    }
+    setIsRegistering(true);
     try {
       const response = await fetch('/api/auth/self-register', {
         method: 'POST',
@@ -970,10 +981,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 autoComplete="email"
                 required
                 value={registerForm.email}
-                onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
+                onChange={(e) => {
+                  setRegisterForm(prev => ({ ...prev, email: e.target.value }));
+                  if (registerFieldErrors.email) setRegisterFieldErrors(prev => ({ ...prev, email: undefined }));
+                }}
+                onBlur={() => {
+                  if (registerForm.email.trim()) setRegisterFieldErrors(prev => ({ ...prev, email: validateRegistrationEmail(registerForm.email) || undefined }));
+                }}
                 placeholder="you@example.com"
-                className={registerInputClasses}
+                aria-invalid={!!registerFieldErrors.email}
+                aria-describedby={registerFieldErrors.email ? 'reg-email-error' : undefined}
+                className={`${registerInputClasses} ${registerFieldErrors.email ? '!border-red-400 focus:!ring-red-400' : ''}`}
               />
+              {registerFieldErrors.email && (
+                <p id="reg-email-error" role="alert" className="mt-1 text-xs text-red-300">{registerFieldErrors.email}</p>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -982,11 +1004,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   id="reg-run"
                   type="text"
                   required
+                  inputMode="numeric"
                   maxLength={100}
                   value={registerForm.courseRunId}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, courseRunId: e.target.value.trim() }))}
+                  onChange={(e) => {
+                    setRegisterForm(prev => ({ ...prev, courseRunId: e.target.value.trim() }));
+                    if (registerFieldErrors.courseRunId) setRegisterFieldErrors(prev => ({ ...prev, courseRunId: undefined }));
+                  }}
+                  onBlur={() => {
+                    if (registerForm.courseRunId) setRegisterFieldErrors(prev => ({ ...prev, courseRunId: validateCourseRunId(registerForm.courseRunId) || undefined }));
+                  }}
                   placeholder="e.g. 1234567"
-                  className={`${registerInputClasses} font-mono tracking-wider`}
+                  aria-invalid={!!registerFieldErrors.courseRunId}
+                  aria-describedby={registerFieldErrors.courseRunId ? 'reg-run-error' : undefined}
+                  className={`${registerInputClasses} font-mono tracking-wider ${registerFieldErrors.courseRunId ? '!border-red-400 focus:!ring-red-400' : ''}`}
                 />
               </div>
               <div>
@@ -1005,7 +1036,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 />
               </div>
             </div>
-            <p className="-mt-1 text-xs text-blue-100/60">Your Course Run ID is provided by your course administrator or trainer.</p>
+            {registerFieldErrors.courseRunId && (
+              <p id="reg-run-error" role="alert" className="-mt-1 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-200">{registerFieldErrors.courseRunId}</p>
+            )}
+            <p className="-mt-1 text-xs text-blue-100/60">Your Course Run ID is the 7-digit number (e.g. 1234567) provided by your course administrator or trainer — not the course code starting with TGS-.</p>
 
             {registerStatus && (
               <p
