@@ -32,31 +32,49 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const tpCode = tp.code;
 
     const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
-    const result = await api.searchEnrolment({
-      enrolment: {
-        course: { run: { id: courseRunId.trim() } },
-        trainingPartner: { uen: tpUen, code: tpCode },
-      },
-      parameters: { page: 0, pageSize: 20 },
-    } as any);
 
-    if (result.error) {
-      const status = Number(result.status) || 0;
-      if (status === 404) {
-        return res.status(200).json({ success: true, data: [] });
+    // SSG pages the search results. Read every page: a single page of 20 silently
+    // dropped learners from classes larger than 20 (run 1362296 showed 20 of 22).
+    const PAGE_SIZE = 100;
+    const enrolments: any[] = [];
+    const seen = new Set<string>();
+    for (let page = 0; page < 50; page++) {
+      const result = await api.searchEnrolment({
+        enrolment: {
+          course: { run: { id: courseRunId.trim() } },
+          trainingPartner: { uen: tpUen, code: tpCode },
+        },
+        parameters: { page, pageSize: PAGE_SIZE },
+      } as any);
+
+      if (result.error) {
+        const status = Number(result.status) || 0;
+        // 404 = no (more) records: an empty run on page 0, the end of the list after that.
+        if (status === 404) break;
+        // A later page failing must not hide the error behind a partial list.
+        return res.status(status || 500).json({ success: false, error: result.error?.message ?? 'SSG error' });
       }
-      return res.status(status || 500).json({ success: false, error: result.error?.message ?? 'SSG error' });
-    }
 
-    // SSG returns enrolments as data.enrolment[] or data[]
-    const raw: any = result.data;
-    let enrolments: any[];
-    if (Array.isArray(raw?.enrolment)) {
-      enrolments = raw.enrolment;
-    } else if (Array.isArray(raw)) {
-      enrolments = (raw as any[]).map((item: any) => item.enrolment ?? item);
-    } else {
-      enrolments = [];
+      // SSG returns enrolments as data.enrolment[] or data[]
+      const raw: any = result.data;
+      let pageItems: any[];
+      if (Array.isArray(raw?.enrolment)) {
+        pageItems = raw.enrolment;
+      } else if (Array.isArray(raw)) {
+        pageItems = (raw as any[]).map((item: any) => item.enrolment ?? item);
+      } else {
+        pageItems = [];
+      }
+
+      for (const e of pageItems) {
+        const key = e?.referenceNumber ? String(e.referenceNumber) : '';
+        if (key) {
+          if (seen.has(key)) continue;
+          seen.add(key);
+        }
+        enrolments.push(e);
+      }
+      if (pageItems.length < PAGE_SIZE) break; // last page
     }
 
     return res.status(200).json({ success: true, data: enrolments });
