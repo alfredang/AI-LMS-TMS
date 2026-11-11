@@ -137,7 +137,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     // class page could show one class's title while its QR codes pointed at another.
     void loadCourseData(sourceCourse).catch(err => console.error('Failed to reload class:', err));
   };
-  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
+  const { courses, loading: coursesLoading } = // All of the trainer's classes, past ones included: enrolments and manual attendance
+  // must stay viewable after a class ends (they are the record for checking/claims).
+  useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, false);
 
   // Admin-mode course run lookup
   const [adminInput, setAdminInput]             = useState('');
@@ -218,16 +220,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [isDeletingFromClass, setIsDeletingFromClass]  = useState(false);
   const [deleteLearnerError, setDeleteLearnerError]    = useState<string | null>(null);
 
-  // API already filters to upcoming classes (today → today+7, not ended); just sort
+  // Current & upcoming classes first (soonest first), then past classes (most recent first).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const startTime = (c: { startDate?: string | null }) => new Date(c.startDate ?? '').getTime() || 0;
+  const isPastCourse = (c: { endDate?: string | null }) => !!c.endDate && new Date(c.endDate) < today;
   const activeCourses = courses
-    .filter(c => !c.endDate || new Date(c.endDate) >= today)
-    .sort((a, b) => {
-      const aTime = new Date(a.startDate ?? '').getTime();
-      const bTime = new Date(b.startDate ?? '').getTime();
-      return aTime - bTime;
-    });
+    .filter(c => !isPastCourse(c))
+    .sort((a, b) => startTime(a) - startTime(b));
+  const pastCourses = courses
+    .filter(c => isPastCourse(c))
+    .sort((a, b) => startTime(b) - startTime(a));
+  const fmtClassDate = (d?: string | null) =>
+    d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
   const selectedCourse = isAdminMode
     ? adminCourse
@@ -1265,11 +1270,24 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     disabled={isFetchingSessions}
                   >
                     <option value="" disabled>— Select a class —</option>
-                    {activeCourses.map(c => (
-                      <option key={c.courseRunId} value={c.courseRunId}>
-                        {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}
-                      </option>
-                    ))}
+                    {activeCourses.length > 0 && (
+                      <optgroup label="Current & upcoming classes">
+                        {activeCourses.map(c => (
+                          <option key={c.courseRunId} value={c.courseRunId}>
+                            {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}{c.startDate ? ` — ${fmtClassDate(c.startDate)}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {pastCourses.length > 0 && (
+                      <optgroup label="Past classes">
+                        {pastCourses.map(c => (
+                          <option key={c.courseRunId} value={c.courseRunId}>
+                            {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}{c.startDate ? ` — ${fmtClassDate(c.startDate)}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
                 </div>
