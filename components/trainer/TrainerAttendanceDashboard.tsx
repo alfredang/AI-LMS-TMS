@@ -1075,7 +1075,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         courseRunId: course.courseRunCode || '',
         sessionId,
       });
-      const response = await fetch(`/api/ssg/session-attendance?${params}`);
+      // SSG e-attendance changes minute to minute while learners sign in: never serve a cached copy
+      params.set('_ts', String(Date.now()));
+      const response = await fetch(`/api/ssg/session-attendance?${params}`, { cache: 'no-store' });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`Request failed ${response.status}: ${text}`);
@@ -1088,7 +1090,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         ?? courseRun?.sessions?.[0]
         ?? null;
       setAttendanceRecords(matchedSession?.attendance ?? []);
-      setAttendanceSuccess('Attendance data fetched successfully.');
+      const at = new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      setAttendanceSuccess(`E-attendance updated from SSG at ${at}.`);
     } catch (err) {
       setAttendanceError(err instanceof Error ? err.message : 'Failed to fetch attendance.');
     } finally {
@@ -1739,7 +1742,21 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
       {/* ── Session: filter + per-session KPIs (drives the two sections below) ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Session" />
+        <SectionHeader
+          title="Session"
+          right={selectedSession ? (
+            <button
+              type="button"
+              onClick={() => handleFetchAttendance(selectedSession)}
+              disabled={isLoadingAttendance}
+              title="Fetch the latest e-attendance for this session from SSG"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshIcon className={`w-3.5 h-3.5 ${isLoadingAttendance ? 'animate-spin' : ''}`} />
+              {isLoadingAttendance ? 'Refreshing...' : 'Refresh E-Attendance'}
+            </button>
+          ) : undefined}
+        />
         <div className="p-4 space-y-4">
           {/* Session filter — shown after sessions load */}
           {sessions.length > 0 && (
