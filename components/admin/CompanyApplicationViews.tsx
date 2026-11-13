@@ -3343,15 +3343,22 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (invGenerated === 0 && (invSkipReasons > 0 || invErrors.length > 0)) {
         const onlyNotEnrolled = skippedNotEnrolled > 0 && skippedAwaitingGrants === 0 && invFailed === 0;
         const onlyAwaitingGrants = skippedAwaitingGrants > 0 && skippedNotEnrolled === 0 && invFailed === 0;
+        // SSG rejected the data itself (bad UEN, NRIC, DOB…) — re-running
+        // Auto-Process unchanged will fail the same way.
+        const ssgRejected = invErrors.some(e => e.includes('SSG rejected enrolment'));
         const guidance = onlyNotEnrolled
-          ? 'Re-run Auto-Process for the flagged learner(s). Once they have an ENR- enrolment ID, retry Generate Invoice.'
+          ? ssgRejected
+            ? 'SSG rejected the enrolment because of the data on the application (see the reason in brackets above, e.g. an invalid Employer UEN). Correct that field on the application, re-run Auto-Process to enrol, then retry Generate Invoice.'
+            : 'Re-run Auto-Process for the flagged learner(s). Once they have an ENR- enrolment ID, retry Generate Invoice.'
           : onlyAwaitingGrants
             ? 'Grants land asynchronously (seconds to ~15 min). Click "Sync Grants", then "Generate Invoice" — or mark full-fee learners "Not Grant Eligible" so they invoice without a grant.'
             : 'Clear the blockers above, then retry Generate Invoice. If the blocker is a pending grant, click "Sync Grants" first.';
         setAutoProcessPopup({
           tone: 'warning',
           title: onlyNotEnrolled
-            ? 'Invoice skipped — learner not yet SSG-enrolled'
+            ? ssgRejected
+              ? 'Invoice skipped — SSG rejected the enrolment'
+              : 'Invoice skipped — learner not yet SSG-enrolled'
             : onlyAwaitingGrants
               ? 'Enrolment done — awaiting grant before invoice'
               : 'Invoice skipped — action needed',

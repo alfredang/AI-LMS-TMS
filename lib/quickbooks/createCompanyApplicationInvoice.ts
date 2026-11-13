@@ -1287,6 +1287,7 @@ const CA_INVOICE_ROW_SELECT = `SELECT
        ca.trainee_full_name,
        ca.trainee_nric,
        ca.enrolment_id,
+       ca.auto_enrol_error,
        ca.invoice_id,
        ca.invoice_doc_number,
        ca.invoice_drive_file_id,
@@ -1575,8 +1576,15 @@ export async function generateInvoicesForApplications(
       if (missing.length > 0) {
         result.skipped++;
         result.skippedNotEnrolled++;
+        // Attach SSG's rejection reason (e.g. "TGS-409 - Invalid Employer UEN")
+        // so the admin fixes the bad data instead of re-running Auto-Process,
+        // which would just be rejected again.
         const names = missing
-          .map(r => String(r.trainee_full_name || '').trim() || String(r.trainee_nric || '').trim() || '(unnamed)')
+          .map(r => {
+            const name = String(r.trainee_full_name || '').trim() || String(r.trainee_nric || '').trim() || '(unnamed)';
+            const ssgError = String(r.auto_enrol_error || '').replace(/^enrol(?:l)?ment:\s*/i, '').trim();
+            return ssgError ? `${name} (SSG rejected enrolment: ${ssgError})` : name;
+          })
           .slice(0, 5)
           .join(', ');
         const more = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
