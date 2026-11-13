@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
+import { EnrolmentRequestsPanel } from './EnrolmentRequestsPanel';
 
 interface Session {
   id: string;
@@ -1568,6 +1569,15 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           )}
         </div>
       </div>
+
+      {/* ── Enrolment Requests: enrolment QR code + the details learners without an enrolment submitted through it ── */}
+      {selectedCourseRunId && (
+        <EnrolmentRequestsPanel
+          courseRunUuid={selectedCourseRunId}
+          isAdminMode={isAdminMode}
+          onEnrolled={() => { if (selectedCourse?.courseRunCode) fetchEnrolments(selectedCourse.courseRunCode); }}
+        />
+      )}
 
       {/* ── Class Enrolments (per class, not per session — collapsible) ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
