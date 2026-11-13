@@ -11,7 +11,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     const result = await runAutomation();
-    return res.status(200).json({ success: true, ...result });
+    return res.status(result.success ? 200 : 500).json(result);
   } catch (err) {
     console.error('run-auto-create-certificates error:', err);
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });

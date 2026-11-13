@@ -1,7 +1,9 @@
 import { withServiceAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { google } from 'googleapis';
+import { google, type calendar_v3 } from 'googleapis';
 import pool from '@lib/db';
+import { collectRunCalendarEvents, isGoogleMeetLink, meetLinkOfEvent, storeRunMeetLink } from '@lib/calendar/meetLink';
+import { eventDateIso, extractEventRunId } from '@lib/calendar/eventMatch';
 import { getGoogleCredentials } from '@lib/google-auth/googleAuth';
 import { getLocalYMD } from '../../../lib/dateHelpers';
 
@@ -30,7 +32,9 @@ async function ensureColumns() {
 const g = globalThis as unknown as { __syncCalendarRunning?: boolean };
 if (g.__syncCalendarRunning === undefined) g.__syncCalendarRunning = false;
 
-export async function runSyncGoogleCalendar(options?: { startDate?: string; endDate?: string }) {
+export interface SyncCalendarOptions { startDate?: string; endDate?: string; /** report what would change without writing */ dryRun?: boolean }
+
+export async function runSyncGoogleCalendar(options?: SyncCalendarOptions) {
   if (g.__syncCalendarRunning) {
     console.warn('[sync-google-calendar] Another run is already in progress — skipping');
     return { success: false, message: 'Skipped — another run is already in progress' };
@@ -43,7 +47,8 @@ export async function runSyncGoogleCalendar(options?: { startDate?: string; endD
   }
 }
 
-async function _runSyncGoogleCalendarInner(options?: { startDate?: string; endDate?: string }) {
+async function _runSyncGoogleCalendarInner(options?: SyncCalendarOptions) {
+  const dryRun = !!options?.dryRun;
   await ensureColumns();
 
   // Read configurable look-ahead days from scheduler_config
@@ -102,130 +107,141 @@ async function _runSyncGoogleCalendarInner(options?: { startDate?: string; endDa
   const startDate = options?.startDate ? new Date(options.startDate) : now;
   const futureDate = options?.endDate ? new Date(options.endDate + 'T23:59:59') : new Date(startDate.getTime() + lookAheadDays * 24 * 60 * 60 * 1000);
 
-  const eventsResponse = await calendar.events.list({
-    calendarId,
-    timeMin: startDate.toISOString(),
-    timeMax: futureDate.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 500,
-  });
-
-  const events = eventsResponse.data.items || [];
+  // Events are fetched from 60 days BEFORE the window too: a run can hold a Meet
+  // link that belongs to a class that already ran (copied by the old fuzzy match),
+  // and we can only prove that by seeing the owning event. Paginated — a busy
+  // calendar has ~20 events/day.
+  const ownershipLookbackMs = 60 * 24 * 60 * 60 * 1000;
+  const events: calendar_v3.Schema$Event[] = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await calendar.events.list({
+      calendarId,
+      timeMin: new Date(startDate.getTime() - ownershipLookbackMs).toISOString(),
+      timeMax: futureDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 2500,
+      pageToken,
+    });
+    events.push(...(page.data.items || []));
+    pageToken = page.data.nextPageToken || undefined;
+  } while (pageToken);
   console.log(`📅 [Calendar Sync] Found ${events.length} events in the next ${lookAheadDays} days`);
 
-  // Get all course runs in the date range for matching
+  // Course runs in the window. Matching is EXACT ONLY — via the durable
+  // course_run_calendar_event mapping or the "Course Run ID: <id>" the LMS stamps
+  // into event descriptions. The previous title-substring match ("Autonomous AI
+  // Agents" ⊂ "Build a Human–AI Workforce with Autonomous AI Agents") and its
+  // "same title, any date" fallback copied OTHER classes' Meet links onto runs, so
+  // the TMS link disagreed with the calendar invite learners were emailed from.
   const courseRuns = await pool.query(
-    `SELECT cr.id, cr.course_run_id, cr.start_date, cr.end_date, cr.class_type, cr.virtual_meeting_link,
+    `SELECT cr.id, cr.course_run_id, cr.start_date, cr.end_date, cr.class_type,
+            cr.virtual_meeting_link, cr.virtual_meeting_provider,
             c.title AS course_title
-     FROM course_run cr
-     JOIN course c ON c.id = cr.course_id
-     WHERE cr.start_date >= $1::date
-       AND cr.start_date <= $2::date`,
+       FROM course_run cr
+       JOIN course c ON c.id = cr.course_id
+      WHERE cr.start_date >= $1::date
+        AND cr.start_date <= $2::date`,
     [getLocalYMD(startDate), getLocalYMD(futureDate)]
   );
 
-  // Build lookup maps
-  const courseRunsByTitle = new Map<string, any[]>();
-  const courseRunsById = new Map<string, any>();
-  for (const cr of courseRuns.rows) {
-    courseRunsById.set(cr.course_run_id, cr);
-    const titleLower = (cr.course_title || '').toLowerCase().trim();
-    if (titleLower) {
-      if (!courseRunsByTitle.has(titleLower)) courseRunsByTitle.set(titleLower, []);
-      courseRunsByTitle.get(titleLower)!.push(cr);
-    }
+  // Which run owns each Meet link seen on the calendar (to detect a run holding
+  // ANOTHER class's link — the symptom users reported).
+  const runByEventId = new Map<string, string>();
+  const mappedRows = await pool.query<{ course_run_id: string; google_event_id: string }>(
+    `SELECT m.course_run_id, m.google_event_id
+       FROM course_run_calendar_event m
+       JOIN course_run cr ON cr.id = m.course_run_id
+      WHERE cr.start_date BETWEEN ($1::date - 14) AND ($2::date + 14)`,
+    [getLocalYMD(startDate), getLocalYMD(futureDate)]
+  );
+  for (const r of mappedRows.rows) runByEventId.set(r.google_event_id, r.course_run_id);
+  const ssgIdToUuid = new Map<string, string>();
+  for (const cr of courseRuns.rows) if (cr.course_run_id) ssgIdToUuid.set(String(cr.course_run_id).toLowerCase(), cr.id);
+  const linkOwner = new Map<string, Set<string>>(); // meet link -> run uuids whose events carry it
+  const linkDates = new Map<string, Set<string>>(); // meet link -> YYYY-MM-DD of every event carrying it
+  for (const e of events) {
+    if (!e.id || e.status === 'cancelled') continue;
+    const link = meetLinkOfEvent(e);
+    if (!link) continue;
+    if (!linkDates.has(link)) linkDates.set(link, new Set());
+    linkDates.get(link)!.add(eventDateIso(e));
+    const rid = extractEventRunId(e);
+    const owner = runByEventId.get(e.id) || (rid ? ssgIdToUuid.get(rid) : undefined);
+    if (!owner) continue;
+    if (!linkOwner.has(link)) linkOwner.set(link, new Set());
+    linkOwner.get(link)!.add(owner);
   }
 
   let updated = 0;
   let skipped = 0;
   const results: any[] = [];
 
-  for (const event of events) {
-    const summary = event.summary || '';
-    const description = event.description || '';
-    const isVirtual = /\[VIRTUAL\]/i.test(summary);
-    const isHybrid = /\[HYBRID\]/i.test(summary);
+  for (const run of courseRuns.rows) {
+    const own = await collectRunCalendarEvents(calendar, calendarId, run, events);
+    if (own.events.length === 0) { skipped++; continue; }
 
-    if (!isVirtual && !isHybrid) continue;
+    const tagged = own.events.map(e => e.summary || '');
+    const isVirtual = tagged.some(t => /\[VIRTUAL\s*\]/i.test(t));
+    const isHybrid = !isVirtual && tagged.some(t => /\[HYBRID\s*\]/i.test(t));
+    const classType = isVirtual ? 'Virtual' : isHybrid ? 'Hybrid' : null;
 
-    // Extract Google Meet link from event
-    const meetLink = event.hangoutLink
-      || event.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri
-      || '';
+    const current = (run.virtual_meeting_link || '').trim();
+    const changes: string[] = [];
+    let nextLink: string | null | undefined = undefined; // undefined = leave as is
 
-    // Also check description for meet links
-    const meetFromDesc = !meetLink
-      ? (description.match(/https:\/\/meet\.google\.com\/[a-z-]+/i)?.[0] || '')
-      : meetLink;
-
-    const finalMeetLink = meetLink || meetFromDesc;
-
-    const classType = isVirtual ? 'Virtual' : 'Hybrid';
-
-    // Remove [VIRTUAL]/[HYBRID] tag to get the course title for matching
-    const cleanTitle = summary.replace(/\[(VIRTUAL|HYBRID)\]\s*/i, '').trim().toLowerCase();
-
-    // Try to match to a course run:
-    // 1. Check if course_run_id appears in description
-    let matched: any = null;
-    const runIdMatch = description.match(/\b(\d{6,})\b/);
-    if (runIdMatch && courseRunsById.has(runIdMatch[1])) {
-      matched = courseRunsById.get(runIdMatch[1]);
-    }
-
-    // 2. Match by event start date + course title
-    if (!matched) {
-      const eventStart = event.start?.dateTime || event.start?.date || '';
-      const eventDate = eventStart.slice(0, 10); // YYYY-MM-DD
-
-      // Find course runs whose title is contained in the event summary and start on the same date
-      for (const [title, runs] of courseRunsByTitle) {
-        if (cleanTitle.includes(title) || title.includes(cleanTitle)) {
-          const dateMatch = runs.find(r => {
-            const crDate = r.start_date ? getLocalYMD(new Date(r.start_date)) : '';
-            return crDate === eventDate;
-          });
-          if (dateMatch) { matched = dateMatch; break; }
-          // If no date match, try first run with matching title
-          if (!matched && runs.length === 1) matched = runs[0];
-        }
+    if (own.meetLink) {
+      if (current !== own.meetLink) { nextLink = own.meetLink; changes.push(`meet_link → ${own.meetLink}`); }
+      if (own.meetLinks.length > 1) {
+        console.warn(`  ⚠️ ${run.course_run_id}: session days carry different Meet links (${own.meetLinks.join(', ')}); using the first day's.`);
+      }
+    } else if (current && isGoogleMeetLink(current)) {
+      // The run's own events have no Meet, but the stored link is a Meet link that
+      // belongs to a DIFFERENT run's event → it was copied over by the old fuzzy
+      // sync. Clear it rather than keep showing learners the wrong room.
+      const owners = linkOwner.get(current);
+      const dates = linkDates.get(current);
+      const sd = run.start_date ? getLocalYMD(new Date(run.start_date)) : '';
+      const ed = run.end_date ? getLocalYMD(new Date(run.end_date)) : sd;
+      const onOwnDays = !!dates && Array.from(dates).some(d => sd && d >= sd && d <= ed);
+      if (owners && owners.size > 0 && !owners.has(run.id)) {
+        nextLink = null; changes.push(`meet_link cleared (belongs to another class's calendar event)`);
+      } else if (dates && dates.size > 0 && !onOwnDays) {
+        // Every calendar event carrying this room is on a day this class is NOT in
+        // session → it is some other class's room (Meet rooms are per event).
+        nextLink = null; changes.push(`meet_link cleared (calendar events with this room are on ${Array.from(dates).sort().join(', ')}, outside ${sd}..${ed})`);
       }
     }
+    if (classType && run.class_type !== classType) changes.push(`class_type → ${classType}`);
 
-    if (!matched) {
-      skipped++;
-      console.log(`  ⏭️ No match for: "${summary}" (${event.start?.dateTime || event.start?.date})`);
-      results.push({ event: summary, status: 'no_match' });
-      continue;
+    if (changes.length === 0) { skipped++; results.push({ courseRunId: run.course_run_id, status: 'no_changes' }); continue; }
+
+    if (!dryRun && nextLink !== undefined) await storeRunMeetLink(run.id, nextLink);
+    if (!dryRun && classType && run.class_type !== classType) {
+      await pool.query(`UPDATE course_run SET class_type = $1, updated_at = NOW() WHERE id = $2`, [classType, run.id]);
     }
-
-    // Update the course run
-    const changes: string[] = [];
-    if (matched.class_type !== classType) changes.push(`class_type → ${classType}`);
-    if (finalMeetLink && matched.virtual_meeting_link !== finalMeetLink) changes.push(`meet_link → ${finalMeetLink}`);
-
-    if (changes.length > 0) {
-      await pool.query(
-        `UPDATE course_run SET
-           class_type = $1,
-           virtual_meeting_link = COALESCE($2, virtual_meeting_link),
-           updated_at = NOW()
-         WHERE id = $3`,
-        [classType, finalMeetLink || null, matched.id]
-      );
-      updated++;
-      console.log(`  ✅ Updated ${matched.course_run_id} (${matched.course_title}): ${changes.join(', ')}`);
-      results.push({ courseRunId: matched.course_run_id, courseTitle: matched.course_title, changes, meetLink: finalMeetLink });
-    } else {
-      skipped++;
-      results.push({ courseRunId: matched.course_run_id, status: 'no_changes' });
-    }
+    updated++;
+    console.log(`  ${dryRun ? '🔎 Would update' : '✅ Updated'} ${run.course_run_id} (${run.course_title}): ${changes.join(', ')}`);
+    results.push({ courseRunId: run.course_run_id, courseTitle: run.course_title, changes, meetLink: nextLink === undefined ? current || null : nextLink });
   }
+
+  // Tagged events that carry no resolvable run id are reported (not guessed) so
+  // staff can stamp "Course Run ID: <id>" into the event — the only way a
+  // calendar event is ever linked to a class.
+  const unresolvedTagged = events
+    .filter(e => e.status !== 'cancelled' && /\[(VIRTUAL|HYBRID)\s*\]/i.test(e.summary || ''))
+    .filter(e => !(e.id && runByEventId.has(e.id)) && !(extractEventRunId(e) && ssgIdToUuid.has(extractEventRunId(e)!)))
+    .filter(e => eventDateIso(e) >= getLocalYMD(startDate))
+    .map(e => ({ event: e.summary, date: e.start?.dateTime || e.start?.date, status: 'no_run_id' }));
+  results.push(...unresolvedTagged.slice(0, 50));
 
   const summary = {
     totalEvents: events.length,
-    virtualEvents: events.filter(e => /\[(VIRTUAL|HYBRID)\]/i.test(e.summary || '')).length,
+    virtualEvents: events.filter(e => /\[(VIRTUAL|HYBRID)\s*\]/i.test(e.summary || '')).length,
+    runsInWindow: courseRuns.rows.length,
+    unresolvedTaggedEvents: unresolvedTagged.length,
+    dryRun,
     updated,
     skipped,
     calendarId,
@@ -242,8 +258,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    const { startDate, endDate } = req.body || {};
-    const result = await runSyncGoogleCalendar({ startDate, endDate });
+    const { startDate, endDate, dryRun } = req.body || {};
+    const result = await runSyncGoogleCalendar({ startDate, endDate, dryRun: dryRun === true || dryRun === 'true' });
     return res.status(200).json(result);
   } catch (error) {
     console.error('❌ [Calendar Sync] Error:', error);

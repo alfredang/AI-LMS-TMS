@@ -64,7 +64,19 @@ const FIELD_MAP: Record<string, string> = {
   activities_url: 'c.activities_url',
   trainers_list: 'c.trainers_list',
   trainers_email_list: 'c.trainers_email_list',
-  skillsfuture_link: 'c.skillsfuture_link',
+  skillsfuture_link: `CASE
+    WHEN c.course_code LIKE 'TGS-%' AND c.course_availability_status = 'active'
+      THEN 'https://courses.myskillsfuture.gov.sg/courses/' || COALESCE(
+        (SELECT h.code FROM course_code_history h
+          WHERE h.course_id = c.id AND h.is_current LIMIT 1),
+        NULLIF(c.new_course_code, ''), c.course_code)
+    WHEN c.course_code NOT LIKE 'TGS-%' THEN c.skillsfuture_link
+    ELSE NULL
+  END AS skillsfuture_link`,
+  course_availability_status: 'c.course_availability_status',
+  course_availability_reason: 'c.course_availability_reason',
+  course_availability_checked_at: 'c.course_availability_checked_at',
+  ssg_has_future_run: 'c.ssg_has_future_run',
   sf_for_business_link: 'c.sf_for_business_link',
   description: 'c.description',
   course_outline: 'c.course_outline',
@@ -105,7 +117,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .map((f) => FIELD_MAP[f])
       .join(',\n         ');
 
-    const conditions: string[] = [];
+    const conditions: string[] = [
+      `(c.course_code NOT LIKE 'TGS-%' OR c.course_availability_status = 'active')`,
+    ];
     const params: (string | number)[] = [];
     let idx = 1;
     if (courseCode) {

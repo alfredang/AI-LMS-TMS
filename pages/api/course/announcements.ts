@@ -5,6 +5,7 @@ import pool from '../../../lib/db';
 import fs from 'fs';
 import path from 'path';
 import { ensureCourseAnnouncementTable } from '../../../lib/course-announcement-ensure-table';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -55,7 +56,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             if (!UUID_RE.test(id)) {
                 return res.status(400).json({ success: false, message: 'Invalid announcement id' });
             }
-            const selectRes = await pool.query(`SELECT file_url, course_run_id FROM course_announcement WHERE id = $1`, [id]);
+            const selectRes = await pool.query(`SELECT file_url, drive_file_id, course_run_id FROM course_announcement WHERE id = $1`, [id]);
             if (selectRes.rows.length === 0) {
                 return res.status(404).json({ success: false, message: 'Announcement not found' });
             }
@@ -65,9 +66,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, String(selectRes.rows[0].course_run_id)))) return;
 
             const fileUrl: string | null = selectRes.rows[0].file_url;
+            const driveFileId: string | null = selectRes.rows[0].drive_file_id;
             await pool.query(`DELETE FROM course_announcement WHERE id = $1`, [id]);
 
-            if (fileUrl) {
+            if (driveFileId) {
+                // The document stays in the class's Assessment Records folder on
+                // Drive as a record; only the public view link is withdrawn.
+                try {
+                    const drive = await getDriveClient();
+                    await drive.permissions.delete({ fileId: driveFileId, permissionId: 'anyoneWithLink' });
+                } catch (driveError: any) {
+                    console.error('Failed to unshare announcement Drive file:', driveError?.message ?? driveError);
+                }
+            } else if (fileUrl && fileUrl.startsWith('/uploads/')) {
                 try {
                     const filePath = path.join(process.cwd(), 'public', fileUrl);
                     if (fs.existsSync(filePath)) {

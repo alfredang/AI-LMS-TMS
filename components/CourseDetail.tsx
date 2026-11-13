@@ -1,4 +1,5 @@
 import { displayCourseCodes } from '@lib/utils/courseCodes';
+import { isLabsUnit } from '@lib/courseLessonUnits';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLms } from '@contexts/LmsContext';
@@ -15,6 +16,7 @@ import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
 import { ClassPhotoUpload } from './trainer/ClassPhotoUpload';
 import { VirtualMeetingLinkEditor } from './trainer/VirtualMeetingLinkEditor';
 import QuizTakerModal from './QuizTakerModal';
+import { AssessmentUploadZone, AssessmentUploadState, UploadSuccessAlert, runAssessmentUpload } from './learner/AssessmentUploadZone';
 
 // --- Types (assuming these exist in your project) ---
 interface Topic {
@@ -56,6 +58,8 @@ interface Course {
     courseCode: string;
     tscTitle?: string;
     tscCode?: string;
+    /** CASL courses only — CASL has no TSC, its skill area is shown here instead. */
+    caslSkills?: string;
     courseRunId: string;
     daId?: string;
     trainingHours: number;
@@ -230,10 +234,8 @@ const AssessmentsSection: React.FC<{
 
     const [accessCodeInputs, setAccessCodeInputs] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [selectedFiles, setSelectedFiles] = useState<Record<string, File | null>>({});
     const [isResubmitting, setIsResubmitting] = useState<Record<string, boolean>>({});
-    const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
-    const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+    const [assessmentUploadState, setAssessmentUploadState] = useState<Record<string, AssessmentUploadState | undefined>>({});
     const [verificationStatus, setVerificationStatus] = useState<Record<string, { loading: boolean, exists?: boolean, count?: number, error?: string }>>({});
     const [hasTriggeredVerification, setHasTriggeredVerification] = useState<Record<string, boolean>>({});
     const [currentEnrollmentId, setCurrentEnrollmentId] = useState<string | null>(null);
@@ -352,10 +354,9 @@ const AssessmentsSection: React.FC<{
         submitted_at: string;
     }
     const [linkSubmissions, setLinkSubmissions] = useState<LinkSubmission[]>([]);
-    const [selectedLinkFiles, setSelectedLinkFiles] = useState<Record<string, File[]>>({});
-    const [isLinkUploading, setIsLinkUploading] = useState<Record<string, boolean>>({});
-    const [linkUploadSuccess, setLinkUploadSuccess] = useState<Record<string, boolean>>({});
-    const [linkUploadProgress, setLinkUploadProgress] = useState<Record<string, number>>({});
+    const [linkUploadState, setLinkUploadState] = useState<Record<string, AssessmentUploadState | undefined>>({});
+    // Drive result per picked file, so a retry after a failed DB-record step doesn't re-upload to Drive.
+    const driveUploadCache = React.useRef(new WeakMap<File, { fileUrl: string; studentFolderId?: string }>());
     const [isLinkResubmitting, setIsLinkResubmitting] = useState<Record<string, boolean>>({});
 
     // Fetch link-based assessment submissions for learners
@@ -387,116 +388,80 @@ const AssessmentsSection: React.FC<{
         fetchLinkSubmissions();
     }, [currentUser?.id, courseRunId, userRole]);
 
-    // Handlers for link-based assessment file upload
-    const handleLinkFileChange = (assessmentType: string, event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files.length > 0) {
-            setSelectedLinkFiles(prev => ({
-                ...prev,
-                [assessmentType]: Array.from(event.target.files!)
-            }));
-        }
-    };
+    // Link-based assessment file upload — starts as soon as files are picked/dropped/pasted.
+    // Each file is recorded the moment it lands, so a later failure never loses earlier uploads.
+    const handleLinkFiles = async (assessmentType: string, files: File[]) => {
+        const courseCode = course?.courseCode || '';
+        const courseName = course?.title || '';
+        const studentName = currentUser?.fullName || 'Unknown Student';
+        const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
+        const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
 
-    const handleLinkSubmit = async (assessmentType: string) => {
-        const files = selectedLinkFiles[assessmentType];
-        if (!files || files.length === 0) {
-            alert('Please select a file to submit.');
-            return;
-        }
+        const uploadOne = async (file: File) => {
+            const formData = new FormData();
+            formData.append('file', file);
 
-        setIsLinkUploading(prev => ({ ...prev, [assessmentType]: true }));
-        setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 10 }));
+            let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
+            if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
+            if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
+            if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
 
-        try {
-            const courseCode = course?.courseCode || '';
-            const courseName = course?.title || '';
-            const studentName = currentUser?.fullName || 'Unknown Student';
-            const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
-            const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
-
-            const newSubmissions: LinkSubmission[] = [];
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const progress = Math.round(10 + ((i / files.length) * 80));
-                setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: progress }));
-
-                const formData = new FormData();
-                formData.append('file', file);
-
-                let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
-                if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
-                if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
-                if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
-
-                const uploadResponse = await fetch(fetchUrl, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const uploadData = await uploadResponse.json();
-
+            let drive = driveUploadCache.current.get(file);
+            if (!drive) {
+                const uploadResponse = await fetch(fetchUrl, { method: 'POST', body: formData });
+                const uploadData = await uploadResponse.json().catch(() => ({}));
                 if (!uploadResponse.ok || !uploadData.success) {
-                    throw new Error(uploadData.error || `Failed to upload file "${file.name}" to Google Drive.`);
+                    throw new Error(uploadData.error || `Failed to upload "${file.name}".`);
                 }
-
-                const submitResponse = await fetch('/api/assessments/submit-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: currentUser?.id,
-                        courseRunId,
-                        assessmentType,
-                        fileName: file.name,
-                        fileUrl: uploadData.data.fileUrl,
-                        folderId: uploadData.data.studentFolderId
-                    }),
-                });
-
-                const submitResult = await submitResponse.json();
-
-                if (!submitResponse.ok || !submitResult.success) {
-                    throw new Error(submitResult.error || `Failed to record submission for "${file.name}".`);
-                }
-
-                newSubmissions.push({
-                    id: submitResult.id || `temp-${Date.now()}-${i}`,
-                    user_id: currentUser?.id || '',
-                    course_run_id: courseRunId || '',
-                    assessment_type: assessmentType,
-                    file_name: file.name,
-                    file_url: uploadData.data.fileUrl,
-                    submitted_at: new Date().toISOString()
-                });
+                drive = { fileUrl: uploadData.data.fileUrl, studentFolderId: uploadData.data.studentFolderId };
+                driveUploadCache.current.set(file, drive);
             }
 
-            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 100 }));
-            console.log(`✅ ${newSubmissions.length} file(s) uploaded and recorded`);
+            const submitResponse = await fetch('/api/assessments/submit-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: currentUser?.id,
+                    courseRunId,
+                    assessmentType,
+                    fileName: file.name,
+                    fileUrl: drive.fileUrl,
+                    folderId: drive.studentFolderId
+                }),
+            });
+            const submitResult = await submitResponse.json().catch(() => ({}));
+            if (!submitResponse.ok || !submitResult.success) {
+                throw new Error(submitResult.error || `Failed to record submission for "${file.name}".`);
+            }
 
-            setLinkSubmissions(prev => [...prev, ...newSubmissions]);
+            setLinkSubmissions(prev => [...prev, {
+                id: submitResult.id || `temp-${Date.now()}-${file.name}`,
+                user_id: currentUser?.id || '',
+                course_run_id: courseRunId || '',
+                assessment_type: assessmentType,
+                file_name: file.name,
+                file_url: drive.fileUrl,
+                submitted_at: new Date().toISOString()
+            }]);
+        };
+
+        const result = await runAssessmentUpload(files, uploadOne, (s) => setLinkUploadState(prev => ({ ...prev, [assessmentType]: s })));
+        setLinkUploadState(prev => ({ ...prev, [assessmentType]: result }));
+        if (result.status === 'error') console.error('Link submission error:', result.message);
+        if (result.status === 'success' || (result.status === 'error' && (result.uploadedCount ?? 0) > 0)) {
             handleVerifyDrive(assessmentType);
-
-            // Reset UI state
-            setSelectedLinkFiles(prev => ({ ...prev, [assessmentType]: [] }));
             setIsLinkResubmitting(prev => ({ ...prev, [assessmentType]: false }));
-
-            const fileInput = document.getElementById(`link-file-upload-${assessmentType}`) as HTMLInputElement;
-            if (fileInput) fileInput.value = '';
-
-            // Show "uploaded successfully" confirmation, auto-clear after 5s
-            setLinkUploadSuccess(prev => ({ ...prev, [assessmentType]: true }));
+        }
+        if (result.status === 'success') {
+            // Keep the green alert up long enough to read, then clear it.
             setTimeout(() => {
-                setLinkUploadSuccess(prev => ({ ...prev, [assessmentType]: false }));
-            }, 5000);
-
-        } catch (error: any) {
-            alert(`Upload failed: ${error.message || 'Please try again.'}`);
-            console.error('Link submission error:', error);
-        } finally {
-            setIsLinkUploading(prev => ({ ...prev, [assessmentType]: false }));
-            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 0 }));
+                setLinkUploadState(prev => prev[assessmentType] === result ? { ...prev, [assessmentType]: undefined } : prev);
+            }, 8000);
         }
     };
+
+    const dismissLinkUploadState = (assessmentType: string) =>
+        setLinkUploadState(prev => ({ ...prev, [assessmentType]: undefined }));
 
     const handleDeleteSubmission = async (submissionId: string) => {
         if (!confirm('Are you sure you want to delete this uploaded file?')) return;
@@ -610,32 +575,15 @@ const AssessmentsSection: React.FC<{
     };
 
 
-    const handleFileChange = (assessmentId: string, event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files.length > 0) {
-            setSelectedFiles(prev => ({
-                ...prev,
-                [assessmentId]: event.target.files![0]
-            }));
-        }
-    };
+    // Uploaded-paper assessment: one file, uploads as soon as it is picked/dropped/pasted.
+    const handleAssessmentFiles = async (assessmentId: string, files: File[]) => {
+        const courseCode = course?.courseCode || '';
+        const courseName = course?.title || '';
+        const studentName = currentUser?.fullName || 'Unknown Student';
+        const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
+        const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
 
-    const handleSubmit = async (assessmentId: string) => {
-        const file = selectedFiles[assessmentId];
-        if (!file) {
-            alert('Please select a file to submit.');
-            return;
-        }
-
-        setIsUploading(prev => ({ ...prev, [assessmentId]: true }));
-        setUploadProgress(prev => ({ ...prev, [assessmentId]: 10 })); // Start progress
-
-        try {
-            const courseCode = course?.courseCode || '';
-            const courseName = course?.title || '';
-            const studentName = currentUser?.fullName || 'Unknown Student';
-            const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
-            const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
-
+        const uploadOne = async (file: File) => {
             const formData = new FormData();
             formData.append('file', file);
 
@@ -645,47 +593,34 @@ const AssessmentsSection: React.FC<{
             if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
             if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
 
-            setUploadProgress(prev => ({ ...prev, [assessmentId]: 40 })); // Updating progress
-
-            const response = await fetch(fetchUrl, {
-                method: 'POST',
-                body: formData,
-            });
-
-            setUploadProgress(prev => ({ ...prev, [assessmentId]: 80 })); // Almost done
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to upload file to Google Drive.');
+            let drive = driveUploadCache.current.get(file);
+            if (!drive) {
+                const response = await fetch(fetchUrl, { method: 'POST', body: formData });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || `Failed to upload "${file.name}".`);
+                }
+                drive = { fileUrl: data.data.fileUrl, studentFolderId: data.data.studentFolderId };
+                driveUploadCache.current.set(file, drive);
             }
 
-            setUploadProgress(prev => ({ ...prev, [assessmentId]: 100 })); // Upload complete
-
             // Mark as submitted in the LMS database using the returned Google Drive link
-            await submitAssessment(assessmentId, file.name, data.data.fileUrl);
+            await submitAssessment(assessmentId, file.name, drive.fileUrl);
+        };
 
-            console.log('✅ Assessment successfully uploaded and recorded');
-            await loadSubmissions();
-
-            // Auto-verify the uploaded file
-            handleVerifyDrive(assessmentId);
-
-            // Reset UI state
-            setSelectedFiles(prev => ({ ...prev, [assessmentId]: null }));
-            setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
-
-            // Reset the file input visually
-            const fileInput = document.getElementById(`file-upload-${assessmentId}`) as HTMLInputElement;
-            if (fileInput) fileInput.value = '';
-
-        } catch (error: any) {
-            alert(`Upload failed: ${error.message || 'Please try again.'}`);
-            console.error('Submission error:', error);
-        } finally {
-            setIsUploading(prev => ({ ...prev, [assessmentId]: false }));
-            setUploadProgress(prev => ({ ...prev, [assessmentId]: 0 }));
+        const result = await runAssessmentUpload(files.slice(0, 1), uploadOne, (s) => setAssessmentUploadState(prev => ({ ...prev, [assessmentId]: s })));
+        setAssessmentUploadState(prev => ({ ...prev, [assessmentId]: result }));
+        if (result.status !== 'success') {
+            if (result.status === 'error') console.error('Submission error:', result.message);
+            return;
         }
+
+        await loadSubmissions();
+        handleVerifyDrive(assessmentId);
+        setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
+        setTimeout(() => {
+            setAssessmentUploadState(prev => prev[assessmentId] === result ? { ...prev, [assessmentId]: undefined } : prev);
+        }, 8000);
     };
 
     const handleVerifyDrive = async (assessmentId: string) => {
@@ -808,6 +743,12 @@ const AssessmentsSection: React.FC<{
                             Resubmit
                         </Button>
                     </div>
+                    {assessmentUploadState[assessment.id]?.status === 'success' && (
+                        <UploadSuccessAlert
+                            fileNames={(assessmentUploadState[assessment.id] as { fileNames: string[] }).fileNames}
+                            onDismiss={() => setAssessmentUploadState(prev => ({ ...prev, [assessment.id]: undefined }))}
+                        />
+                    )}
                     {vStatus && (
                         <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
                             {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
@@ -835,46 +776,24 @@ const AssessmentsSection: React.FC<{
                         </div>
                     </div>
                 )}
-                {/* Step 1: File Upload Input */}
                 <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
-                    </label>
-                    <input
-                        type="file"
-                        id={`file-upload-${assessment.id}`}
-                        onChange={(e) => handleFileChange(assessment.id, e)}
-                        className="block w-full text-sm text-gray-500 dark:text-gray-400
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-md file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-blue-50 file:text-blue-700
-                            hover:file:bg-blue-100
-                            dark:file:bg-blue-900/20 dark:file:text-blue-300
-                            dark:hover:file:bg-blue-900/40"
+                    <AssessmentUploadZone
+                        inputId={`file-upload-${assessment.id}`}
+                        label={canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
+                        state={assessmentUploadState[assessment.id]}
+                        onFiles={(files) => handleAssessmentFiles(assessment.id, files)}
+                        onDismiss={() => setAssessmentUploadState(prev => ({ ...prev, [assessment.id]: undefined }))}
                     />
-                </div>
-
-                {/* Step 2: Submit Button & Progress */}
-                {selectedFiles[assessment.id] && !isUploading[assessment.id] && (
-                    <div className="mt-4">
-                        <Button
-                            onClick={() => handleSubmit(assessment.id)}
-                            className="w-full"
+                    {canResubmit && assessmentUploadState[assessment.id]?.status !== 'uploading' && (
+                        <button
+                            type="button"
+                            onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: false }))}
+                            className="mt-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 underline"
                         >
-                            Submit Assessment
-                        </Button>
-                    </div>
-                )}
-                {isUploading[assessment.id] && (
-                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <div className="flex flex-col items-center justify-center space-y-3">
-                            <Spinner size="md" />
-                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
-                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
-                        </div>
-                    </div>
-                )}
+                            Cancel — keep my previous submission
+                        </button>
+                    )}
+                </div>
             </div>
         );
     };
@@ -1026,44 +945,14 @@ const AssessmentsSection: React.FC<{
                                     </div>
                                 )}
 
-                                {/* Upload input — always visible */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        {writtenSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
-                                    </label>
-                                    <input
-                                        type="file"
-                                        id="link-file-upload-written"
-                                        onChange={(e) => handleLinkFileChange('written', e)}
-                                        className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                            file:mr-4 file:py-2 file:px-4
-                                            file:rounded-md file:border-0
-                                            file:text-sm file:font-semibold
-                                            file:bg-blue-50 file:text-blue-700
-                                            hover:file:bg-blue-100
-                                            dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                            dark:hover:file:bg-blue-900/40"
-                                        multiple
-                                    />
-                                    {selectedLinkFiles['written']?.length > 0 && !isLinkUploading['written'] && (
-                                        <div className="mt-3">
-                                            <Button onClick={() => handleLinkSubmit('written')} className="w-full">
-                                                Upload {selectedLinkFiles['written'].length > 1 ? `${selectedLinkFiles['written'].length} Files` : 'File'}
-                                            </Button>
-                                        </div>
-                                    )}
-                                    {isLinkUploading['written'] && (
-                                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                            <div className="flex flex-col items-center justify-center space-y-3">
-                                                <Spinner size="md" />
-                                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {linkUploadSuccess['written'] && !isLinkUploading['written'] && (
-                                        <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
-                                    )}
-                                </div>
+                                <AssessmentUploadZone
+                                    inputId="link-file-upload-written"
+                                    label={writtenSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                    multiple
+                                    state={linkUploadState['written']}
+                                    onFiles={(files) => handleLinkFiles('written', files)}
+                                    onDismiss={() => dismissLinkUploadState('written')}
+                                />
                             </div>
                         );
                     })()}
@@ -1146,44 +1035,14 @@ const AssessmentsSection: React.FC<{
                                     </div>
                                 )}
 
-                                {/* Upload input — always visible */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        {practicalSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
-                                    </label>
-                                    <input
-                                        type="file"
-                                        id="link-file-upload-practical"
-                                        onChange={(e) => handleLinkFileChange('practical', e)}
-                                        className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                            file:mr-4 file:py-2 file:px-4
-                                            file:rounded-md file:border-0
-                                            file:text-sm file:font-semibold
-                                            file:bg-blue-50 file:text-blue-700
-                                            hover:file:bg-blue-100
-                                            dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                            dark:hover:file:bg-blue-900/40"
-                                        multiple
-                                    />
-                                    {selectedLinkFiles['practical']?.length > 0 && !isLinkUploading['practical'] && (
-                                        <div className="mt-3">
-                                            <Button onClick={() => handleLinkSubmit('practical')} className="w-full">
-                                                Upload {selectedLinkFiles['practical'].length > 1 ? `${selectedLinkFiles['practical'].length} Files` : 'File'}
-                                            </Button>
-                                        </div>
-                                    )}
-                                    {isLinkUploading['practical'] && (
-                                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                            <div className="flex flex-col items-center justify-center space-y-3">
-                                                <Spinner size="md" />
-                                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {linkUploadSuccess['practical'] && !isLinkUploading['practical'] && (
-                                        <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
-                                    )}
-                                </div>
+                                <AssessmentUploadZone
+                                    inputId="link-file-upload-practical"
+                                    label={practicalSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                    multiple
+                                    state={linkUploadState['practical']}
+                                    onFiles={(files) => handleLinkFiles('practical', files)}
+                                    onDismiss={() => dismissLinkUploadState('practical')}
+                                />
                             </div>
                         );
                     })()}
@@ -1269,43 +1128,14 @@ const AssessmentsSection: React.FC<{
                                             ))}
                                         </div>
                                     )}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            {methodSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
-                                        </label>
-                                        <input
-                                            type="file"
-                                            id={`link-file-upload-${methodKey}`}
-                                            onChange={(e) => handleLinkFileChange(methodKey, e)}
-                                            className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                                file:mr-4 file:py-2 file:px-4
-                                                file:rounded-md file:border-0
-                                                file:text-sm file:font-semibold
-                                                file:bg-blue-50 file:text-blue-700
-                                                hover:file:bg-blue-100
-                                                dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                                dark:hover:file:bg-blue-900/40"
-                                            multiple
-                                        />
-                                        {selectedLinkFiles[methodKey]?.length > 0 && !isLinkUploading[methodKey] && (
-                                            <div className="mt-3">
-                                                <Button onClick={() => handleLinkSubmit(methodKey as any)} className="w-full">
-                                                    Upload {selectedLinkFiles[methodKey].length > 1 ? `${selectedLinkFiles[methodKey].length} Files` : 'File'}
-                                                </Button>
-                                            </div>
-                                        )}
-                                        {isLinkUploading[methodKey] && (
-                                            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                                <div className="flex flex-col items-center justify-center space-y-3">
-                                                    <Spinner size="md" />
-                                                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {linkUploadSuccess[methodKey] && !isLinkUploading[methodKey] && (
-                                            <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
-                                        )}
-                                    </div>
+                                    <AssessmentUploadZone
+                                        inputId={`link-file-upload-${methodKey}`}
+                                        label={methodSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                        multiple
+                                        state={linkUploadState[methodKey]}
+                                        onFiles={(files) => handleLinkFiles(methodKey, files)}
+                                        onDismiss={() => dismissLinkUploadState(methodKey)}
+                                    />
                                 </div>
                             );
                         })()}
@@ -1518,7 +1348,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                                         </button>
                                     </span>
                                 ) : (
-                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">or drag a file here (max 50 MB)</span>
+                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">or drag a file here (max 50 MB) — saved to this class's cloud folder</span>
                                 )}
                             </div>
                             <button
@@ -1913,8 +1743,11 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
             <div className="space-y-4 text-sm">
                 <DetailRow label="Course Title" value={course.title} />
                 <DetailRow label="Course Ref Code" value={displayCourseCodes(course)} />
-                <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
-                <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
+                <DetailRow label="TSC Title" value={course.courseType === 'CASL' ? 'NA' : (course.tscTitle || 'N/A')} />
+                <DetailRow label="TSC Code" value={course.courseType === 'CASL' ? 'NA' : (course.tscCode || 'N/A')} />
+                {course.courseType === 'CASL' && (
+                    <DetailRow label="CASL Skills" value={course.caslSkills || 'N/A'} />
+                )}
                 {(() => {
                     const start = course.fundingValidityStart ? new Date(course.fundingValidityStart) : null;
                     const expiry = course.fundingValidity ? new Date(course.fundingValidity) : null;
@@ -2676,6 +2509,7 @@ export const CourseDetail: React.FC = () => {
         courseRunId: effectiveDetail?.courseRunId || selectedCourse.courseRunId || selectedCourse.courseCode,
         tscTitle: effectiveDetail?.tscTitle,
         tscCode: effectiveDetail?.tscCode,
+        caslSkills: effectiveDetail?.caslSkills,
         trainingHours: effectiveDetail?.trainingHours || selectedCourse.trainingHours,
         assessmentHours: effectiveDetail?.assessmentHours || selectedCourse.assessmentHours,
         startDate: effectiveDetail?.startDate || selectedCourse.startDate,
@@ -2715,7 +2549,7 @@ export const CourseDetail: React.FC = () => {
         practicalAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider
             ? true
             : effectiveDetail?.practicalAssessmentPublished ?? false,
-        topics: effectiveUnits?.map((unit, index) => ({
+        topics: effectiveUnits?.filter(unit => !isLabsUnit(unit.title)).map((unit, index) => ({
             id: unit.id || `topic-${index}`,
             title: unit.title,
             subtopics: unit.subtopics?.map((subtopic: any) => ({
@@ -2938,7 +2772,7 @@ export const CourseDetail: React.FC = () => {
                         </div>
                     )}
 
-                    <div className="xl:grid xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8">
+                    <div className={`xl:grid ${userRole === UserRole.Trainer ? 'xl:grid-cols-[minmax(320px,1fr)_minmax(0,2fr)] xl:gap-6' : 'xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8'}`}>
                         {/* Desktop Sidebar */}
                         <aside className="hidden xl:block">
                             <Card className="">

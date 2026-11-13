@@ -3,6 +3,7 @@ import type { calendar_v3 } from 'googleapis';
 import pool from '../db';
 import { getCalendarClient } from './calendarClient';
 import { ensureClassCalendarEvent } from './ensureClassCalendarEvent';
+import { collectRunCalendarEvents, meetLinkOfEvent, storeRunMeetLink } from './meetLink';
 
 /**
  * Everything Google-Calendar-side that must happen when a trainer ACCEPTS an
@@ -88,8 +89,24 @@ export async function confirmTrainerOnCalendar(
   const emailLower = trainerEmail.trim().toLowerCase();
   const runIdStr = String(run.course_run_id || '');
   const virtual = isVirtualRun(run);
-  let meetLink: string | null = (run.virtual_meeting_link || '').trim() || null;
+  // The calendar event is the source of truth for the Meet link (learners'
+  // confirmation emails go out from the invite). Read it back from the run's own
+  // events first and store it on the run; only fall back to the stored link, and
+  // only generate a Meet, when no event has one.
+  let meetLink: string | null = null;
   let meetGenerated = false;
+  try {
+    const own = await collectRunCalendarEvents(calendar, calendarId, { id: run.id, course_run_id: run.course_run_id });
+    if (own.meetLink) {
+      meetLink = own.meetLink;
+      if (await storeRunMeetLink(run.id, meetLink)) {
+        console.log(`📹 [confirmTrainerOnCalendar] run=${runIdStr}: stored Meet link from calendar event: ${meetLink}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️ [confirmTrainerOnCalendar] could not read Meet link from calendar for run=${runIdStr}:`, e instanceof Error ? e.message : e);
+  }
+  if (!meetLink) meetLink = (run.virtual_meeting_link || '').trim() || null;
 
   for (let i = 0; i < mapped.rows.length; i++) {
     const eventId = mapped.rows[i].google_event_id;
@@ -114,6 +131,14 @@ export async function confirmTrainerOnCalendar(
       // 4) Google Meet for virtual classes — generate once, on the first live event.
       if (virtual && !meetLink && !meetGenerated) {
         try {
+          // Never issue a createRequest on an event that already has a conference —
+          // that can replace the room learners were already invited to.
+          const existing = meetLinkOfEvent(evt);
+          if (existing) {
+            meetLink = existing;
+            await storeRunMeetLink(run.id, meetLink);
+            console.log(`📹 [confirmTrainerOnCalendar] run=${runIdStr}: event already has Meet ${meetLink}`);
+          } else {
           await calendar.events.patch({
             calendarId, eventId,
             conferenceDataVersion: 1,
@@ -134,21 +159,15 @@ export async function confirmTrainerOnCalendar(
             const link = fresh?.hangoutLink
               || fresh?.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri
               || null;
-            if (link) { meetLink = link; evt = fresh; break; }
+            if (link && fresh) { meetLink = link; evt = fresh; break; }
             await new Promise(r => setTimeout(r, 1500));
           }
           if (meetLink) {
-            await pool.query(
-              `UPDATE course_run
-                  SET virtual_meeting_link = $2,
-                      virtual_meeting_provider = 'google_meet',
-                      updated_at = NOW()
-                WHERE id = $1`,
-              [run.id, meetLink]
-            );
+            await storeRunMeetLink(run.id, meetLink);
             console.log(`📹 [confirmTrainerOnCalendar] Google Meet generated for run=${runIdStr}: ${meetLink}`);
           } else {
             console.warn(`⚠️ [confirmTrainerOnCalendar] Meet create request sent but no link resolved for run=${runIdStr}`);
+          }
           }
         } catch (meetErr) {
           console.error(`❌ [confirmTrainerOnCalendar] Meet generation failed for run=${runIdStr}:`, meetErr);

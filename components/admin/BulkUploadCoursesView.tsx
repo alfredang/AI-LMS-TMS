@@ -10,6 +10,7 @@ interface CourseRow {
   course_type?: string;
   tsc_title?: string;
   tsc_code?: string;
+  casl_skills?: string;
   training_hours?: number | string;
   assessment_hours?: number | string;
   domain?: string;
@@ -137,6 +138,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
             })(),
             tsc_title: str(['TSC Title', 'tsc_title']),
             tsc_code: str(['TSC Code', 'tsc_code']),
+            casl_skills: str(['CASL Skills', 'casl_skills']),
             training_hours: row['Duration (hrs)'] || row['Training Hours'] || row['training_hours'] || 0,
             assessment_hours: row['Assessment Hours'] || row['assessment_hours'] || 0,
             domain: str(['Domain', 'domain']),

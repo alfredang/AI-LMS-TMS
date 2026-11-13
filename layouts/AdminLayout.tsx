@@ -65,6 +65,7 @@ import PastAttendance from '../components/trainer/PastAttendance';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import ViewClassByDateView from '../components/admin/ViewClassByDateView';
 import SchedulerView from '../components/admin/SchedulerView';
+import GoogleAutomationsView from '../components/admin/GoogleAutomationsView';
 import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
@@ -228,6 +229,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.MicrosoftCertificate]: 'Microsoft Certificate',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
+  [AdminPage.GoogleAutomations]: 'Google Automations',
   [AdminPage.SchedulerSummary]: 'Schedule Summary',
   [AdminPage.AddSessions]: 'Add Sessions',
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
@@ -510,6 +512,8 @@ const AdminLayout: React.FC = () => {
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
         return <SchedulerView />;
+      case AdminPage.GoogleAutomations:
+        return <GoogleAutomationsView />;
       case AdminPage.SchedulerSummary:
         return <SchedulerSummaryView />;
       case AdminPage.WorkflowGuides:
@@ -542,7 +546,7 @@ const AdminLayout: React.FC = () => {
       {/* Main Layout Container */}
       <div className="flex flex-1">
         {/* Sidebar: icon rail when collapsed, full panel when expanded */}
-        <div className="flex flex-shrink-0">
+        <div className={`${adminPage === AdminPage.GoogleAutomations ? 'hidden md:flex' : 'flex'} flex-shrink-0`}>
           <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
             {/* Toggle arrow at top */}
             <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>

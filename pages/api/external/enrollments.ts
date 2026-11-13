@@ -79,6 +79,12 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
          e.enrolment_date,
          e.payment_status,
          e.assessment_status,
+         e.certificate AS certificate_url,
+         CASE
+           WHEN e.certificate = '__generating__' THEN 'generating'
+           WHEN NULLIF(BTRIM(e.certificate), '') IS NOT NULL THEN 'issued'
+           ELSE 'not_issued'
+         END AS certificate_status,
          e.course_sponsorship,
          e.progress_percent,
          e.nric,
@@ -91,6 +97,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
          c.course_code,
          c.course_fee,
          cr.course_run_id,
+         cr.id AS course_run_uuid,
          cr.start_date AS course_run_start,
          cr.end_date AS course_run_end,
          cr.class_status,

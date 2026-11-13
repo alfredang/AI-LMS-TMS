@@ -5,6 +5,23 @@ import { getGoogleCredentials } from '../google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 import { calendarWritesAllowed, calendarSkipReason } from '../calendar/calendarGuard';
 import * as crypto from 'crypto';
+import { extractEventRunId } from '../calendar/eventMatch';
+
+/** Record a created event in the durable per-date mapping so every other calendar
+ *  path (ensureClassCalendarEvent, Meet-link sync, cancel) finds it exactly. */
+async function registerCalendarEvent(runUuid: string, dateIso: string, eventId: string, baseEventId: string | null): Promise<void> {
+  if (!runUuid || !dateIso || !eventId) return;
+  try {
+    await pool.query(
+      `INSERT INTO course_run_calendar_event (course_run_id, event_date, google_event_id, base_event_id)
+       VALUES ($1::uuid, $2::date, $3, $4)
+       ON CONFLICT DO NOTHING`,
+      [runUuid, dateIso, eventId, baseEventId]
+    );
+  } catch (e) {
+    console.warn(`[calendar-sync] could not register event ${eventId} for run ${runUuid}:`, e instanceof Error ? e.message : e);
+  }
+}
 
 /**
  * Strip common prefixes from a calendar event summary so we can match it
@@ -228,6 +245,11 @@ export async function addDaLearnerToCalendar(
 
     // Merge API events with recently created events from cache
     const allEvents = [...(eventsResponse.data.items || []), ...Array.from(recentCreatedEventsCache.values())];
+    const mappedEventIds = new Set<string>(
+      (await pool.query<{ google_event_id: string }>(
+        `SELECT google_event_id FROM course_run_calendar_event WHERE course_run_id::text = $1`, [resolvedUuid]
+      )).rows.map(r => r.google_event_id)
+    );
     
     const strippedCourseTitle = stripPrefixes(courseTitle).toLowerCase();
     const learnerEmailLower = learnerEmail.trim().toLowerCase();
@@ -239,14 +261,17 @@ export async function addDaLearnerToCalendar(
       const dayNumber = i + 1;
 
       // 1. Find ALL events on this date matching the core course title string
+      // Exact match first (event stamped with this run's Course Run ID, or in the
+      // durable mapping) — recognises events created by ensureClassCalendarEvent /
+      // the CA sync even when the title wording differs. Title similarity is the fallback.
       const dateAndTitleMatches = allEvents.filter(evt => {
-        const evtTitleNormalized = stripPrefixes(evt.summary || '');
-        // Search for the cleaned course title within the cleaned event title (most robust)
-        const titleMatch = evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized);
-        if (!titleMatch) return false;
-
         const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
-        return evtDate === targetDate;
+        if (evtDate !== targetDate || evt.status === 'cancelled') return false;
+        if (evt.id && mappedEventIds.has(evt.id)) return true;
+        const evtRunId = extractEventRunId(evt);
+        if (ssgRunId && evtRunId) return evtRunId === String(ssgRunId).toLowerCase();
+        const evtTitleNormalized = stripPrefixes(evt.summary || '');
+        return evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized);
       });
 
       // 2. Try to strictly differentiate parallel sessions using "Day N" in the raw summary
@@ -365,7 +390,10 @@ export async function addDaLearnerToCalendar(
             },
             sendUpdates: 'none'
           });
-          if (newEvent.data.id) result.addedTo++;
+          if (newEvent.data.id) {
+            result.addedTo++;
+            await registerCalendarEvent(resolvedUuid, firstMissing.date, newEvent.data.id, null);
+          }
         } else {
           // Create recurring event using RDATE
           const rdates = missingDates.slice(1).map(m => m.date.replace(/-/g, '') + 'T093000');
@@ -405,6 +433,7 @@ export async function addDaLearnerToCalendar(
               const missingObj = missingDates.find(m => m.date === instDate);
               
               if (missingObj && instance.id) {
+                await registerCalendarEvent(resolvedUuid, instDate, instance.id, newEvent.data.id);
                 const dayTitle = `Day ${missingObj.dayNumber} - ${baseTitle}`;
                 await calendar.events.patch({
                   calendarId,

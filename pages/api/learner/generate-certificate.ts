@@ -1,12 +1,8 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { AuthedApiRequest, withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { Pool } from 'pg';
+import pool from '../../../lib/db';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
 import { checkCertificateIssuance } from '../../../lib/services/certificateIssuance';
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-});
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
@@ -20,6 +16,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     try {
+        const authUser = (req as AuthedApiRequest).authUser!;
+        const privileged = authUser.isService || ['admin', 'trainingProvider', 'trainer', 'developer']
+            .some(role => authUser.roles.has(role));
+        if (!privileged) {
+            const owned = await pool.query(
+                `SELECT 1 FROM enrollment WHERE id = $1 AND user_id = $2 LIMIT 1`,
+                [enrolmentId, authUser.id]
+            );
+            if (owned.rowCount === 0) {
+                return res.status(403).json({ success: false, message: 'You may only generate your own certificate.' });
+            }
+        }
+
         // Guard: this is the learner-facing, self-service path. A certificate may
         // only be minted once the class has actually ended (or the trainer marked
         // the learner Competent) AND the minimum attendance is met — otherwise a
@@ -43,4 +52,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(handler);
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'trainer', 'developer', 'learner'] });

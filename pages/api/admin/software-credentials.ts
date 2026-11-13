@@ -11,12 +11,41 @@ type Row = {
   licence_type: string;
   url: string;
   notes: string;
+  recovery_code: string;
+  two_factor: string;
   created_at: string;
   updated_at: string;
 };
 
+let ensurePromise: Promise<void> | null = null;
+
+/** Adds the recovery_code / two_factor columns on tenants that predate them. */
+function ensureRecoveryColumns(): Promise<void> {
+  if (!ensurePromise) {
+    ensurePromise = (async () => {
+      const { rowCount } = await pool.query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'software_credential'
+            AND column_name IN ('recovery_code', 'two_factor')`
+      );
+      if (rowCount === 2) return;
+      await pool.query(
+        `ALTER TABLE public.software_credential
+           ADD COLUMN IF NOT EXISTS recovery_code TEXT NOT NULL DEFAULT '',
+           ADD COLUMN IF NOT EXISTS two_factor    TEXT NOT NULL DEFAULT ''`
+      );
+    })().catch((err) => {
+      ensurePromise = null;
+      throw err;
+    });
+  }
+  return ensurePromise;
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    await ensureRecoveryColumns();
+
     if (req.method === 'GET') {
       const result = await pool.query<Row>(
         `SELECT * FROM public.software_credential
@@ -26,36 +55,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'POST') {
-      const { license, software, login, password, licence_type, url, notes } = req.body || {};
+      const { license, software, login, password, licence_type, url, notes, recovery_code, two_factor } = req.body || {};
       if (!license || typeof license !== 'string') {
         return res.status(400).json({ success: false, message: 'license is required' });
       }
       const result = await pool.query<Row>(
         `INSERT INTO public.software_credential
-           (license, software, login, password, licence_type, url, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+           (license, software, login, password, licence_type, url, notes, recovery_code, two_factor)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          RETURNING *`,
-        [license, software || '', login || '', password || '', licence_type || '', url || '', notes || '']
+        [license, software || '', login || '', password || '', licence_type || '', url || '', notes || '',
+         recovery_code || '', two_factor || '']
       );
       return res.status(200).json({ success: true, data: result.rows[0] });
     }
 
     if (req.method === 'PUT') {
-      const { id, license, software, login, password, licence_type, url, notes } = req.body || {};
+      const { id, license, software, login, password, licence_type, url, notes, recovery_code, two_factor } = req.body || {};
       if (!id) return res.status(400).json({ success: false, message: 'id is required' });
       const result = await pool.query<Row>(
         `UPDATE public.software_credential
-            SET license      = $2,
-                software     = $3,
-                login        = $4,
-                password     = $5,
-                licence_type = $6,
-                url          = $7,
-                notes        = $8,
-                updated_at   = NOW()
+            SET license       = $2,
+                software      = $3,
+                login         = $4,
+                password      = $5,
+                licence_type  = $6,
+                url           = $7,
+                notes         = $8,
+                recovery_code = $9,
+                two_factor    = $10,
+                updated_at    = NOW()
           WHERE id = $1
           RETURNING *`,
-        [id, license, software || '', login || '', password || '', licence_type || '', url || '', notes || '']
+        [id, license, software || '', login || '', password || '', licence_type || '', url || '', notes || '',
+         recovery_code || '', two_factor || '']
       );
       if (!result.rowCount) return res.status(404).json({ success: false, message: 'Not found' });
       return res.status(200).json({ success: true, data: result.rows[0] });

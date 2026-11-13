@@ -243,6 +243,7 @@ const ManagementCourseList: React.FC = () => {
                 course.courseCode?.toLowerCase().includes(searchLower) ||
                 course.newCourseCode?.toLowerCase().includes(searchLower) ||
                 course.tscTitle?.toLowerCase().includes(searchLower) ||
+                course.caslSkills?.toLowerCase().includes(searchLower) ||
                 course.tscCode?.toLowerCase().includes(searchLower) ||
                 (course.courseRunId && String(course.courseRunId).includes(searchLower)) ||
                 (course.courseRunCode && course.courseRunCode.toLowerCase().includes(searchLower)) ||
@@ -519,8 +520,11 @@ const ManagementCourseList: React.FC = () => {
 
                             <div className="text-xs space-y-2 mb-4 flex-grow min-h-[180px]">
                                 <DetailRow label="TGS Ref" value={displayCourseCodes(course)} />
-                                <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
-                                <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
+                                <DetailRow label="TSC Title" value={course.courseType === 'CASL' ? 'NA' : (course.tscTitle || 'N/A')} />
+                                <DetailRow label="TSC Code" value={course.courseType === 'CASL' ? 'NA' : (course.tscCode || 'N/A')} />
+                                {course.courseType === 'CASL' && (
+                                    <DetailRow label="CASL Skills" value={course.caslSkills || 'N/A'} />
+                                )}
                                 <DetailRow label="Course Type" value={
                                     <span className={`font-semibold px-2 py-0.5 rounded-full ${getTypeColor(course.courseType)}`}>
                                         {course.courseType}

@@ -2,10 +2,17 @@ import type { calendar_v3 } from 'googleapis';
 
 /** Strip storefront/title prefixes the way the existing calendar code does. */
 export function stripPrefixes(t: string): string {
-  return (t || '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .trim();
+  // Repeated so any order of "Day 2 - [VIRTUAL] WSQ - ..." / "*Day 2 - WSQ - ..." /
+  // "[VIRTUAL] Day 1 - WSQ - ..." collapses to the bare course title. The CA/DA
+  // calendar syncs title multi-day events "Day N - WSQ - <title>"; without
+  // stripping "Day N" those events never title-matched, so a second event was created.
+  let s = (t || '');
+  for (let i = 0; i < 4; i++) {
+    s = s
+      .replace(/^[\s*]*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID|E-LEARNING)\s*\]?[\s-:–]*/i, '')
+      .replace(/^[\s*]*Day\s*[-:]?\s*\d+[\s-:–]*/i, '');
+  }
+  return s.trim();
 }
 
 /** The YYYY-MM-DD date of a calendar event (timed or all-day). */
@@ -66,23 +73,27 @@ export function findEventOnDate(
     return er === null || er === runIdLower;
   };
 
-  // 2) title substring, on the target date
-  if (!match) {
-    match = events.find(evt => {
-      const s = stripPrefixes(evt.summary || '').toLowerCase();
-      const titleMatch = s.includes(strippedTitle) || strippedTitle.includes(s);
-      return eventDateIso(evt) === dateIso && titleMatch && notAnotherRun(evt);
-    });
+  // 2) same title (normalised), on the target date. Was substring containment,
+  //    which let "Autonomous AI Agents" claim "Build a Human–AI Workforce with
+  //    Autonomous AI Agents" on the same day — and then its Meet link.
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const normTitle = norm(strippedTitle);
+  if (!match && normTitle) {
+    match = events.find(evt =>
+      eventDateIso(evt) === dateIso && notAnotherRun(evt) &&
+      norm(stripPrefixes(evt.summary || '')) === normTitle);
   }
 
-  // 3) >=60% title-word overlap, on the target date
+  // 3) >=60% title-word overlap IN BOTH DIRECTIONS, on the target date — so a
+  //    short title fully contained in a longer, different course title fails.
   if (!match && titleWords.size > 0) {
     match = events.find(evt => {
       const s = stripPrefixes(evt.summary || '').toLowerCase();
-      const evtWords = s.split(/\s+/).filter(w => w.length > 2);
-      const overlap = evtWords.filter(w => titleWords.has(w));
+      const evtWords = new Set(s.split(/\s+/).filter(w => w.length > 2));
+      if (evtWords.size === 0) return false;
+      let overlap = 0; for (const w of evtWords) if (titleWords.has(w)) overlap++;
       return eventDateIso(evt) === dateIso && notAnotherRun(evt) &&
-        overlap.length >= Math.ceil(titleWords.size * 0.6);
+        overlap >= Math.ceil(titleWords.size * 0.6) && overlap >= Math.ceil(evtWords.size * 0.6);
     });
   }
 

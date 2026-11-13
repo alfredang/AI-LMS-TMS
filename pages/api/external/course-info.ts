@@ -60,7 +60,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   OR NULLIF(c.new_course_code, '') = $1`;
     } else {
       params.push(`%${search}%`);
-      where = `WHERE (c.title ILIKE $1 OR c.course_code ILIKE $1)`;
+      where = `WHERE (c.title ILIKE $1 OR c.course_code ILIKE $1)
+                 AND (c.course_code NOT LIKE 'TGS-%' OR c.course_availability_status = 'active')`;
     }
 
     const result = await pool.query(
@@ -83,7 +84,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          c.num_of_days,
          c.course_link,
          c.brochure_link,
-         c.skillsfuture_link,
+         CASE
+           WHEN c.course_code LIKE 'TGS-%' AND c.course_availability_status = 'active'
+             THEN 'https://courses.myskillsfuture.gov.sg/courses/' || COALESCE(
+               (SELECT h.code FROM course_code_history h
+                 WHERE h.course_id = c.id AND h.is_current LIMIT 1),
+               NULLIF(c.new_course_code, ''), c.course_code)
+           WHEN c.course_code NOT LIKE 'TGS-%' THEN c.skillsfuture_link
+           ELSE NULL
+         END AS skillsfuture_link,
+         c.course_availability_status,
+         c.course_availability_reason,
+         c.course_availability_checked_at,
+         c.ssg_has_future_run,
          c.sf_for_business_link,
          c.description,
          c.course_outline,

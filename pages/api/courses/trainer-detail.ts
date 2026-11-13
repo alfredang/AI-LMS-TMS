@@ -2,6 +2,7 @@ import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
 import { requireSelfTrainer } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureCaslSkillsColumn } from '@lib/course-casl-skills-ensure-column';
 
 // Types for the response data
 interface LearningUnitRow {
@@ -48,6 +49,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!(await requireSelfTrainer((req as AuthedApiRequest).authUser!, res, { id: String(trainerUserId) }))) return;
 
   try {
+    await ensureCaslSkillsColumn();
     // Both learner and trainer roles now provide courseRunId as UUID
     const actualCourseRunId = Array.isArray(courseRunId) ? courseRunId[0] : courseRunId;
 
@@ -63,6 +65,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         c.new_course_code,
         c.tsc_title,
         c.tsc_code,
+        c.casl_skills,
         cr.id AS course_run_id,
         cr.digital_attendance_id,
         c.training_hours,
@@ -225,6 +228,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           currentCourseCode: courseDetail.course_code || '',
           tscTitle: courseDetail.tsc_title,
           tscCode: courseDetail.tsc_code,
+          caslSkills: courseDetail.casl_skills || '',
           courseRunId: courseDetail.external_course_run_id,
           courseRunUuid: courseDetail.course_run_id, // This is the UUID we need for grading APIs
           digitalAttendanceId: courseDetail.digital_attendance_id,

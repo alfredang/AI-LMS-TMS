@@ -6,6 +6,7 @@ import { View, DeveloperPage } from '@app-types';
 import CourseList from '../components/CourseList';
 import SeoGeneratorView from '../components/developer/SeoGeneratorView';
 import CourseChangeControlView from '../components/developer/CourseChangeControlView';
+import GoogleAutomationsView from '../components/admin/GoogleAutomationsView';
 import CourseEditor from '../components/CourseEditor';
 import { CourseDetail } from '../components/CourseDetail';
 import ProfileView from '../components/ProfileView';
@@ -39,6 +40,7 @@ const DeveloperLayout: React.FC = () => {
   }
 
   const renderContent = () => {
+    if (developerPage === DeveloperPage.GoogleAutomations) return <GoogleAutomationsView />;
     if (editingCourse) {
       return <CourseEditor />;
     }
@@ -103,7 +105,7 @@ const DeveloperLayout: React.FC = () => {
       {/* Main Layout Container */}
       <div className="flex flex-1">
         {/* Sidebar area */}
-        <div className="flex flex-shrink-0">
+        <div className={`${developerPage === DeveloperPage.GoogleAutomations ? 'hidden md:flex' : 'flex'} flex-shrink-0`}>
           <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
             {/* Toggle arrow at top */}
             <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>

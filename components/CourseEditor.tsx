@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { Course, Topic, Subtopic, ModeOfLearning, UserRole, AssessmentMethodKey, ASSESSMENT_METHOD_LABELS, DEFAULT_ASSESSMENT_METHODS } from '@app-types';
+import { CASL_NO_TSC } from '@lib/courseCaslSkills';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
@@ -549,6 +550,10 @@ const CourseEditor: React.FC = () => {
         assessments: editingCourse.assessments || [],
         assessmentMethods: initialAssessmentMethods,
         modeOfLearning: editingCourse.modeOfLearning?.length ? editingCourse.modeOfLearning : [ModeOfLearning.Physical],
+        // A CASL course not yet migrated still holds its skill area in TSC Title.
+        caslSkills: editingCourse.caslSkills
+            || (editingCourse.courseType === 'CASL' && editingCourse.tscTitle?.trim().toUpperCase() !== CASL_NO_TSC ? editingCourse.tscTitle : '')
+            || '',
         // Leave blank when unset — the standard branded banner is rendered as the fallback
         imageUrl: editingCourse.imageUrl || ''
     });
@@ -1084,6 +1089,33 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         }
     };
 
+    // CASL courses have no TSC Title / TSC Code; their skill area lives in CASL
+    // Skills. Switching type carries the value across so nothing typed is lost.
+    const handleCourseTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const courseType = e.target.value as Course['courseType'];
+        setCourse(prev => {
+            const isNa = (v?: string) => !v || v.trim().toUpperCase() === CASL_NO_TSC;
+            if (courseType === 'CASL') {
+                return {
+                    ...prev,
+                    courseType,
+                    caslSkills: prev.caslSkills?.trim() ? prev.caslSkills : (isNa(prev.tscTitle) ? '' : prev.tscTitle),
+                    tscTitle: CASL_NO_TSC,
+                    tscCode: CASL_NO_TSC,
+                };
+            }
+            if (prev.courseType === 'CASL') {
+                return {
+                    ...prev,
+                    courseType,
+                    tscTitle: isNa(prev.tscTitle) ? (prev.caslSkills || '') : prev.tscTitle,
+                    tscCode: isNa(prev.tscCode) ? '' : prev.tscCode,
+                };
+            }
+            return { ...prev, courseType };
+        });
+    };
+
     const handleFundingDateChange = (
         field: 'fundingValidityStart' | 'fundingValidity',
         displayValue: string
@@ -1202,8 +1234,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             requiredFields.push({ field: course.assessmentHours, name: 'Assessment Hours' });
         }
 
-        // TSC Title and TSC Code are required for WSQ, CASL and IBF courses
-        const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF';
+        // TSC Title and TSC Code are required for WSQ and IBF courses. CASL courses
+        // have no TSC; they carry CASL Skills instead.
+        const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'IBF';
+        if (course.courseType === 'CASL' && (isNewCourse || editingCourse.caslSkills)) {
+            requiredFields.push({ field: course.caslSkills || '', name: 'CASL Skills' });
+        }
         if (isTscRequired) {
             if (isNewCourse || editingCourse.tscTitle) {
                 requiredFields.push({ field: course.tscTitle || '', name: 'TSC Title' });
@@ -1269,8 +1305,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 imageUrl: files.courseImage ? undefined : course.imageUrl,
                 courseCode: course.courseCode,
                 newCourseCode: course.newCourseCode ?? '',
-                tscTitle: course.tscTitle,
-                tscCode: course.tscCode,
+                tscTitle: course.courseType === 'CASL' ? CASL_NO_TSC : course.tscTitle,
+                tscCode: course.courseType === 'CASL' ? CASL_NO_TSC : course.tscCode,
+                caslSkills: course.courseType === 'CASL' ? (course.caslSkills || '') : undefined,
                 trainingHours: course.trainingHours,
                 assessmentHours: course.assessmentHours,
                 modeOfLearning: selectedMode, // Use the validated mode
@@ -1847,8 +1884,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         </>
                                     );
                                 })()}
-                                <ReadonlyValueField label="TSC Title" value={course.tscTitle} />
-                                <ReadonlyValueField label="TSC Code" value={course.tscCode} />
+                                <ReadonlyValueField label="TSC Title" value={course.courseType === 'CASL' ? CASL_NO_TSC : course.tscTitle} />
+                                <ReadonlyValueField label="TSC Code" value={course.courseType === 'CASL' ? CASL_NO_TSC : course.tscCode} />
+                                {course.courseType === 'CASL' && (
+                                    <ReadonlyValueField label="CASL Skills" value={course.caslSkills} />
+                                )}
                                 <ReadonlyValueField label="Funding Validity Start Date" value={course.fundingValidityStart} />
                                 <ReadonlyValueField label="Funding Validity End Date" value={course.fundingValidity} />
                                 <ReadonlyValueField label="Training Hours" value={formatDisplayValue(course.trainingHours)} />
@@ -2157,17 +2197,28 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     SSG submissions. Both codes resolve to this same course.
                                 </p>
                             </div>
+                            {course.courseType === 'CASL' && (
+                                <div>
+                                    <label htmlFor="caslSkills" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        CASL Skills <span className="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="caslSkills" name="caslSkills" value={course.caslSkills || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Data Analytics" />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        CASL courses are not mapped to a TSC, so TSC Title and TSC Code are NA.
+                                    </p>
+                                </div>
+                            )}
                             <div>
                                 <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
+                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
-                                <input type="text" id="tscTitle" name="tscTitle" value={course.tscTitle} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Web Development" />
+                                <input type="text" id="tscTitle" name="tscTitle" value={course.courseType === 'CASL' ? CASL_NO_TSC : course.tscTitle} onChange={handleCourseChange} disabled={course.courseType === 'CASL'} className={`${inputClasses} disabled:opacity-60 disabled:cursor-not-allowed`} placeholder="e.g. Web Development" />
                             </div>
                             <div>
                                 <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
+                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
-                                <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
+                                <input type="text" id="tscCode" name="tscCode" value={course.courseType === 'CASL' ? CASL_NO_TSC : course.tscCode} onChange={handleCourseChange} disabled={course.courseType === 'CASL'} className={`${inputClasses} disabled:opacity-60 disabled:cursor-not-allowed`} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
                             <div>
                                 <label htmlFor="fundingValidityStart" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -2256,11 +2307,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     id="courseType"
                                     name="courseType"
                                     value={course.courseType}
-                                    onChange={handleCourseChange}
+                                    onChange={handleCourseTypeChange}
                                     className={inputClasses}
                                 >
                                     <option value="Non-WSQ">Non-WSQ</option>
                                     <option value="WSQ">WSQ</option>
+                                    <option value="CASL">CASL</option>
                                     <option value="IBF">IBF</option>
                                 </select>
                             </div>

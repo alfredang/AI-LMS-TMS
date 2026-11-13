@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS public.course_announcement (
 
 CREATE INDEX IF NOT EXISTS idx_course_announcement_course_run_id
     ON public.course_announcement(course_run_id);
+
+-- Attachments are stored in the class's Google Drive Assessment Records
+-- session folder; keep the Drive file id so a deleted post can be unshared.
+ALTER TABLE public.course_announcement ADD COLUMN IF NOT EXISTS drive_file_id TEXT;
 `;
 
 const MIGRATE_FROM_LEGACY = `

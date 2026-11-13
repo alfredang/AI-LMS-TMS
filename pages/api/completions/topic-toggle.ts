@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { NOT_LABS_UNIT_SQL } from '../../../lib/courseLessonUnits';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (cors(req, res)) return;
@@ -42,7 +43,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                  SELECT lu.id FROM public.learning_unit lu
                  JOIN public.course_run cr ON cr.course_id = lu.course_id
                  LEFT JOIN public.subtopic st ON st.learning_unit_id = lu.id
-                 WHERE cr.id = $2
+                 WHERE cr.id = $2 AND ${NOT_LABS_UNIT_SQL}
                  GROUP BY lu.id
                  HAVING COUNT(st.id) = 0
                ) topics_without_subtopics
@@ -51,15 +52,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                SELECT COUNT(*) FROM public.subtopic st
                JOIN public.learning_unit lu ON lu.id = st.learning_unit_id
                JOIN public.course_run cr ON cr.course_id = lu.course_id
-               WHERE cr.id = $2
+               WHERE cr.id = $2 AND ${NOT_LABS_UNIT_SQL}
              ) AS total_items,
              (
                SELECT COUNT(*) FROM public.topic_completion tc
-               WHERE tc.user_id = $1 AND tc.course_run_id = $2
+               JOIN public.learning_unit lu ON lu.id = tc.topic_id
+               WHERE tc.user_id = $1 AND tc.course_run_id = $2 AND ${NOT_LABS_UNIT_SQL}
              ) +
              (
                SELECT COUNT(*) FROM public.subtopic_completion sc
-               WHERE sc.user_id = $1 AND sc.course_run_id = $2
+               JOIN public.subtopic st ON st.id = sc.subtopic_id
+               JOIN public.learning_unit lu ON lu.id = st.learning_unit_id
+               WHERE sc.user_id = $1 AND sc.course_run_id = $2 AND ${NOT_LABS_UNIT_SQL}
              ) AS completed_items
          ) stats
        )

@@ -7,6 +7,7 @@ import { authService, User } from '@lib/services/authService';
 import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 import { clearMyEventsCache } from '@lib/calendar/myEventsCache';
+import { isLabsUnit } from '@lib/courseLessonUnits';
 
 // Function to fetch training provider info for all users
 const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
@@ -1189,6 +1190,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           tgsRef: trainerData.data.courseDetail.tgsRef,
           tscTitle: trainerData.data.courseDetail.tscTitle,
           tscCode: trainerData.data.courseDetail.tscCode,
+          caslSkills: trainerData.data.courseDetail.caslSkills,
           courseRunId: trainerData.data.courseDetail.courseRunId, // String format for display
           courseRunUuid: trainerData.data.courseDetail.courseRunUuid, // UUID format for API calls
           digitalAttendanceId: trainerData.data.courseDetail.digitalAttendanceId,
@@ -1643,11 +1645,13 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCompletedTopics(newCompletedTopics);
 
     // Optimistic update — overall progress on course card
-    const totalItems = learningUnits.reduce((sum, unit) =>
+    const lessonUnits = learningUnits.filter(unit => !isLabsUnit(unit.title));
+    const totalItems = lessonUnits.reduce((sum, unit) =>
       sum + (unit.subtopics.length > 0 ? unit.subtopics.length : 1), 0);
-    const completedItems =
-      completedSubtopics.length +
-      learningUnits.filter(u => u.subtopics.length === 0 && newCompletedTopics.includes(u.id)).length;
+    const completedItems = lessonUnits.reduce((sum, unit) =>
+      sum + (unit.subtopics.length > 0
+        ? unit.subtopics.filter(st => completedSubtopics.includes(st.id)).length
+        : (newCompletedTopics.includes(unit.id) ? 1 : 0)), 0);
     const newProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
     setSelectedCourse(prev => prev ? { ...prev, progressPercent: newProgress } : prev);
 

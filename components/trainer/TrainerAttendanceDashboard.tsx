@@ -116,6 +116,87 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
   </div>
 );
 
+/** Show/Hide toggle for a collapsible section header. */
+const CollapseToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-expanded={open}
+    className="flex items-center gap-1 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
+  >
+    {open ? 'Hide' : 'Show'}
+    <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  </button>
+);
+
+interface SessionKpiData {
+  eAttendance: number;
+  enrolments: number;
+  manual: number;
+  missingEAttendance: string[];
+  missingManual: string[];
+  loading: boolean;
+}
+
+/** Three per-session numbers a trainer reconciles: they should all be equal. */
+const SessionKpis: React.FC<{ kpis: SessionKpiData }> = ({ kpis }) => {
+  const { eAttendance, enrolments, manual, missingEAttendance, missingManual, loading } = kpis;
+  const allMatch = !loading && enrolments > 0 && eAttendance === enrolments && manual === enrolments;
+  const tiles: Array<{ label: string; value: number; hint: string }> = [
+    { label: 'E-Attendance Taken', value: eAttendance, hint: 'Trainees signed in on SSG for this session' },
+    { label: 'Enrolments', value: enrolments, hint: 'Active SSG enrolments for this class' },
+    { label: 'Manual Attendance', value: manual, hint: 'Marked present in Manual Attendance Taking' },
+  ];
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {tiles.map(t => {
+          const off = !loading && enrolments > 0 && t.value !== enrolments;
+          return (
+            <div
+              key={t.label}
+              title={t.hint}
+              className={`rounded-lg border px-4 py-3 bg-surface-elevated ${off ? 'border-amber-500/60' : allMatch ? 'border-green-500/60' : 'border-default'}`}
+            >
+              <div className="text-xs font-medium text-on-surface-secondary">{t.label}</div>
+              <div className={`text-2xl font-bold mt-0.5 ${off ? 'text-amber-400' : 'text-on-surface'}`}>
+                {loading ? <span className="inline-block h-6 w-8 rounded bg-surface animate-pulse align-middle" /> : t.value}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!loading && enrolments > 0 && (
+        allMatch ? (
+          <p className="text-sm text-green-500 flex items-center gap-1.5">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            All three numbers match.
+          </p>
+        ) : (
+          <div className="text-sm text-amber-400 space-y-1">
+            {missingEAttendance.length > 0 && (
+              <p><span className="font-semibold">No e-attendance yet ({missingEAttendance.length}):</span> {missingEAttendance.join(', ')}</p>
+            )}
+            {missingManual.length > 0 && (
+              <p><span className="font-semibold">Not marked present manually ({missingManual.length}):</span> {missingManual.join(', ')}</p>
+            )}
+            {eAttendance > enrolments && (
+              <p>More e-attendance than enrolments: someone signed in without an active SSG enrolment (check Class Enrolments).</p>
+            )}
+            {missingEAttendance.length === 0 && missingManual.length === 0 && manual > enrolments && (
+              <p>Manual attendance includes learners added by hand who are not in the SSG enrolments.</p>
+            )}
+          </div>
+        )
+      )}
+    </div>
+  );
+};
+
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const router = useRouter();
   const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId, loadCourseData } = useLms();
@@ -137,7 +218,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     // class page could show one class's title while its QR codes pointed at another.
     void loadCourseData(sourceCourse).catch(err => console.error('Failed to reload class:', err));
   };
-  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
+  const { courses, loading: coursesLoading } = // All of the trainer's classes, past ones included: enrolments and manual attendance
+  // must stay viewable after a class ends (they are the record for checking/claims).
+  useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, false);
 
   // Admin-mode course run lookup
   const [adminInput, setAdminInput]             = useState('');
@@ -160,8 +243,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [isFetchingSessions, setIsFetchingSessions]    = useState(false);
   const [fetchError, setFetchError]                    = useState<string | null>(null);
 
-  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist'>('qr');
-
   const [isLoadingAttendance, setIsLoadingAttendance]  = useState(false);
   const [showNric, setShowNric]                        = useState(false);
   const [attendanceError, setAttendanceError]          = useState<string | null>(null);
@@ -181,6 +262,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [enrolmentError, setEnrolmentError]            = useState<string | null>(null);
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
   const [showEnrolContact, setShowEnrolContact]        = useState(false);
+  const [enrolmentsOpen, setEnrolmentsOpen]            = useState(true);
+  const [sessionAttendanceOpen, setSessionAttendanceOpen] = useState(true);
+  const [manualOpen, setManualOpen]                    = useState(true);
 
   // Local admin manual assignments
   const [localAssignments, setLocalAssignments]        = useState<any[]>([]);
@@ -218,16 +302,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [isDeletingFromClass, setIsDeletingFromClass]  = useState(false);
   const [deleteLearnerError, setDeleteLearnerError]    = useState<string | null>(null);
 
-  // API already filters to upcoming classes (today → today+7, not ended); just sort
+  // Current & upcoming classes first (soonest first), then past classes (most recent first).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const startTime = (c: { startDate?: string | null }) => new Date(c.startDate ?? '').getTime() || 0;
+  const isPastCourse = (c: { endDate?: string | null }) => !!c.endDate && new Date(c.endDate) < today;
   const activeCourses = courses
-    .filter(c => !c.endDate || new Date(c.endDate) >= today)
-    .sort((a, b) => {
-      const aTime = new Date(a.startDate ?? '').getTime();
-      const bTime = new Date(b.startDate ?? '').getTime();
-      return aTime - bTime;
-    });
+    .filter(c => !isPastCourse(c))
+    .sort((a, b) => startTime(a) - startTime(b));
+  const pastCourses = courses
+    .filter(c => isPastCourse(c))
+    .sort((a, b) => startTime(b) - startTime(a));
+  const fmtClassDate = (d?: string | null) =>
+    d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
   const selectedCourse = isAdminMode
     ? adminCourse
@@ -988,7 +1075,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         courseRunId: course.courseRunCode || '',
         sessionId,
       });
-      const response = await fetch(`/api/ssg/session-attendance?${params}`);
+      // SSG e-attendance changes minute to minute while learners sign in: never serve a cached copy
+      params.set('_ts', String(Date.now()));
+      const response = await fetch(`/api/ssg/session-attendance?${params}`, { cache: 'no-store' });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`Request failed ${response.status}: ${text}`);
@@ -1001,7 +1090,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         ?? courseRun?.sessions?.[0]
         ?? null;
       setAttendanceRecords(matchedSession?.attendance ?? []);
-      setAttendanceSuccess('Attendance data fetched successfully.');
+      const at = new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      setAttendanceSuccess(`E-attendance updated from SSG at ${at}.`);
     } catch (err) {
       setAttendanceError(err instanceof Error ? err.message : 'Failed to fetch attendance.');
     } finally {
@@ -1100,6 +1190,48 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [enrolmentRecords, localAssignments]);
 
+  // Per-session KPIs: SSG e-attendance taken vs active enrolments vs manual "present".
+  // All three should be equal once every learner has signed in; the gaps name who is missing.
+  const sessionKpis = React.useMemo((): SessionKpiData => {
+    const norm = (v: unknown) => String(v ?? '').trim().toUpperCase();
+    const isPresentStatus = (st: unknown) => ['confirmed', 'present', 'attended'].includes(String(st ?? '').toLowerCase());
+
+    // Active enrolments, one per NRIC (cancelled excluded) — same rule as Manual Attendance
+    const enrolled = new Map<string, string>();
+    for (const item of enrolmentRecords) {
+      const enrol = item?.enrolment ?? item;
+      const status = String(enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+      if (status === 'cancelled') continue;
+      const trainee = enrol?.trainee ?? {};
+      const nric = norm(trainee?.id || trainee?.nric);
+      if (nric && !enrolled.has(nric)) enrolled.set(nric, trainee?.fullName || trainee?.name || nric);
+    }
+
+    // SSG e-attendance for the selected session (trainees only)
+    const eAttendance = new Set<string>();
+    for (const r of attendanceRecords) {
+      if (/trainer|assessor/i.test(String(r?.trainee?.attendeeType || ''))) continue;
+      if (!isPresentStatus(r?.status)) continue;
+      const nric = norm(r?.nric || r?.trainee?.id);
+      if (nric) eAttendance.add(nric);
+    }
+
+    // Manual attendance "present" for the session (enrolled rows + manually added learners)
+    const manualRows = [...manualAttendance, ...extraAttendees];
+    const manualPresent = new Set<string>(manualRows.filter(r => r.isPresent).map(r => norm(r.nric)).filter(Boolean));
+
+    const missingEAttendance = [...enrolled].filter(([n]) => !eAttendance.has(n)).map(([, name]) => name).sort();
+    const missingManual = [...enrolled].filter(([n]) => !manualPresent.has(n)).map(([, name]) => name).sort();
+    return {
+      eAttendance: eAttendance.size,
+      enrolments: enrolled.size,
+      manual: manualPresent.size,
+      missingEAttendance,
+      missingManual,
+      loading: isLoadingAttendance || isLoadingEnrolments || loadingManualAttendance,
+    };
+  }, [enrolmentRecords, attendanceRecords, manualAttendance, extraAttendees, isLoadingAttendance, isLoadingEnrolments, loadingManualAttendance]);
+
   return (
     <div className="space-y-5">
 
@@ -1126,7 +1258,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         )}
       </div>
 
-      {/* ── Class & Session Selection ── */}
+      {/* ── Class Selection: class, run details, attendance links ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
         <div className="flex items-center justify-between px-4 py-3 border-b border-default">
           <h2 className="text-sm font-semibold text-on-surface">Class Selection</h2>
@@ -1265,11 +1397,24 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     disabled={isFetchingSessions}
                   >
                     <option value="" disabled>— Select a class —</option>
-                    {activeCourses.map(c => (
-                      <option key={c.courseRunId} value={c.courseRunId}>
-                        {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}
-                      </option>
-                    ))}
+                    {activeCourses.length > 0 && (
+                      <optgroup label="Current & upcoming classes">
+                        {activeCourses.map(c => (
+                          <option key={c.courseRunId} value={c.courseRunId}>
+                            {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}{c.startDate ? ` — ${fmtClassDate(c.startDate)}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {pastCourses.length > 0 && (
+                      <optgroup label="Past classes">
+                        {pastCourses.map(c => (
+                          <option key={c.courseRunId} value={c.courseRunId}>
+                            {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}{c.startDate ? ` — ${fmtClassDate(c.startDate)}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
                 </div>
@@ -1326,30 +1471,89 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             </div>
           )}
 
-          {/* Session dropdown — shown after sessions load */}
-          {sessions.length > 0 && (
-            <div className="relative">
-              <label className="block text-xs font-medium text-on-surface-secondary mb-1">Session</label>
-              <select
-                value={selectedSession}
-                onChange={e => { setSelectedSession(e.target.value); handleFetchAttendance(e.target.value); }}
-                className="input-themed w-full border rounded px-3 py-2 text-sm pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              >
-                {sessions.map(s => (
-                  <option key={s.id} value={s.id}>{formatSessionLabel(s)}</option>
+          {/* Attendance links — per class (digital attendance ID), not per session */}
+          {selectedCourse && (
+            <div className="border-t border-default pt-4">
+            {isFetchingDigitalId ? (
+              <div className="flex items-center gap-2 text-sm text-muted py-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                Loading attendance link...
+              </div>
+            ) : digitalAttendanceId ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {(['qr', 'elist'] as const).map(type => (
+                  <div key={type}>
+                    <p className="text-xs font-medium text-on-surface-secondary mb-1">
+                      {type === 'qr' ? 'QR Attendance' : 'E-Attendance List'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={attendanceLinkUrl(type)}
+                        className="input-themed flex-1 min-w-0 border rounded px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
+                      />
+                      <a
+                        href={attendanceLinkUrl(type)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
+                      >
+                        <ExternalLinkIcon />
+                        Open
+                      </a>
+                    </div>
+                  </div>
                 ))}
-              </select>
-              <span className="absolute right-2 bottom-2.5 text-muted pointer-events-none text-xs">▼</span>
-            </div>
-          )}
-
-          {/* Total Sessions pill — appears below session dropdown once sessions are loaded */}
-          {sessions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
-                <span className="font-medium text-on-surface-secondary">Total Sessions</span>
-                <span className="font-bold text-on-surface">{sessions.length}</span>
-              </span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {digitalIdError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {digitalIdError}
+                  </p>
+                )}
+                <button
+                  onClick={() => selectedCourse?.courseRunId && selectedCourse?.courseRunCode
+                    && fetchDigitalAttendanceId(selectedCourse.courseRunId, selectedCourse.courseRunCode)}
+                  disabled={!selectedCourse?.courseRunCode}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-default rounded text-sm text-on-surface-secondary hover:bg-surface-elevated transition-colors disabled:opacity-50"
+                >
+                  <RefreshIcon className="w-3.5 h-3.5" />
+                  Load Attendance Link
+                </button>
+                {digitalIdError && (
+                  <div className="border-t border-default pt-3">
+                    <p className="text-xs text-on-surface-secondary mb-2">Or enter the RA code manually:</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={manualDaIdInput}
+                        onChange={e => { setManualDaIdInput(e.target.value); setManualDaIdError(null); }}
+                        placeholder="e.g. RA740761"
+                        className="input-themed flex-1 border rounded px-3 py-1.5 text-sm bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        onClick={saveManualDaId}
+                        disabled={isSavingManualDaId || !manualDaIdInput.trim()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                      >
+                        {isSavingManualDaId ? (
+                          <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
+                        ) : null}
+                        Save
+                      </button>
+                    </div>
+                    {manualDaIdError && (
+                      <p className="text-xs text-red-500 mt-1">{manualDaIdError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             </div>
           )}
 
@@ -1362,244 +1566,32 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               {fetchError}
             </p>
           )}
-          {attendanceError && (
-            <p className="text-sm text-red-500 flex items-center gap-1.5">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {attendanceError}
-            </p>
-          )}
-          {attendanceSuccess && !attendanceError && (
-            <p className="text-sm text-green-600 flex items-center gap-1.5">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              {attendanceSuccess}
-            </p>
-          )}
         </div>
       </div>
 
-      {/* ── Attendance Links ── */}
-      <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Attendance" />
-        <div className="p-4">
-          {/* Tab bar */}
-          <div className="flex border-b border-default mb-4">
-            {(['qr', 'elist'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  activeTab === tab
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-on-surface-secondary hover:text-on-surface'
-                }`}
-              >
-                {tab === 'qr' ? 'QR Attendance' : 'E-Attendance List'}
-              </button>
-            ))}
-          </div>
-
-          {isFetchingDigitalId ? (
-            <div className="flex items-center gap-2 text-sm text-muted py-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-              Loading attendance link...
-            </div>
-          ) : digitalAttendanceId ? (
-            <div>
-              <p className="text-xs text-on-surface-secondary mb-1.5">
-                {activeTab === 'qr' ? 'QR Attendance Link' : 'E-Attendance List Link'}
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={attendanceLinkUrl(activeTab)}
-                  className="input-themed flex-1 border rounded px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
-                />
-                <a
-                  href={attendanceLinkUrl(activeTab)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
-                >
-                  <ExternalLinkIcon />
-                  Open
-                </a>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {digitalIdError && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {digitalIdError}
-                </p>
-              )}
-              <button
-                onClick={() => selectedCourse?.courseRunId && selectedCourse?.courseRunCode
-                  && fetchDigitalAttendanceId(selectedCourse.courseRunId, selectedCourse.courseRunCode)}
-                disabled={!selectedCourse?.courseRunCode}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-default rounded text-sm text-on-surface-secondary hover:bg-surface-elevated transition-colors disabled:opacity-50"
-              >
-                <RefreshIcon className="w-3.5 h-3.5" />
-                Load Attendance Link
-              </button>
-              {digitalIdError && (
-                <div className="border-t border-default pt-3">
-                  <p className="text-xs text-on-surface-secondary mb-2">Or enter the RA code manually:</p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={manualDaIdInput}
-                      onChange={e => { setManualDaIdInput(e.target.value); setManualDaIdError(null); }}
-                      placeholder="e.g. RA740761"
-                      className="input-themed flex-1 border rounded px-3 py-1.5 text-sm bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <button
-                      onClick={saveManualDaId}
-                      disabled={isSavingManualDaId || !manualDaIdInput.trim()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
-                    >
-                      {isSavingManualDaId ? (
-                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
-                      ) : null}
-                      Save
-                    </button>
-                  </div>
-                  {manualDaIdError && (
-                    <p className="text-xs text-red-500 mt-1">{manualDaIdError}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Course Session Attendance ── */}
-      <div className="bg-surface rounded-lg border border-default shadow-sm overflow-x-auto">
-        <SectionHeader
-          title="Course Session Attendance"
-          count={attendanceRecords.length > 0 ? attendanceRecords.length : undefined}
-          loading={isLoadingAttendance}
-          right={
-            selectedSession ? (
-              <button
-                onClick={() => handleFetchAttendance(selectedSession)}
-                disabled={isLoadingAttendance}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshIcon className="w-3.5 h-3.5" />
-                Refetch Attendance
-              </button>
-            ) : undefined
-          }
-        />
-        <table className="w-full text-sm">
-          <thead className="bg-surface-elevated border-b border-default">
-            <tr>
-              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Name</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  NRIC
-                  {isAdminMode && (
-                    <button onClick={() => setShowNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                      {showNric ? 'Hide' : 'Show'}
-                    </button>
-                  )}
-                </div>
-              </th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Phone</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Type</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Status</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Entry Mode</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">TRAQOM</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoadingAttendance ? (
-              Array.from({ length: 5 }).map((_, idx) => (
-                <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 9 }).map((__, col) => (
-                    <td key={col} className="px-3 py-3">
-                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '70%' : '50%' }} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : attendanceRecords.length > 0 ? (
-              attendanceRecords.map((record: any, idx: number) => {
-                const nric: string = record.nric || record.trainee?.id || '';
-                const enrolMatch = enrolmentRecords.find((item: any) => {
-                  const t = (item?.enrolment ?? item)?.trainee ?? {};
-                  return (t?.id || t?.nric) === nric;
-                });
-                const enrolTrainee = enrolMatch ? ((enrolMatch?.enrolment ?? enrolMatch)?.trainee ?? {}) : {};
-                const inline = extractContact(record.trainee);
-                const looked = extractContact(enrolTrainee);
-                const email = inline.email || looked.email || '—';
-                const phone = inline.phone || looked.phone || '—';
-                return (
-                  <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
-                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
-                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{record.trainee?.name || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">
-                      {nric
-                        ? (showNric ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric))
-                        : '—'}
-                    </td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{email}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{phone}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.trainee?.attendeeType || '—'}</td>
-                    <td className="px-3 py-3"><StatusBadge value={record.status || '—'} /></td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.entryMode || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.sentToTraqom || '—'}</td>
-                  </tr>
-                );
-              })
-            ) : attendanceCourseRun ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
-                  No attendance records found for this session.
-                </td>
-              </tr>
-            ) : (
-              <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
-                  Select a class and session to load attendance.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── Class Enrolments ── */}
+      {/* ── Class Enrolments (per class, not per session — collapsible) ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
         <SectionHeader
           title="Class Enrolments"
           count={enrolmentRecords.length > 0 ? enrolmentRecords.length : undefined}
           loading={isLoadingEnrolments}
           right={
-            selectedCourse?.courseRunCode ? (
-              <button
-                onClick={() => fetchEnrolments(selectedCourse.courseRunCode!)}
-                disabled={isLoadingEnrolments}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshIcon className="w-3.5 h-3.5" />
-                Refetch Enrolments
-              </button>
-            ) : undefined
+            <>
+              {selectedCourse?.courseRunCode && (
+                <button
+                  onClick={() => fetchEnrolments(selectedCourse.courseRunCode!)}
+                  disabled={isLoadingEnrolments}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshIcon className="w-3.5 h-3.5" />
+                  Refetch Enrolments
+                </button>
+              )}
+              <CollapseToggle open={enrolmentsOpen} onToggle={() => setEnrolmentsOpen(v => !v)} />
+            </>
           }
         />
+        {enrolmentsOpen && (<>
         {enrolmentError && (
           <p className="px-4 py-2 text-xs text-red-500 flex items-center gap-1.5 border-b border-default">
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1745,6 +1737,184 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </tbody>
         </table>
         </div>{/* end overflow-x-auto */}
+        </>)}
+      </div>
+
+      {/* ── Session: filter + per-session KPIs (drives the two sections below) ── */}
+      <div className="bg-surface rounded-lg border border-default shadow-sm">
+        <SectionHeader
+          title="Session"
+          right={selectedSession ? (
+            <button
+              type="button"
+              onClick={() => handleFetchAttendance(selectedSession)}
+              disabled={isLoadingAttendance}
+              title="Fetch the latest e-attendance for this session from SSG"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshIcon className={`w-3.5 h-3.5 ${isLoadingAttendance ? 'animate-spin' : ''}`} />
+              {isLoadingAttendance ? 'Refreshing...' : 'Refresh E-Attendance'}
+            </button>
+          ) : undefined}
+        />
+        <div className="p-4 space-y-4">
+          {/* Session filter — shown after sessions load */}
+          {sessions.length > 0 && (
+            <div className="relative">
+              <label className="block text-xs font-medium text-on-surface-secondary mb-1">Session</label>
+              <select
+                value={selectedSession}
+                onChange={e => { setSelectedSession(e.target.value); handleFetchAttendance(e.target.value); }}
+                className="input-themed w-full border rounded px-3 py-2 text-sm pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                {sessions.map(s => (
+                  <option key={s.id} value={s.id}>{formatSessionLabel(s)}</option>
+                ))}
+              </select>
+              <span className="absolute right-2 bottom-2.5 text-muted pointer-events-none text-xs">▼</span>
+            </div>
+          )}
+
+          {/* Total Sessions pill */}
+          {sessions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
+                <span className="font-medium text-on-surface-secondary">Total Sessions</span>
+                <span className="font-bold text-on-surface">{sessions.length}</span>
+              </span>
+            </div>
+          )}
+
+          {/* Per-session KPIs — the three numbers should match */}
+          {selectedSession && <SessionKpis kpis={sessionKpis} />}
+
+          {attendanceError && (
+            <p className="text-sm text-red-500 flex items-center gap-1.5">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {attendanceError}
+            </p>
+          )}
+          {attendanceSuccess && !attendanceError && (
+            <p className="text-sm text-green-600 flex items-center gap-1.5">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              {attendanceSuccess}
+            </p>
+          )}
+          {!selectedCourse && (
+            <p className="text-sm text-muted italic">Select a class to choose a session.</p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Course Session Attendance (SSG QR / e-attendance records) ── */}
+      <div className="bg-surface rounded-lg border border-default shadow-sm">
+        <SectionHeader
+          title="Course Session Attendance"
+          count={attendanceRecords.length > 0 ? attendanceRecords.length : undefined}
+          loading={isLoadingAttendance}
+          right={
+            <>
+              {selectedSession && (
+                <button
+                  onClick={() => handleFetchAttendance(selectedSession)}
+                  disabled={isLoadingAttendance}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshIcon className="w-3.5 h-3.5" />
+                  Refetch Attendance
+                </button>
+              )}
+              <CollapseToggle open={sessionAttendanceOpen} onToggle={() => setSessionAttendanceOpen(v => !v)} />
+            </>
+          }
+        />
+        {sessionAttendanceOpen && (
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-elevated border-b border-default">
+            <tr>
+              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Name</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  NRIC
+                  {isAdminMode && (
+                    <button onClick={() => setShowNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                      {showNric ? 'Hide' : 'Show'}
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Phone</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Type</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Status</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Entry Mode</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">TRAQOM</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoadingAttendance ? (
+              Array.from({ length: 5 }).map((_, idx) => (
+                <tr key={idx} className="border-b border-default">
+                  {Array.from({ length: 9 }).map((__, col) => (
+                    <td key={col} className="px-3 py-3">
+                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '70%' : '50%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : attendanceRecords.length > 0 ? (
+              attendanceRecords.map((record: any, idx: number) => {
+                const nric: string = record.nric || record.trainee?.id || '';
+                const enrolMatch = enrolmentRecords.find((item: any) => {
+                  const t = (item?.enrolment ?? item)?.trainee ?? {};
+                  return (t?.id || t?.nric) === nric;
+                });
+                const enrolTrainee = enrolMatch ? ((enrolMatch?.enrolment ?? enrolMatch)?.trainee ?? {}) : {};
+                const inline = extractContact(record.trainee);
+                const looked = extractContact(enrolTrainee);
+                const email = inline.email || looked.email || '—';
+                const phone = inline.phone || looked.phone || '—';
+                return (
+                  <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
+                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
+                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{record.trainee?.name || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">
+                      {nric
+                        ? (showNric ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric))
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{email}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{phone}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.trainee?.attendeeType || '—'}</td>
+                    <td className="px-3 py-3"><StatusBadge value={record.status || '—'} /></td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.entryMode || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.sentToTraqom || '—'}</td>
+                  </tr>
+                );
+              })
+            ) : attendanceCourseRun ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
+                  No attendance records found for this session.
+                </td>
+              </tr>
+            ) : (
+              <tr>
+                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
+                  Select a class and session to load attendance.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        </div>
+        )}
       </div>
 
       {/* ── Manual Attendance Taking ── */}
@@ -1807,6 +1977,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               </svg>
               Add Learner
             </button>
+            <CollapseToggle open={manualOpen} onToggle={() => setManualOpen(v => !v)} />
           </div>
         </div>
 
@@ -1928,6 +2099,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
         )}
 
+        {manualOpen && (<>
         {/* Feedback banner */}
         {manualAttendanceMsg && (
           <div className={`px-4 py-2 text-xs border-b border-default ${manualAttendanceMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
@@ -2121,6 +2293,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             </button>
           </div>
         )}
+        </>)}
       </div>
 
     </div>

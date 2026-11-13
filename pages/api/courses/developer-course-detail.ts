@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureCaslSkillsColumn } from '@lib/course-casl-skills-ensure-column';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -9,6 +10,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     const { courseId } = req.query;
+    await ensureCaslSkillsColumn();
 
     if (!courseId) {
       return res.status(400).json({ message: 'Course ID is required' });
@@ -31,6 +33,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.new_course_code,
           c.tsc_title,
           c.tsc_code,
+          c.casl_skills,
           c.training_hours,
           c.assessment_hours,
           c.lesson_plan_url      AS lesson_plan,
@@ -100,6 +103,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         currentCourseCode: courseDetail.course_code || '',
         tscTitle: courseDetail.tsc_title,
         tscCode: courseDetail.tsc_code,
+        caslSkills: courseDetail.casl_skills || '',
         courseRunId: null, // No course run for developers
         courseRunUuid: null,
         digitalAttendanceId: null, // No DA for developers

@@ -20,6 +20,14 @@ function escapeXml(value: string): string {
 }
 
 /**
+ * Strip leading funding-scheme prefixes ("WSQ - ", "IBF - ", "CASL: ", and
+ * stacked forms like "WSQ IBF - ") so banners show only the course subject.
+ */
+export function stripFundingPrefix(raw: string): string {
+  return raw.replace(/^\s*(?:(?:WSQ|IBF|CASL)\b\s*[:\-–—]?\s*)+/i, '').trim();
+}
+
+/**
  * Break a title into at most `maxLines` lines of roughly `maxChars` characters,
  * on word boundaries. The final line is ellipsised if the title doesn't fit.
  */
@@ -98,7 +106,7 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
   // Course title — optically centred in the area below the header row.
   let titleBlock = '';
   if (!isThumbnail && title) {
-    const lines = wrapTitle(title, 26, 3);
+    const lines = wrapTitle(stripFundingPrefix(title), 26, 3);
     const fontSize = (lines.length >= 3 ? 21 : 25) * scale;
     const lineHeight = fontSize * 1.25;
     // Centre within the band between the header and the bottom edge.

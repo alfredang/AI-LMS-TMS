@@ -4,6 +4,8 @@ import pool from '../../../lib/db';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 import { normalizeRenewStatus } from '../../../lib/courseRenewalStatus';
 import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
+import { resolveTscFields } from '../../../lib/courseCaslSkills';
+import { ensureCaslSkillsColumn } from '../../../lib/course-casl-skills-ensure-column';
 
 interface CourseRow {
   course_code: string;
@@ -11,6 +13,7 @@ interface CourseRow {
   course_type?: string;
   tsc_title?: string;
   tsc_code?: string;
+  casl_skills?: string;
   training_hours?: number | string;
   assessment_hours?: number | string;
   domain?: string;
@@ -109,6 +112,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   let updated = 0;
   let failed = 0;
 
+  // Ensure casl_skills exists BEFORE the transaction: the DDL runs on its own
+  // pool connection and would wait forever on this transaction's lock on course.
+  await ensureCaslSkillsColumn();
   const client = await pool.connect();
 
   try {
@@ -134,6 +140,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         return 'Non-WSQ';
       })();
 
+      // CASL courses have no TSC: store 'NA' and keep the skill area in casl_skills.
+      const tsc = resolveTscFields({
+        courseType: courseTypeVal,
+        tscTitle: toText(course.tsc_title),
+        tscCode: toText(course.tsc_code),
+        caslSkills: toText(course.casl_skills),
+      });
+
       try {
         await client.query('BEGIN');
 
@@ -146,8 +160,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const values = [
           title.trim(),                            //  1
           courseTypeVal,                            //  2
-          toText(course.tsc_title),                //  3
-          toText(course.tsc_code),                 //  4
+          tsc.tscTitle,                            //  3
+          tsc.tscCode,                             //  4
           toFloat(course.training_hours) ?? 0,              //  5
           toFloat(course.assessment_hours) ?? 0,            //  6
           toText(course.domain),                            //  7
@@ -214,6 +228,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
              WHERE id=$43`,
             [...values, existing.rows[0].id]
           );
+          if (tsc.caslSkills) {
+            await client.query(`UPDATE course SET casl_skills = $2 WHERE id = $1`, [existing.rows[0].id, tsc.caslSkills]);
+          }
 
           await client.query('COMMIT');
 
@@ -246,6 +263,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
              ) RETURNING id`,
             [...values, course_code.trim()]
           );
+          if (tsc.caslSkills) {
+            await client.query(`UPDATE course SET casl_skills = $2 WHERE id = $1`, [insertResult.rows[0].id, tsc.caslSkills]);
+          }
 
           await client.query('COMMIT');
 

@@ -20,8 +20,19 @@ import type { FeedbackFormSection } from '@app-types';
  */
 export interface LearnerReviewScore {
   learner_name: string;
+  /** Mean of the learner's answered star questions. */
   score: number;
+  /** Each star question's answer, in form order; null when left unanswered. */
+  ratings: { label: string; score: number | null }[];
 }
+
+// Column headings for the default form's star questions; a custom question
+// falls back to its own label.
+const SHORT_RATING_LABELS: Record<string, string> = {
+  rate_learning_objectives: 'Learning Objectives',
+  rate_trainer_knowledge: 'Trainer Knowledge',
+  rate_training_environment: 'Training Environment',
+};
 
 async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, LearnerReviewScore[]>> {
   const scores = new Map<string, LearnerReviewScore[]>();
@@ -29,11 +40,11 @@ async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, Lea
   try {
     const tmpl = await pool.query(`SELECT sections FROM feedback_form_template ORDER BY created_at ASC LIMIT 1`);
     const sections: FeedbackFormSection[] = tmpl.rows[0]?.sections || DEFAULT_FEEDBACK_FORM_SECTIONS;
-    const ratingIds = sections
+    const ratingFields = sections
       .flatMap((s) => s.fields || [])
       .filter((f) => f.type === 'rating1to5')
-      .map((f) => f.id);
-    if (ratingIds.length === 0) return scores;
+      .map((f) => ({ id: f.id, label: SHORT_RATING_LABELS[f.id] || f.label }));
+    if (ratingFields.length === 0) return scores;
 
     const r = await pool.query(
       `SELECT course_run_id, learner_name, answers FROM feedback_form_response
@@ -43,15 +54,18 @@ async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, Lea
     );
     for (const row of r.rows) {
       const answers = row.answers || {};
-      const vals = ratingIds
-        .map((id) => Number(answers[id]))
-        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 5);
+      const ratings = ratingFields.map((f) => {
+        const n = Number(answers[f.id]);
+        return { label: f.label, score: Number.isFinite(n) && n >= 1 && n <= 5 ? n : null };
+      });
+      const vals = ratings.map((x) => x.score).filter((n): n is number => n !== null);
       if (vals.length === 0) continue;
       const avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
       const list = scores.get(row.course_run_id) || [];
       list.push({
         learner_name: String(row.learner_name || answers.learner_name || '').trim() || 'Learner',
         score: avg,
+        ratings,
       });
       scores.set(row.course_run_id, list);
     }

@@ -19,6 +19,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Live data: learners sign in throughout the session, so no caching anywhere
+  res.setHeader('Cache-Control', 'no-store');
+
   const { uen: uenParam, courseCode, courseRunId, sessionId } = req.query;
 
   if (!courseCode || !courseRunId || !sessionId) {

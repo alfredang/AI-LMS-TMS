@@ -307,6 +307,7 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
       { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
       { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+      { view: View.GoogleAutomations, label: 'Google Automations', icon: IconName.Settings },
     ]
   };
 

@@ -42,10 +42,14 @@ import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
 import TrainingHoursPage from '../components/trainer/TrainingHoursPage';
 import PaymentHistoryPage from '../components/trainer/PaymentHistoryPage';
 
+const isPhoneWidth = () => typeof window !== 'undefined' && window.innerWidth < 768;
+
 const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
   const appVersion = useAppVersion();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // The open menu is a fixed 256px, which leaves a phone almost no room for the
+  // page, so phones start on the icon rail and return to it after navigating.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isPhoneWidth());
 
   // The grading roster is wide, so auto-collapse the sidebar to the icon rail
   // when entering Assessment Grading, and restore it on leaving (unless the
@@ -55,6 +59,12 @@ const TrainerLayout: React.FC = () => {
     currentView !== View.HelpAndSupport &&
     !selectedCourse &&
     trainerPage === TrainerPage.AssessmentGrading;
+  // The course page has its own Course Details column, so it fills the width
+  // beside the menu instead of sitting in the centred max-width container.
+  const isCourseDetailView =
+    currentView !== View.Profile &&
+    currentView !== View.HelpAndSupport &&
+    !!selectedCourse;
   const autoCollapsedRef = useRef(false);
   const isSidebarOpenRef = useRef(isSidebarOpen);
   isSidebarOpenRef.current = isSidebarOpen;
@@ -170,7 +180,12 @@ const TrainerLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-              <TrainerSidebar collapsed={!isSidebarOpen} />
+              <TrainerSidebar
+                collapsed={!isSidebarOpen}
+                onNavigate={() => {
+                  if (isPhoneWidth()) setIsSidebarOpen(false);
+                }}
+              />
             </div>
             {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
           </aside>
@@ -178,7 +193,7 @@ const TrainerLayout: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className={`${isCourseDetailView ? 'w-full lg:px-5' : 'max-w-6xl mx-auto lg:px-8'} px-4 sm:px-6 py-6`}>
             {renderContent()}
           </div>
         </main>
