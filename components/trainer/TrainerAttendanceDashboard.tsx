@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
 import { EnrolmentRequestsPanel } from './EnrolmentRequestsPanel';
+import { PracticeExamPanel } from './PracticeExamPanel';
 
 interface Session {
   id: string;
@@ -1578,6 +1579,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           onEnrolled={() => { if (selectedCourse?.courseRunCode) fetchEnrolments(selectedCourse.courseRunCode); }}
         />
       )}
+
+      {/* ── Practice Exam: register the class's learners on exams.tertiaryinfotech.com (courses linked to a practice exam) ── */}
+      {selectedCourseRunId && <PracticeExamPanel courseRunUuid={selectedCourseRunId} />}
 
       {/* ── Class Enrolments (per class, not per session — collapsible) ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">

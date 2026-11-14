@@ -58,6 +58,7 @@ npm run db:migrate
 - **SSG / TPGateway** (`lib/ssg/`, `types/ssg.ts`) — publishing, enrollment, grants, claims. `training_provider.ssg_app_count` (1–4) + `ssg_app_names` jsonb edited under Training Provider profile.
 - **Google APIs** (`lib/google-auth/`, `google-calendar/`, `google-drive/`) — OAuth, calendar sync, Drive storage, Gmail for cert emails.
 - **QuickBooks** (`lib/quickbooks/`, `/pages/api/quickbooks/`) — invoices, payments.
+- **Tertiary Exams** (`lib/practiceExam/examsApi.ts`, `/pages/api/practice-exam/course-run.ts`, `components/trainer/PracticeExamPanel.tsx`) — E-Attendance → Practice Exam panel: staff link a course to a practice exam (`course.practice_exam_code`, e.g. TGS-2026061312 → CCAR-F); trainers register the class's learners (name + email) via the exams `POST /api/v1/registrations`, which creates the account and records Course Run ID / Register Date / "Registered from TMS". Off unless `EXAMS_API_TOKEN` (scope `assign:practice-exams`) is set; `EXAMS_API_URL` defaults to https://exams.tertiaryinfotech.com.
 - **Scheduler** (`lib/scheduler/scheduler.ts`) — `node-cron`, `Asia/Singapore`, config in `scheduler_config`. Singleton via `globalThis.__lmsScheduler`, initialized in `instrumentation.ts`.
 
 ## Database
