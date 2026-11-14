@@ -299,6 +299,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isTertiaryCoursesSgIntegrationOpen, setIsTertiaryCoursesSgIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
     const [isMailerliteIntegrationOpen, setIsMailerliteIntegrationOpen] = useState(false);
+    const [isAiExamIntegrationOpen, setIsAiExamIntegrationOpen] = useState(false);
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isSmtpIntegrationOpen, setIsSmtpIntegrationOpen] = useState(false);
     const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
@@ -2866,6 +2867,52 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 ) : (
                                                     <p className="text-sm text-on-surface truncate">
                                                         {(formData.integrations as any)[key] || 'Not Set'}
+                                                    </p>
+                                                )}
+                                                {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                    )}
+                    </div>
+
+                            {/* AI Exam (Tertiary Exams) Configuration */}
+                    <div>
+                    {renderIntegrationPanelHeader('AI Exam', isAiExamIntegrationOpen, () => setIsAiExamIntegrationOpen(prev => !prev))}
+                    {isAiExamIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'examsApiUrl' as const, label: 'Exams Site URL', placeholder: 'https://exams.tertiaryinfotech.com', secret: false, helpText: 'The AI Exam site the practice exams live on. Leave blank for the default.' },
+                                            { key: 'examsApiToken' as const, label: 'API Token', placeholder: 'Exams API token', secret: true, helpText: 'Create it on the Exams site under Admin → API Tokens with the scope assign:practice-exams. It turns on the Practice Exam section on the class page, where trainers register the class on the course\'s practice exam. Replaces the EXAMS_API_TOKEN env var.' },
+                                        ].map(({ key, label, placeholder, secret, helpText }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type={secret ? 'password' : 'text'}
+                                                        autoComplete="off"
+                                                        value={(formData.integrations as any)[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={placeholder}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {(formData.integrations as any)[key]
+                                                            ? (secret ? '••••••••' + String((formData.integrations as any)[key]).slice(-4) : (formData.integrations as any)[key])
+                                                            : 'Not Set'}
                                                     </p>
                                                 )}
                                                 {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}

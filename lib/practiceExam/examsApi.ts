@@ -2,14 +2,42 @@ import pool from '../db';
 
 /**
  * Client for the Tertiary Exams bearer-token API (exams.tertiaryinfotech.com/api/v1).
- * The feature is off unless EXAMS_API_TOKEN is set (a token with the
- * `assign:practice-exams` scope from Exams → Admin → API Tokens), so tenants
- * without it never see the Practice Exam panel.
+ * The token (scope `assign:practice-exams`, from Exams → Admin → API Tokens) and
+ * base URL are set under Company Settings → Integrations → AI Exam
+ * (`training_provider.exams_api_token` / `exams_api_url`); the EXAMS_API_TOKEN /
+ * EXAMS_API_URL env vars are the fallback. The feature is off without a token,
+ * so tenants that haven't set one never see the Practice Exam section.
  */
-const BASE_URL = (process.env.EXAMS_API_URL || 'https://exams.tertiaryinfotech.com').replace(/\/+$/, '');
+const DEFAULT_BASE_URL = 'https://exams.tertiaryinfotech.com';
+const CONFIG_TTL_MS = 60_000;
 
-export function examsApiConfigured(): boolean {
-  return !!process.env.EXAMS_API_TOKEN?.trim();
+interface ExamsConfig { baseUrl: string; token: string }
+let cached: { at: number; value: ExamsConfig } | null = null;
+
+async function getConfig(): Promise<ExamsConfig> {
+  if (cached && Date.now() - cached.at < CONFIG_TTL_MS) return cached.value;
+  let dbUrl = '';
+  let dbToken = '';
+  try {
+    const r = await pool.query('SELECT exams_api_url, exams_api_token FROM training_provider LIMIT 1');
+    dbUrl = String(r.rows[0]?.exams_api_url ?? '').trim();
+    dbToken = String(r.rows[0]?.exams_api_token ?? '').trim();
+  } catch { /* columns not created yet — use env */ }
+  const value: ExamsConfig = {
+    baseUrl: (dbUrl || process.env.EXAMS_API_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ''),
+    token: dbToken || process.env.EXAMS_API_TOKEN?.trim() || '',
+  };
+  cached = { at: Date.now(), value };
+  return value;
+}
+
+/** Call after the integration settings are saved so the new token applies immediately. */
+export function invalidateExamsConfigCache(): void {
+  cached = null;
+}
+
+export async function examsApiConfigured(): Promise<boolean> {
+  return !!(await getConfig()).token;
 }
 
 export interface PracticeExamRef {
@@ -33,10 +61,11 @@ export interface ExamRegistration {
 interface ApiResult<T> { ok: boolean; status: number; data: T & { error?: string } }
 
 async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
-  const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+  const cfg = await getConfig();
+  const res = await fetch(`${cfg.baseUrl}/api/v1${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${process.env.EXAMS_API_TOKEN?.trim() || ''}`,
+      Authorization: `Bearer ${cfg.token}`,
       'Content-Type': 'application/json',
       ...(init?.headers || {}),
     },

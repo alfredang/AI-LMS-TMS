@@ -52,6 +52,42 @@ async function getLearners(courseRunUuid: string): Promise<{ name: string; email
     .sort((a: { name: string }, b: { name: string }) => (a.name || '').localeCompare(b.name || ''));
 }
 
+/**
+ * The class's trainers (junction + legacy scalar columns), one row per email. They are
+ * registered alongside the learners so the trainer can open the practice exam too.
+ */
+async function getTrainers(courseRunUuid: string): Promise<{ name: string; email: string }[]> {
+  const r = await pool.query(
+    `WITH t AS (
+       SELECT crt.trainer_id AS user_id, crt.trainer_name AS name, crt.trainer_email AS email
+         FROM course_run_trainer crt WHERE crt.course_run_id = $1
+       UNION ALL
+       SELECT cr.assigned_trainer_id, NULL, cr.assigned_trainer_email FROM course_run cr WHERE cr.id = $1
+       UNION ALL
+       SELECT cr.tpg_assigned_trainer_id, NULL, cr.tpg_assigned_trainer_email FROM course_run cr WHERE cr.id = $1
+     )
+     SELECT DISTINCT ON (email) name, email FROM (
+       SELECT TRIM(COALESCE(NULLIF(TRIM(au.full_name), ''), t.name, '')) AS name,
+              LOWER(TRIM(COALESCE(NULLIF(TRIM(au.email), ''), t.email))) AS email
+         FROM t LEFT JOIN app_user au ON au.id = t.user_id
+     ) x
+      WHERE email IS NOT NULL AND email <> ''
+      ORDER BY email, (name = '') ASC`,
+    [courseRunUuid]
+  );
+  return r.rows.filter((x: { email: string }) => EMAIL_RE.test(x.email));
+}
+
+/** Learners + trainers of the class, one row per email (a trainer who is also enrolled counts once, as trainer). */
+async function getPeople(courseRunUuid: string): Promise<{ name: string; email: string; isTrainer: boolean }[]> {
+  const [learners, trainers] = await Promise.all([getLearners(courseRunUuid), getTrainers(courseRunUuid)]);
+  const trainerEmails = new Set(trainers.map(t => t.email));
+  return [
+    ...trainers.map(t => ({ ...t, isTrainer: true })),
+    ...learners.filter(l => !trainerEmails.has(l.email)).map(l => ({ ...l, isTrainer: false })),
+  ];
+}
+
 /** Run `fn` over `items`, `limit` at a time. */
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
@@ -70,17 +106,17 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
  * (name + email) on exams.tertiaryinfotech.com for the course's practice exam.
  * Admin / training provider / developer: any class. Trainer: only classes they are assigned to.
  *
- * GET  ?courseRunUuid=                                   → { configured, examCode, learners[], catalog? (staff) }
- * POST { courseRunUuid, action: 'register', emails? }   → register all learners (or just `emails`)
+ * GET  ?courseRunUuid=                                   → { configured, examCode, learners[] (incl. the class's trainers, isTrainer), catalog? (staff) }
+ * POST { courseRunUuid, action: 'register', emails? }   → register all learners + trainers (or just `emails`)
  * POST { courseRunUuid, action: 'set_exam', examCode }  → staff: link/unlink the course's practice exam
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const user = (req as AuthedApiRequest).authUser!;
   const staff = isStaff(user);
 
-  if (!examsApiConfigured()) {
+  if (!(await examsApiConfigured())) {
     if (req.method === 'GET') return res.status(200).json({ success: true, configured: false });
-    return res.status(503).json({ success: false, error: 'The Exams integration is not configured (EXAMS_API_TOKEN).' });
+    return res.status(503).json({ success: false, error: 'The AI Exam integration is not configured (Company Settings → Integrations → AI Exam).' });
   }
 
   try {
@@ -109,7 +145,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       }
 
-      const learners = await getLearners(courseRunUuid);
+      const learners = await getPeople(courseRunUuid);
       let registered = new Map<string, ExamRegistration>();
       if (run.examCode && run.courseRunId && !warning) {
         try {
@@ -161,8 +197,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const only: string[] | null = Array.isArray(req.body.emails)
         ? req.body.emails.map((e: unknown) => String(e).trim().toLowerCase())
         : null;
-      const learners = (await getLearners(courseRunUuid)).filter(l => !only || only.includes(l.email));
-      if (learners.length === 0) return res.status(400).json({ success: false, error: 'No learners to register' });
+      const learners = (await getPeople(courseRunUuid)).filter(l => !only || only.includes(l.email));
+      if (learners.length === 0) return res.status(400).json({ success: false, error: 'No one to register' });
 
       const results = await mapLimit(learners, 4, async (l): Promise<RegisterResult & { email: string; name: string }> => {
         try {

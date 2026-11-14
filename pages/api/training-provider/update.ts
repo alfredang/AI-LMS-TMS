@@ -1,4 +1,5 @@
 import { withAuth } from '@lib/auth/withAuth';
+import { invalidateExamsConfigCache } from '../../../lib/practiceExam/examsApi';
 import pool from '../../../lib/db';
 import { IncomingForm, File, Fields, Files } from 'formidable';
 import fs from 'fs';
@@ -741,6 +742,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         { name: 'mailerlite_api_key', value: profileData.integrations?.mailerliteApiKey || null },
         { name: 'mailerlite_group_id', value: profileData.integrations?.mailerliteGroupId || null },
       ]);
+      // AI Exam (Tertiary Exams) — practice-exam registration from the class page
+      // Only when the form carries the fields — a tab opened before this panel existed must not wipe the token.
+      if (profileData.integrations?.examsApiToken !== undefined || profileData.integrations?.examsApiUrl !== undefined) {
+        await autoCreateAndUpdate([
+          { name: 'exams_api_url', value: String(profileData.integrations?.examsApiUrl ?? '').trim() || null },
+          { name: 'exams_api_token', value: String(profileData.integrations?.examsApiToken ?? '').trim() || null },
+        ]);
+        invalidateExamsConfigCache();
+      }
       // AI Agent (WhatsApp support widgets — admin ops group + trainer group)
       await autoCreateAndUpdate([
         { name: 'whatsapp_chat_url', value: profileData.integrations?.whatsappChatUrl || null },

@@ -4,6 +4,7 @@ import { Course, Topic, Subtopic, ModeOfLearning, UserRole, AssessmentMethodKey,
 import { CASL_NO_TSC } from '@lib/courseCaslSkills';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
+import { CoursePracticeExamSetting } from './developer/CoursePracticeExamSetting';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { getCourseImageUrl } from '@utils/imageUtils';
@@ -2867,6 +2868,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </button>
                         </div>
+                        {!isNewCourse && course.id && (
+                            <div className="mt-3">
+                                <CoursePracticeExamSetting courseId={course.id} />
+                            </div>
+                        )}
                     </CollapsibleSection>
                 </div>
             </div>

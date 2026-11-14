@@ -15,6 +15,7 @@ import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
 import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
 import { ClassPhotoUpload } from './trainer/ClassPhotoUpload';
 import { VirtualMeetingLinkEditor } from './trainer/VirtualMeetingLinkEditor';
+import { PracticeExamPanel } from './trainer/PracticeExamPanel';
 import QuizTakerModal from './QuizTakerModal';
 import { AssessmentUploadZone, AssessmentUploadState, UploadSuccessAlert, runAssessmentUpload } from './learner/AssessmentUploadZone';
 
@@ -3334,6 +3335,18 @@ export const CourseDetail: React.FC = () => {
                                     )}
                                 </Card>
                             </div>
+
+                            {/* Practice Exam (Tertiary Exams) — trainer/staff register the class's learners.
+                                Renders nothing unless the integration is configured and (for trainers) the
+                                course is linked to a practice exam. */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider)
+                                && (effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId) && (
+                                <PracticeExamPanel
+                                    id={toId("Practice Exam")}
+                                    variant="section"
+                                    courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
+                                />
+                            )}
 
                             {/* TRAQOM Survey & Certificate Delivery */}
                             {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (

@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { isStaff } from '../../lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import pool from '../../lib/db';
 import { cors } from '../../lib/cors';
@@ -52,6 +53,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       profileData = await getTrainerProfile(userId);
     } else if (role === 'training_provider') {
       profileData = await getTrainingProviderProfile(userId);
+      // The AI Exam token is only for staff editing Company Settings — never send it to learners/trainers.
+      const caller = (req as AuthedApiRequest).authUser;
+      const integrations = (profileData as any)?.integrations;
+      if (integrations && !(caller && isStaff(caller))) integrations.examsApiToken = '';
     } else {
       return res.status(400).json(
         createApiResponse(false, `Role ${role} not implemented yet`)
@@ -664,6 +669,11 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT mailerlite_api_key, mailerlite_group_id FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // AI Exam (Tertiary Exams practice-exam registration)
+  try {
+    const r = await pool.query(`SELECT exams_api_url, exams_api_token FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
   // AI Agent (WhatsApp support widget)
   try {
     const r = await pool.query(`SELECT whatsapp_chat_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
@@ -822,6 +832,8 @@ async function getTrainingProviderProfile(userId: string) {
       tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
       mailerliteApiKey: refLinks.mailerlite_api_key || '',
       mailerliteGroupId: refLinks.mailerlite_group_id || '',
+      examsApiUrl: refLinks.exams_api_url || '',
+      examsApiToken: refLinks.exams_api_token || '',
       whatsappChatUrl: refLinks.whatsapp_chat_url || '',
       trainerWhatsappChatUrl: refLinks.trainer_whatsapp_chat_url || '',
       r2Endpoint: refLinks.r2_endpoint || '',

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Card } from '../ui/Card';
+import { Icon, IconName } from '../ui/Icon';
 
 interface Learner {
   name: string;
   email: string;
   registeredAt: string | null;
   signedIn: boolean;
+  isTrainer?: boolean;
 }
 
 interface CatalogItem {
@@ -27,19 +30,26 @@ interface PanelData {
 
 interface RowResult { ok: boolean; error?: string; accountCreated?: boolean }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const btn = 'px-2 py-1 text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Singapore' }) : '—';
 
 /**
- * E-Attendance page → Practice Exam. For courses linked to a practice exam on
+ * Class page (after Lesson) and E-Attendance page → Practice Exam. For courses linked to a practice exam on
  * exams.tertiaryinfotech.com (e.g. CCAR-F), the trainer registers the class's
- * learners (name + email) there in one click; the Exams account records the
+ * learners and its trainer (name + email) there in one click; the Exams account records the
  * course run ID, register date and "Registered from TMS". Staff link the course
  * to its exam here. Hidden when the integration isn't configured, and for
  * trainers when the course has no practice exam.
  */
-export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) {
+export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
+  courseRunUuid: string;
+  /** 'section' = full-width class-page card (matches the Lesson section); 'compact' = E-Attendance panel. */
+  variant?: 'compact' | 'section';
+  id?: string;
+}) {
+  const section = variant === 'section';
   const [data, setData] = useState<PanelData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +59,10 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
   const [summary, setSummary] = useState<{ ok: boolean; text: string } | null>(null);
   const [examPick, setExamPick] = useState('');
 
+  const validRun = UUID_RE.test(courseRunUuid);
+
   const load = useCallback(async () => {
+    if (!UUID_RE.test(courseRunUuid)) return;
     setLoading(true);
     setError(null);
     try {
@@ -121,20 +134,33 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
     }
   };
 
-  if (!data && !error) return null;
+  if (!validRun || (!data && !error)) return null;
   if (data && !data.configured) return null;
   if (data && !data.examCode && !data.isStaff) return null;
+  // Class page: only when the course has a practice exam (set under Course Settings in the course editor).
+  if (section && !data?.examCode) return null;
 
   const learners = data?.learners || [];
   const pending = learners.filter(l => !l.registeredAt).length;
+  const pendingTrainers = learners.filter(l => l.isTrainer && !l.registeredAt).length;
+  const pendingLearners = pending - pendingTrainers;
+  const registerLabel = pending === 0
+    ? 'Re-register all'
+    : pendingLearners === 0
+      ? `Register ${pendingTrainers === 1 ? 'trainer' : `${pendingTrainers} trainers`}`
+      : `Register ${pendingLearners} learner${pendingLearners === 1 ? '' : 's'}${pendingTrainers ? ' + trainer' : ''}`;
   const known = !examPick || !!data?.catalog?.some(c => c.slug === examPick);
   const savedSlug = data?.catalog?.find(c => c.slug === data.examCode || c.code.toUpperCase() === String(data.examCode || '').toUpperCase())?.slug ?? data?.examCode ?? '';
 
-  return (
-    <div className="bg-surface rounded-lg border border-default shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-default">
-        <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2 text-left">
-          <h2 className="text-sm font-semibold text-on-surface">Practice Exam</h2>
+  const body = (
+    <>
+      <div className={section
+        ? 'flex flex-wrap items-center justify-between gap-3 p-6'
+        : 'flex items-center justify-between px-4 py-3 border-b border-default'}>
+        <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2 text-left" aria-expanded={open}>
+          {section
+            ? <h3 className="text-xl font-bold text-gray-900 dark:text-white">Practice Exam</h3>
+            : <h2 className="text-sm font-semibold text-on-surface">Practice Exam</h2>}
           {data?.examCode && (
             <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
               {data.examCode}
@@ -145,7 +171,7 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
               {learners.length - pending}/{learners.length} registered
             </span>
           )}
-          <span className="text-xs text-on-surface-secondary">{open ? '▾' : '▸'}</span>
+          {!section && <span className="text-xs text-on-surface-secondary">{open ? '▾' : '▸'}</span>}
         </button>
         <div className="flex items-center gap-2">
           <button type="button" onClick={load} disabled={loading} className={`${btn} border border-default text-on-surface-secondary hover:bg-surface-elevated`}>
@@ -157,20 +183,25 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
               onClick={() => register()}
               disabled={!!busy || !data.courseRunId}
               className={`${btn} bg-blue-600 text-white hover:bg-blue-700`}
-              title="Create Tertiary Exams accounts (name + email) and assign the practice exam to every learner in this class"
+              title="Create Tertiary Exams accounts (name + email) and assign the practice exam to every learner and trainer in this class"
             >
-              {busy === 'all' ? 'Registering…' : pending > 0 ? `Register ${pending} learner${pending === 1 ? '' : 's'}` : 'Re-register all'}
+              {busy === 'all' ? 'Registering…' : registerLabel}
+            </button>
+          )}
+          {section && (
+            <button type="button" onClick={() => setOpen(o => !o)} aria-label={open ? 'Collapse' : 'Expand'} className="p-1">
+              <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
             </button>
           )}
         </div>
       </div>
 
       {open && (
-        <div className="px-4 py-3 space-y-3">
+        <div className={section ? 'px-6 pb-6 pt-4 space-y-3 border-t' : 'px-4 py-3 space-y-3'}>
           {error && <p className="text-sm text-red-500">{error}</p>}
           {data?.warning && <p className="text-xs text-amber-600 dark:text-amber-400">{data.warning}</p>}
 
-          {data?.isStaff && (
+          {data?.isStaff && !section && (
             <div className="flex flex-wrap items-end gap-2 text-xs">
               <label className="flex flex-col gap-1">
                 <span className="text-on-surface-secondary">Practice exam for this course (all classes)</span>
@@ -200,8 +231,8 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
           {data?.examCode && (
             <p className="text-xs text-on-surface-secondary">
               {data.examTitle || data.examCode} on exams.tertiaryinfotech.com · Course Run ID{' '}
-              <span className="font-mono text-on-surface">{data.courseRunId || '—'}</span>. New learners get an account and a
-              welcome email; they sign in with Google or an email code.
+              <span className="font-mono text-on-surface">{data.courseRunId || '—'}</span>. The class&apos;s trainer is registered too. New
+              accounts get a welcome email; they sign in with Google or an email code.
             </p>
           )}
 
@@ -209,7 +240,7 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
 
           {data?.examCode && (
             learners.length === 0 ? (
-              <p className="text-xs text-on-surface-secondary">No learners are enrolled in this class yet.</p>
+              <p className="text-xs text-on-surface-secondary">No learners or trainers are on this class yet.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
@@ -227,7 +258,12 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
                       const r = rowResult[l.email];
                       return (
                         <tr key={l.email} className="border-b border-default last:border-0">
-                          <td className="py-1.5 pr-3 text-on-surface">{l.name || '—'}</td>
+                          <td className="py-1.5 pr-3 text-on-surface">
+                            {l.name || '—'}
+                            {l.isTrainer && (
+                              <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">Trainer</span>
+                            )}
+                          </td>
                           <td className="py-1.5 pr-3 text-on-surface-secondary">{l.email}</td>
                           <td className="py-1.5 pr-3 text-on-surface-secondary">{fmtDate(l.registeredAt)}</td>
                           <td className="py-1.5 pr-3">
@@ -263,6 +299,10 @@ export function PracticeExamPanel({ courseRunUuid }: { courseRunUuid: string }) 
           )}
         </div>
       )}
-    </div>
+    </>
   );
+
+  return section
+    ? <div id={id}><Card className="p-0 overflow-hidden">{body}</Card></div>
+    : <div id={id} className="bg-surface rounded-lg border border-default shadow-sm">{body}</div>;
 }
