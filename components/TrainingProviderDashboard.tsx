@@ -92,6 +92,7 @@ const RANK_PERIOD_OPTIONS: Option<RankPeriod>[] = [
   { value: '6m', label: 'Last 6 months' },
   { value: '3m', label: 'Last 3 months' },
 ];
+const DEFAULT_RANK_PERIOD: RankPeriod = '3m';
 const isRankPeriod = (v: string): v is RankPeriod => RANK_PERIOD_OPTIONS.some((o) => o.value === v);
 const SPONSORSHIP_OPTIONS: Option<Sponsorship>[] = [
   { value: 'all', label: 'All' },
@@ -189,7 +190,7 @@ const TrainingProviderDashboard: React.FC = () => {
   const [trendRange, setTrendRange] = useState<TrendRange>('12m');
   const [topN, setTopN] = useState(10);
   const [rankMetric, setRankMetric] = useState<RankMetric>('enrolments');
-  const [rankPeriod, setRankPeriod] = useState<RankPeriod>('all');
+  const [rankPeriod, setRankPeriod] = useState<RankPeriod>(DEFAULT_RANK_PERIOD);
 
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [trend, setTrend] = useState<TrendData | null>(null);
@@ -442,7 +443,7 @@ const TrainingProviderDashboard: React.FC = () => {
               type="button"
               onClick={() => {
                 setFilters(DEFAULT_FILTERS);
-                setRankPeriod('all');
+                setRankPeriod(DEFAULT_RANK_PERIOD);
               }}
               className="ml-auto text-sm font-semibold text-primary-600 hover:underline dark:text-blue-300"
             >
