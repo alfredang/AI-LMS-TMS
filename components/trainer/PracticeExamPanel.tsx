@@ -53,7 +53,8 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
   const [data, setData] = useState<PanelData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(true);
+  // Collapsed until the user expands it; the header still shows the exam and the registered count.
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // 'all' | email | 'exam'
   const [rowResult, setRowResult] = useState<Record<string, RowResult>>({});
   const [summary, setSummary] = useState<{ ok: boolean; text: string } | null>(null);
@@ -87,6 +88,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
   }, [load]);
 
   const register = async (emails?: string[]) => {
+    setOpen(true); // show the per-person result of the registration
     setBusy(emails?.length === 1 ? emails[0] : 'all');
     setSummary(null);
     try {
