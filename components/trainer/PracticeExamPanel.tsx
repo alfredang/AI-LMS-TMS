@@ -343,27 +343,37 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Practice exam self-registration QR code"
+          aria-label="Practice Exam self-register QR code"
           onClick={closeQr}
-          className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center gap-4 p-6"
+          className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center gap-4 p-6"
         >
-          <p className="text-3xl font-bold text-gray-900 text-center">Scan to register for the practice exam</p>
-          <p className="text-lg font-medium text-blue-700 text-center">{data?.examTitle || data?.examCode}</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrSrc(selfRegisterUrl, 1000)} alt="Practice exam self-registration QR code" style={{ width: 'min(58vh, 88vw)', height: 'min(58vh, 88vw)' }} />
-          <p className="text-base text-gray-700 text-center max-w-2xl">
-            Enter your name and email. You will get an email with the practice exam link; sign in with the one-time code sent to the same inbox.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3" onClick={e => e.stopPropagation()}>
-            <span className="text-sm text-gray-500 break-all text-center">{selfRegisterUrl}</span>
-            <button type="button" onClick={copyLink} className="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-100">
-              {copied ? 'Copied' : 'Copy link'}
-            </button>
-            <button type="button" onClick={closeQr} className="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700">
-              Close
-            </button>
+          <button
+            type="button"
+            onClick={closeQr}
+            autoFocus
+            title="Close (Esc)"
+            aria-label="Close"
+            className="absolute top-3 right-4 w-11 h-11 flex items-center justify-center text-4xl leading-none text-white hover:text-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded"
+          >
+            &times;
+          </button>
+          <div className="text-center">
+            <p className="text-2xl sm:text-3xl font-bold text-white">Scan to register for the practice exam</p>
+            <p className="mt-1 text-lg sm:text-xl font-semibold text-blue-300">{data?.examTitle || data?.examCode}</p>
           </div>
-          <p className="text-xs text-gray-400">Click anywhere or press Esc to close</p>
+          <div className="bg-white rounded-2xl p-5 sm:p-8" onClick={e => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrSrc(selfRegisterUrl, 1000)} alt="Practice Exam self-register QR code" className="block" style={{ width: 'min(62vh, 80vw)', height: 'min(62vh, 80vw)' }} />
+          </div>
+          <div className="text-center text-sm text-gray-300" onClick={e => e.stopPropagation()}>
+            <p className="break-all">
+              {selfRegisterUrl}
+              <button type="button" onClick={copyLink} className="ml-3 px-2 py-0.5 text-xs font-medium rounded border border-gray-500 text-gray-200 hover:bg-white/10">
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+            </p>
+            <p className="mt-1">Course Run ID: <strong className="text-white">{data?.courseRunId}</strong></p>
+          </div>
         </div>
       )}
     </>
