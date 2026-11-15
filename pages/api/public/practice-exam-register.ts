@@ -8,7 +8,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVALID = 'This practice exam link is not valid.';
 
 /**
- * PUBLIC: the /practice-exam/[runId] page a learner reaches by scanning the class's Self Register
+ * PUBLIC: the /practice-exam/[runId] page a learner reaches by scanning the class's Self-Register
  * QR code (shown by the trainer from the Practice Exam section). The link carries the class's
  * unguessable UUID.
  *

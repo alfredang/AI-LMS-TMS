@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
-// PUBLIC page behind the class's Self Register QR code (shown by the trainer from the Practice
+// PUBLIC page behind the class's Self-Register QR code (shown by the trainer from the Practice
 // Exam section). The learner enters their name and email and is registered on Tertiary Exams for
 // the course's practice exam; the exams site emails them the exam link.
 
@@ -122,13 +122,22 @@ export default function PracticeExamSelfRegisterPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Practice Exam Registration</h1>
             {course && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {examTitle && <><span className="font-medium text-gray-700 dark:text-gray-200">{examTitle}</span><br /></>}
-                {course.title}
-                <br />
-                Course Run {course.courseRunId}
-                {course.startDate && <> · {fmtDay(course.startDate)}{course.endDate && course.endDate !== course.startDate ? ` to ${fmtDay(course.endDate)}` : ''}</>}
-              </p>
+              <dl className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5">
+                <dt className="text-gray-500 dark:text-gray-400">Practice exam</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">{examTitle || '—'}</dd>
+                <dt className="text-gray-500 dark:text-gray-400">Course</dt>
+                <dd className="text-gray-700 dark:text-gray-200">{course.title}</dd>
+                <dt className="text-gray-500 dark:text-gray-400">Course run</dt>
+                <dd className="text-gray-700 dark:text-gray-200 font-mono">{course.courseRunId}</dd>
+                {course.startDate && (
+                  <>
+                    <dt className="text-gray-500 dark:text-gray-400">Class dates</dt>
+                    <dd className="text-gray-700 dark:text-gray-200">
+                      {fmtDay(course.startDate)}{course.endDate && course.endDate !== course.startDate ? ` to ${fmtDay(course.endDate)}` : ''}
+                    </dd>
+                  </>
+                )}
+              </dl>
             )}
           </div>
           {body}

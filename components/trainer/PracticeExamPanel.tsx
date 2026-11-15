@@ -85,7 +85,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
     }
   }, [courseRunUuid]);
 
-  // Self Register QR: Esc closes it; new sign-ups arrive while it is on screen, so reload on close.
+  // Self-Register QR: Esc closes it; new sign-ups arrive while it is on screen, so reload on close.
   const closeQr = useCallback(() => { setQrOpen(false); load(); }, [load]);
   useEffect(() => {
     if (!qrOpen) return;
@@ -205,7 +205,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
               className={`${btn} border border-default text-on-surface hover:bg-surface-elevated`}
               title="Show a QR code the class scans to register themselves for the practice exam"
             >
-              Self Register
+              Self-Register
             </button>
           )}
           {data?.examCode && learners.length > 0 && (
@@ -297,7 +297,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
                             {l.selfRegistered && (
                               <span
                                 className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                                title="Registered from the Self Register QR code with an email that is not on this class's list"
+                                title="Registered from the Self-Register QR code with an email that is not on this class's list"
                               >
                                 Self-registered
                               </span>

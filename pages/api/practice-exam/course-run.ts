@@ -173,7 +173,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             const r = registered.get(l.email);
             return { ...l, registeredAt: r?.registeredAt ?? null, signedIn: r?.signedIn ?? false, selfRegistered: false };
           }),
-          // People who registered themselves from the Self Register QR code and are not on the class list.
+          // People who registered themselves from the Self-Register QR code and are not on the class list.
           ...[...registered.values()]
             .filter(r => !classEmails.has(r.email.toLowerCase()))
             .map(r => ({
