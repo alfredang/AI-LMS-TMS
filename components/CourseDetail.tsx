@@ -1186,7 +1186,6 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
     const [loading, setLoading] = React.useState(true);
     const [submitting, setSubmitting] = React.useState(false);
     const [message, setMessage] = React.useState('');
-    const [linkUrl, setLinkUrl] = React.useState('');
     const [pendingFile, setPendingFile] = React.useState<File | null>(null);
     const [isDragging, setIsDragging] = React.useState(false);
     // Chronological (oldest first) by default so the class reads Day 1 → Day N.
@@ -1216,7 +1215,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
     const pickFile = (file: File | null | undefined) => {
         if (!file) return;
         if (file.size > ANNOUNCEMENT_MAX_FILE_BYTES) {
-            alert('That file is larger than 50 MB. Please upload a smaller file, or share it as a web link.');
+            alert('That file is larger than 50 MB. Please upload a smaller file, or paste a link to it in the message.');
             return;
         }
         setPendingFile(file);
@@ -1229,18 +1228,14 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
 
     const resetComposer = () => {
         setMessage('');
-        setLinkUrl('');
         clearFile();
     };
 
     const handleSubmit = async () => {
         const trimmedMessage = message.trim();
-        let trimmedLink = linkUrl.trim();
-        // Accept "www.example.com" as typed — learners still get a working link.
-        if (trimmedLink && !/^https?:\/\//i.test(trimmedLink)) trimmedLink = `https://${trimmedLink}`;
 
-        if (!trimmedMessage && !trimmedLink && !pendingFile) {
-            alert('Type a message, add a web link or attach a document before posting.');
+        if (!trimmedMessage && !pendingFile) {
+            alert('Type a message or attach a document before posting.');
             return;
         }
 
@@ -1250,7 +1245,6 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
             formData.append('courseRunId', courseRunId);
             formData.append('postedBy', currentUser?.name || currentUser?.email || 'Trainer');
             if (trimmedMessage) formData.append('message', trimmedMessage);
-            if (trimmedLink) formData.append('linkUrl', trimmedLink);
             if (pendingFile) formData.append('file', pendingFile);
 
             const res = await fetch('/api/trainer/create-announcement', {
@@ -1315,17 +1309,6 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                             rows={3}
                             className={inputClass}
                         />
-                        <div className="flex items-center gap-2">
-                            <Icon name={IconName.Link} className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <input
-                                type="text"
-                                inputMode="url"
-                                value={linkUrl}
-                                onChange={e => setLinkUrl(e.target.value)}
-                                placeholder="Web link (optional), e.g. https://example.com/reading"
-                                className={inputClass}
-                            />
-                        </div>
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -1780,15 +1763,15 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         <div className="space-y-3">
                             <div className="flex justify-between items-baseline">
                                 <p className="text-gray-500 dark:text-gray-400">Training Hours:</p>
-                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.trainingHours}</p>
+                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.trainingHours} hrs</p>
                             </div>
                             <div className="flex justify-between items-baseline">
                                 <p className="text-gray-500 dark:text-gray-400">Assessment Hours:</p>
-                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.assessmentHours}</p>
+                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.assessmentHours} hrs</p>
                             </div>
-                            <div className="flex justify-between items-baseline font-bold pt-2 border-t dark:border-gray-700">
+                            <div className="flex justify-between items-baseline font-bold">
                                 <p className="text-gray-900 dark:text-white">Total Duration:</p>
-                                <p className="text-gray-900 dark:text-white">{totalDuration}</p>
+                                <p className="text-gray-900 dark:text-white">{totalDuration} hrs</p>
                             </div>
                         </div>
                     </div>
