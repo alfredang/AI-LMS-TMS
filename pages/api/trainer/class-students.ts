@@ -115,7 +115,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, courseRunId))) return;
 
     try {
-        // Fetch all enrolments from the unified `enrollment` table
+        // Fetch the run's active enrolments from the unified `enrollment` table.
+        // Learners removed from the class (no-shows, withdrawals, cancellations)
+        // are left off the roster so they are not graded or sent a certificate.
         const query = `
             SELECT
                 e.id as enrolment_id,
@@ -130,6 +132,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             FROM enrollment e
             LEFT JOIN app_user u ON e.user_id = u.id
             WHERE e.course_run_id = $1
+              AND (
+                    COALESCE(e.enrolment_status, '') NOT IN ('Admin Removed', 'Cancelled', 'Withdrawn')
+                    -- Keep a removed row that already holds a grade or certificate, so
+                    -- past records (and merged duplicate rows) do not lose them.
+                    OR e.certificate IS NOT NULL
+                    OR e.assessment_status IN ('Competent', 'Passed')
+              )
         `;
         const [resData, subsData, methodsData] = await Promise.all([
             pool.query(query, [courseRunId]),
