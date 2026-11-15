@@ -383,6 +383,8 @@ export interface CourseDetail {
   courseRunId: string;
   courseRunUuid: string;
   digitalAttendanceId: string;
+  /** Trainer name(s) of this class run, comma-separated. */
+  trainerNames?: string;
   trainingHours: number;
   assessmentHours: number;
   lessonPlanUrl: string;

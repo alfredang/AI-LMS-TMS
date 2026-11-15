@@ -63,6 +63,8 @@ interface Course {
     caslSkills?: string;
     courseRunId: string;
     daId?: string;
+    /** Trainer name(s) of this class run, comma-separated. */
+    trainerNames?: string;
     trainingHours: number;
     assessmentHours: number;
     courseType: string;
@@ -1726,56 +1728,84 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
 };
 
 //---- Course Info Panel ---
+// Two cards: "Course Details" holds the course-level facts (title, codes, TSC,
+// funding, duration); "Class Details" holds the facts of this one class run
+// (trainer, dates, Course Run ID, Digital Attendance ID, class type and status).
 const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ course, userRole }) => {
     const totalDuration = Number(course.trainingHours) + Number(course.assessmentHours);
+    // Admin / TP / Developer view the course, not a class run, so run-level fields are hidden.
+    const showRunFields = userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && userRole !== UserRole.Admin;
+    const fmtDate = (v?: string | null) => {
+        const d = v ? new Date(v) : null;
+        return d && !isNaN(d.getTime()) ? d.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+    };
 
-    const DetailRow = ({ label, value }: { label: string, value: string | number }) => (
+    const DetailRow = ({ label, value }: { label: string, value: React.ReactNode }) => (
         <div className="flex justify-between items-start gap-4">
             <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">{label}</p>
-            <p className="font-semibold text-gray-900 dark:text-gray-100 text-right">{value}</p>
+            <div className="font-semibold text-gray-900 dark:text-gray-100 text-right">{value}</div>
         </div>
     );
-    console.log("course code", course.courseCode);
-    console.log('tsc ref', course.tscCode);
+
+    const expiry = course.fundingValidity ? new Date(course.fundingValidity) : null;
+    const isExpired = expiry && !isNaN(expiry.getTime()) ? expiry < new Date() : false;
+    const trainers = (course.trainerNames || '').split(',').map(t => t.trim()).filter(Boolean);
+    const classStatus = (course.classStatus || '').toLowerCase();
+    const classStatusStyle: Record<string, string> = {
+        cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+        pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+        confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    };
 
     return (
-        <div className="p-6 border-b dark:border-gray-700">
-            <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Course Details</h3>
-            <div className="space-y-4 text-sm">
-                <DetailRow label="Course Title" value={course.title} />
-                <DetailRow label="Course Ref Code" value={displayCourseCodes(course)} />
-                <DetailRow label="TSC Title" value={course.courseType === 'CASL' ? 'NA' : (course.tscTitle || 'N/A')} />
-                <DetailRow label="TSC Code" value={course.courseType === 'CASL' ? 'NA' : (course.tscCode || 'N/A')} />
-                {course.courseType === 'CASL' && (
-                    <DetailRow label="CASL Skills" value={course.caslSkills || 'N/A'} />
-                )}
-                {(() => {
-                    const start = course.fundingValidityStart ? new Date(course.fundingValidityStart) : null;
-                    const expiry = course.fundingValidity ? new Date(course.fundingValidity) : null;
-                    const isExpired = expiry ? expiry < new Date() : false;
-                    const fmt = (d: Date | null) => d && !isNaN(d.getTime()) ? d.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-                    return (
-                        <>
-                            <div className="flex justify-between items-start gap-4">
-                                <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">Funding Validity Start Date</p>
-                                <p className="font-semibold text-right text-gray-900 dark:text-gray-100">{fmt(start)}</p>
+        <>
+            <div className="p-6 border-b dark:border-gray-700">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Course Details</h3>
+                <div className="space-y-4 text-sm">
+                    <DetailRow label="Course Title" value={course.title} />
+                    <DetailRow label="Course Ref Code" value={displayCourseCodes(course)} />
+                    <DetailRow label="TSC Title" value={course.courseType === 'CASL' ? 'NA' : (course.tscTitle || 'N/A')} />
+                    <DetailRow label="TSC Code" value={course.courseType === 'CASL' ? 'NA' : (course.tscCode || 'N/A')} />
+                    {course.courseType === 'CASL' && (
+                        <DetailRow label="CASL Skills" value={course.caslSkills || 'N/A'} />
+                    )}
+                    <DetailRow label="Funding Validity Start Date" value={fmtDate(course.fundingValidityStart)} />
+                    <DetailRow label="Funding Validity End Date" value={
+                        <span className={expiry && isExpired ? 'text-red-600 dark:text-red-400' : expiry ? 'text-green-600 dark:text-green-400' : ''}>
+                            {fmtDate(course.fundingValidity)}{expiry && !isNaN(expiry.getTime()) ? (isExpired ? ' (Expired)' : ' (Valid)') : ''}
+                        </span>
+                    } />
+                    <div className="pt-4">
+                        <p className="font-semibold text-gray-500 dark:text-gray-400 mb-3">Course Duration</p>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-baseline">
+                                <p className="text-gray-500 dark:text-gray-400">Training Hours:</p>
+                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.trainingHours}</p>
                             </div>
-                            <div className="flex justify-between items-start gap-4">
-                                <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">Funding Validity End Date</p>
-                                <p className={`font-semibold text-right ${expiry && isExpired ? 'text-red-600 dark:text-red-400' : expiry ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                                    {fmt(expiry)}{expiry ? (isExpired ? ' (Expired)' : ' (Valid)') : ''}
-                                </p>
+                            <div className="flex justify-between items-baseline">
+                                <p className="text-gray-500 dark:text-gray-400">Assessment Hours:</p>
+                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.assessmentHours}</p>
                             </div>
-                        </>
-                    );
-                })()}
-                {/* Course run fields — hide for Developer, TP, and Admin (admin views course-level, not run-level) */}
-                {userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && userRole !== UserRole.Admin && (
-                    <>
-                        <DetailRow label="Course Run ID" value={course.courseRunId} />
+                            <div className="flex justify-between items-baseline font-bold pt-2 border-t dark:border-gray-700">
+                                <p className="text-gray-900 dark:text-white">Total Duration:</p>
+                                <p className="text-gray-900 dark:text-white">{totalDuration}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {showRunFields && (
+                <div className="p-6 border-b dark:border-gray-700">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Class Details</h3>
+                    <div className="space-y-4 text-sm">
+                        <DetailRow label={trainers.length > 1 ? 'Trainers' : 'Trainer'} value={
+                            trainers.length === 0 ? 'N/A' : trainers.map(t => <div key={t}>{t}</div>)
+                        } />
+                        <DetailRow label="Class Start Date" value={fmtDate(course.startDate)} />
+                        <DetailRow label="Class End Date" value={fmtDate(course.endDate)} />
+                        <DetailRow label="Course Run ID" value={course.courseRunId || 'N/A'} />
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
-                        <DetailRow label="Start Date" value={course.startDate ? new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
-                        <DetailRow label="End Date" value={course.endDate ? new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
                         <DetailRow label="Class Type" value={
                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                                 course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
@@ -1785,45 +1815,15 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                                 {course.classType || 'Physical'}
                             </span>
                         } />
-                        <DetailRow label="Class Status" value={(() => {
-                            const status = (course.classStatus || '').toLowerCase();
-                            const styleMap: Record<string, string> = {
-                                cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-                                pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-                                confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-                            };
-                            const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
-                            const label = course.classStatus || 'N/A';
-                            return (
-                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${style}`}>
-                                    {label}
-                                </span>
-                            );
-                        })()} />
-                    </>
-                )}
-
-                <div className="pt-4">
-                    <p className="font-semibold text-gray-500 dark:text-gray-400 mb-3">Course Duration</p>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-baseline">
-                            <p className="text-gray-500 dark:text-gray-400">Training Hours:</p>
-                            <p className="font-semibold text-gray-900 dark:text-gray-100">{course.trainingHours}</p>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                            <p className="text-gray-500 dark:text-gray-400">Assessment Hours:</p>
-                            <p className="font-semibold text-gray-900 dark:text-gray-100">{course.assessmentHours}</p>
-                        </div>
-                        <div className="flex justify-between items-baseline font-bold pt-2 border-t dark:border-gray-700">
-                            <p className="text-gray-900 dark:text-white">Total Duration:</p>
-                            <p className="text-gray-900 dark:text-white">{totalDuration}</p>
-                        </div>
+                        <DetailRow label="Class Status" value={
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${classStatusStyle[classStatus] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>
+                                {course.classStatus || 'N/A'}
+                            </span>
+                        } />
                     </div>
                 </div>
-
-
-            </div>
-        </div>
+            )}
+        </>
     );
 };
 
@@ -2520,6 +2520,7 @@ export const CourseDetail: React.FC = () => {
         classStatus: selectedCourse.classStatus,
         totalAssessments: selectedCourse.totalAssessments,
         daId: effectiveDetail?.digitalAttendanceId,
+        trainerNames: effectiveDetail?.trainerNames,
         lessonPlanUrl: effectiveDetail?.lessonPlanUrl,
         learnerGuideUrl: effectiveDetail?.learnerGuideUrl,
         slidesUrl: effectiveDetail?.slidesUrl,
@@ -2542,6 +2543,7 @@ export const CourseDetail: React.FC = () => {
         virtualMeetingJoinLink: (effectiveDetail as any)?.virtualMeetingJoinLink || selectedCourse.virtualMeetingJoinLink || null,
         virtualMeetingProvider: (effectiveDetail as any)?.virtualMeetingProvider || selectedCourse.virtualMeetingProvider || null,
         fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
+        fundingValidityStart: (effectiveDetail as any)?.fundingValidityStart || (selectedCourse as any).fundingValidityStart || null,
         assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
         publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
         writtenAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider

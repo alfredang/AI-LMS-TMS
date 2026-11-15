@@ -68,6 +68,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         c.casl_skills,
         cr.id AS course_run_id,
         cr.digital_attendance_id,
+        -- Trainer(s) of this class: the course_run_trainer junction is canonical;
+        -- the legacy scalar name / assigned_trainer_id is the fallback.
+        COALESCE(
+          (SELECT string_agg(crt.trainer_name, ', ' ORDER BY crt.assigned_at, crt.trainer_name)
+             FROM course_run_trainer crt
+            WHERE crt.course_run_id = cr.id AND crt.trainer_name <> ''),
+          NULLIF(cr.assigned_trainer_name, ''),
+          (SELECT au_t.full_name FROM app_user au_t WHERE au_t.id = cr.assigned_trainer_id)
+        ) AS trainer_names,
         c.training_hours,
         c.assessment_hours,
         c.lesson_plan_url,
@@ -232,6 +241,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           courseRunId: courseDetail.external_course_run_id,
           courseRunUuid: courseDetail.course_run_id, // This is the UUID we need for grading APIs
           digitalAttendanceId: courseDetail.digital_attendance_id,
+          trainerNames: courseDetail.trainer_names || '',
           trainingHours: courseDetail.training_hours,
           assessmentHours: courseDetail.assessment_hours,
           lessonPlanUrl: courseDetail.lesson_plan_url,
