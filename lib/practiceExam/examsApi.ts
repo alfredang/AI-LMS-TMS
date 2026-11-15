@@ -95,17 +95,20 @@ export interface RegisterResult {
   accountCreated?: boolean;
   created?: boolean;
   alreadyHadAccess?: boolean;
+  /** The exams site emailed the learner the exam link + email-code sign-in steps (first registration for this class only). */
+  emailSent?: boolean;
   registeredAt?: string | null;
 }
 
 /** Create the account if needed, grant the practice exam, record course run + "Registered from TMS". */
-export async function registerLearner(input: { name: string; email: string; exam: string; courseRunId: string }): Promise<RegisterResult> {
+export async function registerLearner(input: { name: string; email: string; exam: string; courseRunId: string; remark?: string }): Promise<RegisterResult> {
   const r = await call<{
     accountCreated: boolean; created: boolean; alreadyHadAccess: boolean;
+    registrationEmailSent?: boolean; welcomeEmailSent?: boolean;
     registration?: { registeredAt: string | null };
   }>('/registrations', {
     method: 'POST',
-    body: JSON.stringify({ ...input, remark: 'Registered from TMS' }),
+    body: JSON.stringify({ ...input, remark: input.remark || 'Registered from TMS' }),
   });
   if (!r.ok) return { ok: false, status: r.status, error: r.data.error || `Exams API error ${r.status}` };
   return {
@@ -114,6 +117,7 @@ export async function registerLearner(input: { name: string; email: string; exam
     accountCreated: r.data.accountCreated,
     created: r.data.created,
     alreadyHadAccess: r.data.alreadyHadAccess,
+    emailSent: !!(r.data.registrationEmailSent ?? r.data.welcomeEmailSent),
     registeredAt: r.data.registration?.registeredAt ?? null,
   };
 }

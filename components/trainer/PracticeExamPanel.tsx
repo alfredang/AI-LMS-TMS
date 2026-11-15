@@ -8,6 +8,7 @@ interface Learner {
   registeredAt: string | null;
   signedIn: boolean;
   isTrainer?: boolean;
+  selfRegistered?: boolean;
 }
 
 interface CatalogItem {
@@ -32,6 +33,8 @@ interface RowResult { ok: boolean; error?: string; accountCreated?: boolean }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const btn = 'px-2 py-1 text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const qrSrc = (url: string, size: number) =>
+  `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Singapore' }) : '—';
 
@@ -55,6 +58,8 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
   const [error, setError] = useState<string | null>(null);
   // Collapsed until the user expands it; the header still shows the exam and the registered count.
   const [open, setOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // 'all' | email | 'exam'
   const [rowResult, setRowResult] = useState<Record<string, RowResult>>({});
   const [summary, setSummary] = useState<{ ok: boolean; text: string } | null>(null);
@@ -79,6 +84,15 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
       setLoading(false);
     }
   }, [courseRunUuid]);
+
+  // Self Register QR: Esc closes it; new sign-ups arrive while it is on screen, so reload on close.
+  const closeQr = useCallback(() => { setQrOpen(false); load(); }, [load]);
+  useEffect(() => {
+    if (!qrOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeQr(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [qrOpen, closeQr]);
 
   useEffect(() => {
     setData(null);
@@ -106,7 +120,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
         });
         setSummary({
           ok: json.failed === 0,
-          text: `${json.registered} registered${json.newAccounts ? ` (${json.newAccounts} new account${json.newAccounts === 1 ? '' : 's'}, welcome email sent)` : ''}${json.failed ? `, ${json.failed} failed` : ''}.`,
+          text: `${json.registered} registered${json.emailed ? ` (${json.emailed} emailed the exam link)` : ''}${json.failed ? `, ${json.failed} failed` : ''}.`,
         });
         await load();
       } else {
@@ -154,6 +168,11 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
   const known = !examPick || !!data?.catalog?.some(c => c.slug === examPick);
   const savedSlug = data?.catalog?.find(c => c.slug === data.examCode || c.code.toUpperCase() === String(data.examCode || '').toUpperCase())?.slug ?? data?.examCode ?? '';
 
+  const selfRegisterUrl = typeof window !== 'undefined' ? `${window.location.origin}/practice-exam/${courseRunUuid}` : '';
+  const copyLink = () => {
+    navigator.clipboard?.writeText(selfRegisterUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  };
+
   const body = (
     <>
       <div className={section
@@ -179,6 +198,16 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
           <button type="button" onClick={load} disabled={loading} className={`${btn} border border-default text-on-surface-secondary hover:bg-surface-elevated`}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
+          {data?.examCode && data.courseRunId && (
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className={`${btn} border border-default text-on-surface hover:bg-surface-elevated`}
+              title="Show a QR code the class scans to register themselves for the practice exam"
+            >
+              Self Register
+            </button>
+          )}
           {data?.examCode && learners.length > 0 && (
             <button
               type="button"
@@ -233,8 +262,8 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
           {data?.examCode && (
             <p className="text-xs text-on-surface-secondary">
               {data.examTitle || data.examCode} on exams.tertiaryinfotech.com · Course Run ID{' '}
-              <span className="font-mono text-on-surface">{data.courseRunId || '—'}</span>. The class&apos;s trainer is registered too. New
-              accounts get a welcome email; they sign in with Google or an email code.
+              <span className="font-mono text-on-surface">{data.courseRunId || '—'}</span>. The class&apos;s trainer is registered too. Each
+              person is emailed the exam link once, when first registered for this class; they sign in with an email code (OTP) or Google.
             </p>
           )}
 
@@ -264,6 +293,14 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
                             {l.name || '—'}
                             {l.isTrainer && (
                               <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">Trainer</span>
+                            )}
+                            {l.selfRegistered && (
+                              <span
+                                className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                title="Registered from the Self Register QR code with an email that is not on this class's list"
+                              >
+                                Self-registered
+                              </span>
                             )}
                           </td>
                           <td className="py-1.5 pr-3 text-on-surface-secondary">{l.email}</td>
@@ -299,6 +336,34 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
               </div>
             )
           )}
+        </div>
+      )}
+
+      {qrOpen && selfRegisterUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Practice exam self-registration QR code"
+          onClick={closeQr}
+          className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center gap-4 p-6"
+        >
+          <p className="text-3xl font-bold text-gray-900 text-center">Scan to register for the practice exam</p>
+          <p className="text-lg font-medium text-blue-700 text-center">{data?.examTitle || data?.examCode}</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qrSrc(selfRegisterUrl, 1000)} alt="Practice exam self-registration QR code" style={{ width: 'min(58vh, 88vw)', height: 'min(58vh, 88vw)' }} />
+          <p className="text-base text-gray-700 text-center max-w-2xl">
+            Enter your name and email. You will get an email with the practice exam link; sign in with the one-time code sent to the same inbox.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3" onClick={e => e.stopPropagation()}>
+            <span className="text-sm text-gray-500 break-all text-center">{selfRegisterUrl}</span>
+            <button type="button" onClick={copyLink} className="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-100">
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button type="button" onClick={closeQr} className="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700">
+              Close
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">Click anywhere or press Esc to close</p>
         </div>
       )}
     </>

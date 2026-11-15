@@ -106,7 +106,8 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
  * (name + email) on exams.tertiaryinfotech.com for the course's practice exam.
  * Admin / training provider / developer: any class. Trainer: only classes they are assigned to.
  *
- * GET  ?courseRunUuid=                                   → { configured, examCode, learners[] (incl. the class's trainers, isTrainer), catalog? (staff) }
+ * GET  ?courseRunUuid=                                   → { configured, examCode, learners[] (incl. the class's trainers, isTrainer, and people who
+ *                                                           self-registered from the QR code, selfRegistered), catalog? (staff) }
  * POST { courseRunUuid, action: 'register', emails? }   → register all learners + trainers (or just `emails`)
  * POST { courseRunUuid, action: 'set_exam', examCode }  → staff: link/unlink the course's practice exam
  */
@@ -146,6 +147,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       const learners = await getPeople(courseRunUuid);
+      const classEmails = new Set(learners.map(l => l.email));
       let registered = new Map<string, ExamRegistration>();
       if (run.examCode && run.courseRunId && !warning) {
         try {
@@ -166,10 +168,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         examTitle,
         warning,
         catalog,
-        learners: learners.map(l => {
-          const r = registered.get(l.email);
-          return { ...l, registeredAt: r?.registeredAt ?? null, signedIn: r?.signedIn ?? false };
-        }),
+        learners: [
+          ...learners.map(l => {
+            const r = registered.get(l.email);
+            return { ...l, registeredAt: r?.registeredAt ?? null, signedIn: r?.signedIn ?? false, selfRegistered: false };
+          }),
+          // People who registered themselves from the Self Register QR code and are not on the class list.
+          ...[...registered.values()]
+            .filter(r => !classEmails.has(r.email.toLowerCase()))
+            .map(r => ({
+              name: r.name || '', email: r.email.toLowerCase(), isTrainer: false,
+              registeredAt: r.registeredAt, signedIn: r.signedIn, selfRegistered: true,
+            })),
+        ],
       });
     }
 
@@ -215,6 +226,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         registered: results.length - failed,
         failed,
         newAccounts: results.filter(r => r.ok && r.accountCreated).length,
+        emailed: results.filter(r => r.ok && r.emailSent).length,
         results,
       });
     }
