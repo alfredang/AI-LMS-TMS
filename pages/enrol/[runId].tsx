@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
-// PUBLIC page behind the class's enrolment QR code (shown by the trainer on the E-Attendance
-// page). The learner enters their NRIC/FIN: if they already have an SSG enrolment for the class
-// the page shows their enrolment ID and nothing needs submitting; otherwise they fill in the
-// details staff need to enrol them on TPGateway.
+// PUBLIC page behind the class's SWDA Enrolment QR code (class page → SWDA Enrolment, and the
+// E-Attendance page). The learner enters their name (as in NRIC) and NRIC/FIN: if either is
+// already on the class's SWDA enrolments the page says so and nothing needs submitting; otherwise
+// they fill in the details staff need to enrol them on TPGateway. Submitting also registers them
+// on the class, so they can sign in to the portal with an email code.
 
 type Sponsorship = 'Individual' | 'Employer';
 
@@ -15,6 +16,7 @@ interface FormState {
   contactNumber: string;
   email: string;
   dateOfBirth: string;
+  nationality: string;
   sponsorshipType: Sponsorship;
   employerName: string;
   employerUen: string;
@@ -26,7 +28,7 @@ interface FormState {
 interface CourseInfo { title: string; code: string | null; courseRunId: string; startDate: string | null; endDate: string | null }
 
 const EMPTY: FormState = {
-  traineeName: '', nric: '', contactNumber: '', email: '', dateOfBirth: '', sponsorshipType: 'Individual',
+  traineeName: '', nric: '', contactNumber: '', email: '', dateOfBirth: '', nationality: '', sponsorshipType: 'Individual',
   employerName: '', employerUen: '', employerContactName: '', employerContactEmail: '', employerContactNumber: '',
 };
 
@@ -44,6 +46,12 @@ const Field: React.FC<{ id: string; label: string; error?: string; children: Rea
   </div>
 );
 
+const NATIONALITIES = [
+  'Singaporean', 'Malaysian', 'Chinese', 'Indian', 'Filipino', 'Indonesian', 'Vietnamese', 'Thai', 'Myanmar',
+  'Bangladeshi', 'Sri Lankan', 'Pakistani', 'Korean', 'Japanese', 'Taiwanese', 'Hong Konger', 'Australian',
+  'British', 'American', 'Canadian', 'French', 'German',
+];
+
 const fmtDay = (ymd: string | null) => {
   if (!ymd) return '';
   const [y, m, d] = ymd.slice(0, 10).split('-').map(Number);
@@ -59,6 +67,7 @@ export default function EnrolmentRequestPage() {
   const [step, setStep] = useState<'nric' | 'form' | 'enrolled' | 'submitted'>('nric');
   const [form, setForm] = useState<FormState>(EMPTY);
   const [enrolmentRef, setEnrolmentRef] = useState('');
+  const [registered, setRegistered] = useState<{ ok: boolean; email: string | null; issue: string | null }>({ ok: false, email: null, issue: null });
   const [resubmit, setResubmit] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +94,7 @@ export default function EnrolmentRequestPage() {
     return { res, json: await res.json() };
   };
 
-  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const value = k === 'nric' || k === 'employerUen' ? e.target.value.toUpperCase().trim() : e.target.value;
     setForm(f => ({ ...f, [k]: value }));
     if (fieldErrors[k]) setFieldErrors(fe => { const n = { ...fe }; delete n[k]; return n; });
@@ -103,7 +112,7 @@ export default function EnrolmentRequestPage() {
     e.preventDefault();
     setBusy(true); setError(null); setFieldErrors({});
     try {
-      const { res, json } = await post({ action: 'check', nric: form.nric });
+      const { res, json } = await post({ action: 'check', nric: form.nric, traineeName: form.traineeName });
       if (!res.ok || !json.success) { setFieldErrors({ nric: json.error || 'Could not check your NRIC/FIN.' }); return; }
       if (json.enrolled) { setEnrolmentRef(json.enrolmentRef || ''); setStep('enrolled'); return; }
       setResubmit(!!json.pending);
@@ -126,6 +135,7 @@ export default function EnrolmentRequestPage() {
         return;
       }
       if (json.enrolled) { setEnrolmentRef(json.enrolmentRef || ''); setStep('enrolled'); return; }
+      setRegistered({ ok: !!json.registered, email: json.email || null, issue: json.registrationIssue || null });
       setStep('submitted');
     } catch {
       setError('Could not submit your details. Please try again.');
@@ -134,7 +144,10 @@ export default function EnrolmentRequestPage() {
     }
   };
 
-  const startOver = () => { setForm(EMPTY); setEnrolmentRef(''); setFieldErrors({}); setError(null); setResubmit(false); setStep('nric'); };
+  const startOver = () => {
+    setForm(EMPTY); setEnrolmentRef(''); setFieldErrors({}); setError(null); setResubmit(false);
+    setRegistered({ ok: false, email: null, issue: null }); setStep('nric');
+  };
   const employer = form.sponsorshipType === 'Employer';
 
   let body: React.ReactNode;
@@ -148,13 +161,16 @@ export default function EnrolmentRequestPage() {
     body = (
       <form onSubmit={checkNric} noValidate className="space-y-4">
         <p className="text-sm text-gray-600 dark:text-gray-300">
-          Enter your NRIC/FIN so we can check whether you are already enrolled in this class.
+          Enter your name and NRIC/FIN so we can check whether you are already enrolled in this class.
         </p>
+        <Field id="enr-traineeName" label="Trainee Name (as in NRIC/FIN)" error={fieldErrors.traineeName}>
+          <input {...inp('traineeName')} autoComplete="name" autoFocus />
+        </Field>
         <Field id="enr-nric" label="NRIC/FIN" error={fieldErrors.nric}>
-          <input {...inp('nric')} placeholder="S1234567A" maxLength={9} autoComplete="off" autoCapitalize="characters" autoFocus />
+          <input {...inp('nric')} placeholder="S1234567A" maxLength={9} autoComplete="off" autoCapitalize="characters" />
         </Field>
         {error && <p className="text-sm text-red-500">{error}</p>}
-        <button type="submit" disabled={busy || !form.nric} className={primaryBtn}>{busy ? 'Checking…' : 'Continue'}</button>
+        <button type="submit" disabled={busy || !form.nric || form.traineeName.trim().length < 2} className={primaryBtn}>{busy ? 'Checking…' : 'Continue'}</button>
       </form>
     );
   } else if (step === 'enrolled') {
@@ -164,13 +180,18 @@ export default function EnrolmentRequestPage() {
           <p className="font-semibold text-green-800 dark:text-green-300">You are already enrolled in this class.</p>
           <p className="text-sm text-green-800 dark:text-green-300 mt-1">There is nothing to submit.</p>
         </div>
+        <Field id="enr-name-ro" label="Trainee Name">
+          <input id="enr-name-ro" readOnly value={form.traineeName} className={`${inputCls()} bg-gray-100 dark:bg-gray-700`} />
+        </Field>
         <Field id="enr-nric-ro" label="NRIC/FIN">
           <input id="enr-nric-ro" readOnly value={form.nric ? `${form.nric[0]}XXXX${form.nric.slice(-4)}` : ''} className={`${inputCls()} bg-gray-100 dark:bg-gray-700`} />
         </Field>
-        <Field id="enr-ref" label="Enrolment ID">
-          <input id="enr-ref" readOnly value={enrolmentRef} className={`${inputCls()} bg-gray-100 dark:bg-gray-700 font-mono`} />
-        </Field>
-        <button type="button" onClick={startOver} className="text-sm text-blue-600 hover:underline">Not you? Check another NRIC/FIN</button>
+        {enrolmentRef && (
+          <Field id="enr-ref" label="Enrolment ID">
+            <input id="enr-ref" readOnly value={enrolmentRef} className={`${inputCls()} bg-gray-100 dark:bg-gray-700 font-mono`} />
+          </Field>
+        )}
+        <button type="button" onClick={startOver} className="text-sm text-blue-600 hover:underline">Not you? Check another learner</button>
       </div>
     );
   } else if (step === 'submitted') {
@@ -179,9 +200,21 @@ export default function EnrolmentRequestPage() {
         <div className="rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 p-4">
           <p className="font-semibold text-blue-800 dark:text-blue-300">Thank you, {form.traineeName}. Your details are submitted.</p>
           <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
-            Your trainer or our admin team will complete your enrolment for this class. You do not need to do anything else.
+            Your trainer or our admin team will complete your SWDA enrolment for this class. You do not need to do anything else for it.
           </p>
         </div>
+        {registered.ok && (
+          <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/20 dark:border-green-700 p-4 space-y-2">
+            <p className="text-sm text-green-800 dark:text-green-300">
+              You are registered for this class. Sign in to the learning portal with
+              {registered.email ? <> <strong>{registered.email}</strong></> : ' your email'} and the one-time code we email you.
+            </p>
+            <a href="/" className="inline-block text-sm font-medium text-green-800 dark:text-green-300 underline">Open the learning portal</a>
+          </div>
+        )}
+        {!registered.ok && registered.issue && (
+          <p className="text-sm text-amber-600 dark:text-amber-400">{registered.issue}</p>
+        )}
         <button type="button" onClick={startOver} className="text-sm text-blue-600 hover:underline">Submit for another learner</button>
       </div>
     );
@@ -211,6 +244,10 @@ export default function EnrolmentRequestPage() {
         </Field>
         <Field id="enr-dateOfBirth" label="Date of Birth" error={fieldErrors.dateOfBirth}>
           <input type="date" {...inp('dateOfBirth')} max={new Date().toISOString().slice(0, 10)} />
+        </Field>
+        <Field id="enr-nationality" label="Nationality" error={fieldErrors.nationality}>
+          <input {...inp('nationality')} list="enr-nationalities" placeholder="e.g. Singaporean" autoComplete="country-name" maxLength={60} />
+          <datalist id="enr-nationalities">{NATIONALITIES.map(n => <option key={n} value={n} />)}</datalist>
         </Field>
 
         <fieldset>
@@ -267,20 +304,30 @@ export default function EnrolmentRequestPage() {
   return (
     <>
       <Head>
-        <title>Class Enrolment</title>
+        <title>SWDA Enrolment</title>
         <meta name="robots" content="noindex" />
       </Head>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4">
         <div className="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-xl shadow p-6 space-y-5">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Class Enrolment</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">SWDA Enrolment</h1>
             {course && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {course.title}
-                <br />
-                Course Run {course.courseRunId}
-                {course.startDate && <> · {fmtDay(course.startDate)}{course.endDate && course.endDate !== course.startDate ? ` to ${fmtDay(course.endDate)}` : ''}</>}
-              </p>
+              <dl className="mt-3 grid grid-cols-[7.5rem_1fr] gap-x-3 gap-y-1.5 text-sm rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 p-3">
+                <dt className="text-gray-500 dark:text-gray-400">Course Title</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">{course.title}</dd>
+                {course.code && (<>
+                  <dt className="text-gray-500 dark:text-gray-400">Course Code</dt>
+                  <dd className="text-gray-900 dark:text-white">{course.code}</dd>
+                </>)}
+                <dt className="text-gray-500 dark:text-gray-400">Course Run ID</dt>
+                <dd className="text-gray-900 dark:text-white">{course.courseRunId}</dd>
+                {course.startDate && (<>
+                  <dt className="text-gray-500 dark:text-gray-400">Date</dt>
+                  <dd className="text-gray-900 dark:text-white">
+                    {fmtDay(course.startDate)}{course.endDate && course.endDate !== course.startDate ? ` – ${fmtDay(course.endDate)}` : ''}
+                  </dd>
+                </>)}
+              </dl>
             )}
           </div>
           {body}

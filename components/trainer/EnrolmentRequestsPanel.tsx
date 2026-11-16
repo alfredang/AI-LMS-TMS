@@ -7,6 +7,7 @@ interface EnrolmentRequest {
   contactNumber: string;
   email: string;
   dateOfBirth: string;
+  nationality: string;
   sponsorshipType: 'Individual' | 'Employer';
   employerName: string | null;
   employerUen: string | null;
@@ -219,9 +220,10 @@ export const EnrolmentRequestsPanel: React.FC<{
                   Enrolment QR code <span className="font-normal text-on-surface-secondary">(not the SSG attendance QR code)</span>
                 </p>
                 <p className="text-xs text-on-surface-secondary">
-                  Show this QR code to the class. Each learner scans it and enters their NRIC/FIN. Learners already enrolled see
-                  their enrolment ID and submit nothing. Learners not enrolled fill in their details, which appear below as
-                  Pending for you to enrol on TPGateway. This code is for enrolment details only. It does not take attendance and does
+                  Show this QR code to the class (it is also on the class page under SWDA Enrolment). Each learner scans it and
+                  enters their name and NRIC/FIN. Learners already enrolled are told so and submit nothing. Learners not enrolled
+                  fill in their details, which appear below as Pending for you to enrol on TPGateway; they are also registered on
+                  the class so they can sign in with an email code. This code is for enrolment details only. It does not take attendance and does
                   not change the SSG attendance QR code above: learners still scan that one for e-attendance, enrolled or not.
                 </p>
                 <div className="flex items-center gap-2">
@@ -289,6 +291,7 @@ export const EnrolmentRequestsPanel: React.FC<{
                   </th>
                   <th className={th}>Email</th>
                   <th className={th}>Date of Birth</th>
+                  <th className={th}>Nationality</th>
                   <th className={th}>Sponsorship</th>
                   <th className={th}>Employer</th>
                   <th className={th}>Submitted</th>
@@ -300,7 +303,7 @@ export const EnrolmentRequestsPanel: React.FC<{
               <tbody>
                 {visible.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-3 py-6 text-center text-sm text-muted italic">
+                    <td colSpan={13} className="px-3 py-6 text-center text-sm text-muted italic">
                       {loading ? 'Loading…' : 'No enrolment requests yet for this class.'}
                     </td>
                   </tr>
@@ -317,6 +320,7 @@ export const EnrolmentRequestsPanel: React.FC<{
                       <td className={td}>{showContact ? r.contactNumber : mask(r.contactNumber)}</td>
                       <td className="px-3 py-3 text-on-surface-secondary">{r.email}</td>
                       <td className={td}>{r.dateOfBirth}</td>
+                      <td className={td}>{r.nationality || '—'}</td>
                       <td className={td}>{r.sponsorshipType === 'Employer' ? 'Company Sponsored' : 'Self Sponsored'}</td>
                       <td className="px-3 py-3 text-on-surface-secondary min-w-[12rem]">
                         {r.sponsorshipType === 'Employer' ? (

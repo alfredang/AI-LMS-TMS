@@ -16,6 +16,8 @@ import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
 import { ClassPhotoUpload } from './trainer/ClassPhotoUpload';
 import { VirtualMeetingLinkEditor } from './trainer/VirtualMeetingLinkEditor';
 import { PracticeExamPanel } from './trainer/PracticeExamPanel';
+import { ClassFeedbackSection } from './trainer/ClassFeedbackSection';
+import { SwdaEnrolmentSection } from './trainer/SwdaEnrolmentSection';
 import QuizTakerModal from './QuizTakerModal';
 import { AssessmentUploadZone, AssessmentUploadState, UploadSuccessAlert, runAssessmentUpload } from './learner/AssessmentUploadZone';
 
@@ -1865,10 +1867,12 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
 
     let trainerNavItems: NavItem[] = [
         { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
+        { type: 'link', label: "SWDA Enrolment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
         { type: 'link', label: "Assessment Summary Record", icon: IconName.ClipboardCheck },
+        { type: 'link', label: "Course Feedback", icon: IconName.Edit },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
@@ -2837,6 +2841,17 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* SWDA Enrolment — QR of the class's enrolment form, for learners not yet enrolled */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider || userRole === UserRole.Developer) && (effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId) && (
+                                <div id={toId("SWDA Enrolment")}>
+                                    <SwdaEnrolmentSection
+                                        courseRunUuid={String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '')}
+                                        courseRunId={String(selectedCourse?.courseRunCode || convertedCourse.courseRunId || '')}
+                                        courseCode={String(effectiveDetail?.tgsRef || selectedCourse?.courseCode || convertedCourse.courseCode || '')}
+                                    />
+                                </div>
+                            )}
+
                             {userRole === UserRole.Learner && (
                                 <div id={toId("E-Attendance")}>
                                     <ContentSection title="E-Attendance">
@@ -3610,6 +3625,13 @@ export const CourseDetail: React.FC = () => {
                                         userRole={userRole} 
                                         courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''} 
                                     />
+                                </div>
+                            )}
+
+                            {/* Course Feedback — every learner's feedback for this class */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId) && (
+                                <div id={toId("Course Feedback")}>
+                                    <ClassFeedbackSection courseRunUuid={String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '')} />
                                 </div>
                             )}
 

@@ -3,9 +3,11 @@ import { enrolLearner } from './selfEnrolment';
 
 // Enrolment-details requests: a learner with no SSG/TPGateway enrolment for a class scans the
 // class's enrolment QR code (shown by the trainer on the E-Attendance page) and submits their
-// details on the public /enrol/[runId] page. Admins and the class's trainers review the
-// requests on the E-Attendance page and enrol the learner on TPGateway.
-// A request is keyed by class + NRIC; it is linked to a local enrolment only when staff act on it.
+// details on the public /enrol/[runId] page (QR on the class page → SWDA Enrolment, and on the
+// E-Attendance page). Admins and the class's trainers review the requests on the E-Attendance page
+// and enrol the learner on TPGateway.
+// A request is keyed by class + NRIC. On submit the learner is also registered on the class
+// (account + local enrolment, linked to the request) so they can sign in with an email code.
 // Twin of database/migrations/add_enrolment_detail_request.sql.
 
 export type SponsorshipChoice = 'Individual' | 'Employer';
@@ -17,6 +19,7 @@ export interface EnrolmentDetailsInput {
   contactNumber: string;
   email: string;
   dateOfBirth: string; // YYYY-MM-DD
+  nationality: string;
   sponsorshipType: SponsorshipChoice;
   employerName?: string;
   employerUen?: string;
@@ -55,6 +58,7 @@ export function ensureEnrolmentDetailRequestTable(): Promise<void> {
         UNIQUE (course_run_uuid, nric)
       );
       CREATE INDEX IF NOT EXISTS enrolment_detail_request_run_idx ON enrolment_detail_request (course_run_uuid, status);
+      ALTER TABLE enrolment_detail_request ADD COLUMN IF NOT EXISTS nationality TEXT;
     `).then(() => undefined).catch((err) => { ensured = null; throw err; });
   }
   return ensured;
@@ -76,6 +80,7 @@ export function validateEnrolmentDetails(body: any): { ok: true; data: Enrolment
     contactNumber: digits(body?.contactNumber),
     email: clean(body?.email).toLowerCase(),
     dateOfBirth: clean(body?.dateOfBirth),
+    nationality: clean(body?.nationality).replace(/\s+/g, ' ').slice(0, 60),
     sponsorshipType: clean(body?.sponsorshipType) === 'Employer' ? 'Employer' : 'Individual',
   };
 
@@ -85,6 +90,7 @@ export function validateEnrolmentDetails(body: any): { ok: true; data: Enrolment
   if (data.contactNumber.length === 10 && data.contactNumber.startsWith('65')) data.contactNumber = data.contactNumber.slice(2);
   if (!/^[3689]\d{7}$/.test(data.contactNumber)) errors.contactNumber = 'Enter an 8-digit Singapore number.';
   if (!EMAIL_RE.test(data.email)) errors.email = 'Enter a valid email address.';
+  if (data.nationality.length < 2) errors.nationality = 'Enter your nationality.';
 
   const dob = /^\d{4}-\d{2}-\d{2}$/.test(data.dateOfBirth) ? new Date(`${data.dateOfBirth}T00:00:00Z`) : null;
   if (!dob || isNaN(dob.getTime())) {
@@ -178,6 +184,31 @@ export async function findEnrolmentRefByNric(courseRunUuid: string, nric: string
   return r.rows[0]?.ref || null;
 }
 
+const normName = (v: unknown) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Is a learner with exactly this name (as in NRIC, case and punctuation ignored) already enrolled on
+ * SWDA/TPGateway for the class? Only enrolments that carry an SSG enrolment ref count — a local
+ * self-registration is not an SWDA enrolment.
+ */
+export async function isEnrolledByName(courseRunUuid: string, traineeName: string): Promise<boolean> {
+  const n = normName(traineeName);
+  if (n.length < 3) return false;
+  const rows = (await pool.query<{ name: string | null }>(
+    `SELECT se.trainee_name AS name
+       FROM ssg_enrolments se JOIN course_run cr ON cr.course_run_id = se.course_run_id
+      WHERE cr.id = $1 AND NULLIF(TRIM(se.enrolment_id), '') IS NOT NULL
+        AND LOWER(COALESCE(se.enrolment_status, '')) NOT IN ('cancelled', 'withdrawn', 'rejected')
+     UNION ALL
+     SELECT COALESCE(NULLIF(e.raw_data->'trainee'->>'fullName', ''), au.full_name)
+       FROM enrollment e JOIN app_user au ON au.id = e.user_id
+      WHERE e.course_run_id = $1 AND NULLIF(TRIM(e.enrolment_id), '') IS NOT NULL
+        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')`,
+    [courseRunUuid]
+  )).rows;
+  return rows.some(r => normName(r.name) === n);
+}
+
 /**
  * The local enrolment a request belongs to. Matches an active enrolment on the class by NRIC;
  * with `create`, otherwise finds or creates the learner's account by email and enrols them on
@@ -238,7 +269,7 @@ export async function resolveLocalEnrolment(
 
 /** Column list for request reads — DOB as text so it never shifts through a JS Date. */
 export const REQUEST_COLUMNS = `id, enrollment_uuid, user_id, course_run_uuid, trainee_name, nric, contact_number, email,
-  date_of_birth::text AS date_of_birth, sponsorship_type, employer_name, employer_uen, employer_contact_name,
+  date_of_birth::text AS date_of_birth, nationality, sponsorship_type, employer_name, employer_uen, employer_contact_name,
   employer_contact_email, employer_contact_number, status, enrolment_ref, last_error, submitted_at, updated_at, processed_at`;
 
 /** API shape of one request row (camelCase). */
@@ -253,6 +284,7 @@ export function mapRequestRow(row: any) {
     contactNumber: row.contact_number,
     email: row.email,
     dateOfBirth: row.date_of_birth || '',
+    nationality: row.nationality || '',
     sponsorshipType: row.sponsorship_type,
     employerName: row.employer_name,
     employerUen: row.employer_uen,

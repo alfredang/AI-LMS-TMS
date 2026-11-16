@@ -3,22 +3,30 @@ import pool from '../../../lib/db';
 import { limited } from '../../../lib/android/auth';
 import {
   ensureEnrolmentDetailRequestTable, getEnrolmentRunContext, findEnrolmentRefByNric, validateEnrolmentDetails, NRIC_PATTERN,
+  isEnrolledByName, resolveLocalEnrolment, REQUEST_COLUMNS,
 } from '../../../lib/learner/enrolmentDetailRequest';
+import { maskEmail } from '../../../lib/attendance/checkin';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * PUBLIC: the /enrol/[runId] page a learner reaches by scanning the class's enrolment QR code
- * (shown by the trainer on the E-Attendance page). The link carries the class's unguessable UUID.
+ * PUBLIC: the /enrol/[runId] page a learner reaches by scanning the class's SWDA Enrolment QR code
+ * (class page → SWDA Enrolment, or the E-Attendance page). The link carries the class's
+ * unguessable UUID.
  *
- * GET  ?run=                        → the class shown on the form
- * POST { run, action: 'check', nric } → { enrolled, enrolmentRef? , pending? }
- * POST { run, action: 'submit', ...details } → store the learner's details for staff to enrol
+ * GET  ?run=                                     → the class shown on the form
+ * POST { run, action: 'check', nric, traineeName } → { enrolled, enrolmentRef?, pending? } — enrolled
+ *                                                   when the NRIC or the exact name is on the class's
+ *                                                   SWDA enrolments
+ * POST { run, action: 'submit', ...details }     → store the learner's details for staff to enrol on
+ *                                                   TPGateway, and register the learner on the class
+ *                                                   (account + local enrolment) so they can sign in
+ *                                                   with an email code
  *
- * Never returns anyone's stored personal details: a check answers only "enrolled, with this
- * ref" or "not yet". Submissions do not touch accounts, profiles or SSG — staff review them and
- * enrol the learner from the E-Attendance page. Rate limited per IP (generous: a class shares
- * the venue Wi-Fi) and per NRIC.
+ * Never returns anyone's stored personal details: a check answers only "enrolled" (with the ref
+ * only for a matching NRIC) or "not yet". Nothing is sent to SSG — staff review the requests and
+ * enrol the learner from the E-Attendance page. Rate limited per IP (generous: a class shares the
+ * venue Wi-Fi) and per NRIC.
  */
 function clientIp(req: NextApiRequest): string {
   const fwd = req.headers['x-forwarded-for'];
@@ -60,6 +68,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       const ref = await findEnrolmentRefByNric(run.id, nric);
       if (ref) return res.status(200).json({ success: true, enrolled: true, enrolmentRef: ref });
+      const traineeName = String(req.body?.traineeName || '').trim();
+      if (traineeName && (await isEnrolledByName(run.id, traineeName))) {
+        return res.status(200).json({ success: true, enrolled: true, enrolmentRef: null });
+      }
       const pending = (await pool.query(
         `SELECT 1 FROM enrolment_detail_request WHERE course_run_uuid = $1 AND nric = $2 AND status IN ('submitted', 'failed')`,
         [run.id, nric]
@@ -79,28 +91,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const ref = await findEnrolmentRefByNric(run.id, d.nric);
     if (ref) return res.status(200).json({ success: true, enrolled: true, enrolmentRef: ref });
+    if (await isEnrolledByName(run.id, d.traineeName)) {
+      return res.status(200).json({ success: true, enrolled: true, enrolmentRef: null });
+    }
 
     const employer = d.sponsorshipType === 'Employer';
-    await pool.query(
+    const saved = await pool.query(
       `INSERT INTO enrolment_detail_request
          (course_run_uuid, trainee_name, nric, contact_number, email, date_of_birth,
-          sponsorship_type, employer_name, employer_uen, employer_contact_name, employer_contact_email, employer_contact_number)
-       VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12)
+          sponsorship_type, employer_name, employer_uen, employer_contact_name, employer_contact_email, employer_contact_number,
+          nationality)
+       VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (course_run_uuid, nric) DO UPDATE SET
          trainee_name = EXCLUDED.trainee_name, contact_number = EXCLUDED.contact_number,
          email = EXCLUDED.email, date_of_birth = EXCLUDED.date_of_birth, sponsorship_type = EXCLUDED.sponsorship_type,
+         nationality = EXCLUDED.nationality,
          employer_name = EXCLUDED.employer_name, employer_uen = EXCLUDED.employer_uen,
          employer_contact_name = EXCLUDED.employer_contact_name, employer_contact_email = EXCLUDED.employer_contact_email,
          employer_contact_number = EXCLUDED.employer_contact_number,
          status = 'submitted', last_error = NULL, updated_at = NOW()
-       WHERE enrolment_detail_request.status <> 'enrolled'`,
+       WHERE enrolment_detail_request.status <> 'enrolled'
+       RETURNING ${REQUEST_COLUMNS}`,
       [
         run.id, d.traineeName, d.nric, d.contactNumber, d.email, d.dateOfBirth, d.sponsorshipType,
         employer ? d.employerName : null, employer ? d.employerUen : null, employer ? d.employerContactName : null,
         employer ? d.employerContactEmail : null, employer ? d.employerContactNumber : null,
+        d.nationality,
       ]
     );
-    return res.status(200).json({ success: true, enrolled: false, submitted: true });
+
+    // Register the learner on this class (account + local enrolment) so they can sign in with an
+    // email code straight away. The SWDA enrolment itself is still done by staff on TPGateway.
+    let registered = false;
+    let registrationNote: string | null = null;
+    const row = saved.rows[0];
+    if (row) {
+      try {
+        const local = await resolveLocalEnrolment(row, { create: true });
+        registered = local.ok;
+        if (!local.ok) {
+          registrationNote = local.error;
+          console.warn('[public enrolment-request] class registration skipped:', local.error);
+        }
+      } catch (e: any) {
+        console.error('[public enrolment-request] class registration failed:', e?.message);
+      }
+    }
+    return res.status(200).json({
+      success: true, enrolled: false, submitted: true, registered,
+      email: registered ? maskEmail(d.email) : null,
+      // Only the generic reason reaches the page: the detailed one names another account.
+      registrationIssue: registrationNote ? 'We could not set up your sign-in with this email. Your trainer will help you.' : null,
+    });
   } catch (err: any) {
     console.error('[public enrolment-request] failed:', err?.message);
     return res.status(500).json({ success: false, error: 'Something went wrong. Please try again.' });
