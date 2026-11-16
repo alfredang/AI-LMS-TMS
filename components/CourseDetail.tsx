@@ -2848,6 +2848,7 @@ export const CourseDetail: React.FC = () => {
                                         courseRunUuid={String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '')}
                                         courseRunId={String(selectedCourse?.courseRunCode || convertedCourse.courseRunId || '')}
                                         courseCode={String(effectiveDetail?.tgsRef || selectedCourse?.courseCode || convertedCourse.courseCode || '')}
+                                        isStaff={userRole !== UserRole.Trainer}
                                     />
                                 </div>
                             )}

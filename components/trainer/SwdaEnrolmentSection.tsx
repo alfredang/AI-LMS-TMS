@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
+import { EnrolmentRequestsPanel } from './EnrolmentRequestsPanel';
 
 const qrSrc = (url: string, size: number) =>
   `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
@@ -10,11 +11,12 @@ const qrSrc = (url: string, size: number) =>
  * Class page → SWDA Enrolment (after E-Attendance). The QR code of the class's public enrolment
  * form (/enrol/<class uuid>) for learners not yet enrolled on SWDA/TPGateway. A learner already
  * enrolled is told so; anyone else submits their details, is registered on this class and can sign
- * in with an email code. Staff then enrol them on TPGateway from E-Attendance → Enrolment Requests.
+ * in with an email code. Staff then enrol them on TPGateway from the Enrolment Requests list below
+ * the QR code.
  * Collapsed by default; the QR opens full screen for projecting to the class.
  */
-export const SwdaEnrolmentSection: React.FC<{ courseRunUuid: string; courseRunId?: string; courseCode?: string }> = ({
-  courseRunUuid, courseRunId, courseCode,
+export const SwdaEnrolmentSection: React.FC<{ courseRunUuid: string; courseRunId?: string; courseCode?: string; isStaff?: boolean }> = ({
+  courseRunUuid, courseRunId, courseCode, isStaff = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
@@ -73,15 +75,15 @@ export const SwdaEnrolmentSection: React.FC<{ courseRunUuid: string; courseRunId
           <p className="pt-4 text-sm text-on-surface-secondary">
             For learners not yet enrolled on SWDA (TPGateway). They scan the QR code and fill in their details; a learner who is
             already enrolled is told so. Each learner who submits is registered on this class and can sign in with an email code.
-            Their details appear on E-Attendance → Enrolment Requests for enrolment on TPGateway. This is not the attendance QR code.
+            Their details appear in Enrolment Requests below for enrolment on TPGateway. This is not the attendance QR code.
           </p>
           {available === false && (
             <p className="mt-3 text-sm text-amber-500">
               This class does not take SWDA enrolment requests (a Non-WSQ course, or outside the enrolment window).
             </p>
           )}
-          <div className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col rounded-xl border border-default overflow-hidden">
+          <div className="pt-5 flex justify-center">
+            <div className="w-full max-w-md flex flex-col rounded-xl border border-default overflow-hidden">
               <div className="bg-indigo-600 px-4 py-2.5 flex items-center justify-center gap-2">
                 <Icon name={IconName.ClipboardCheck} className="w-4 h-4 text-white flex-shrink-0" />
                 <span className="text-sm font-semibold text-white">SWDA Enrolment</span>
@@ -117,6 +119,9 @@ export const SwdaEnrolmentSection: React.FC<{ courseRunUuid: string; courseRunId
                 </div>
               </div>
             </div>
+          </div>
+          <div className="pt-5">
+            <EnrolmentRequestsPanel courseRunUuid={courseRunUuid} isAdminMode={isStaff} showQr={false} />
           </div>
         </div>
       )}

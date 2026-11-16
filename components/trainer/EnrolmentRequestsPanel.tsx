@@ -37,7 +37,8 @@ const qrSrc = (url: string, size: number) =>
   `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
 
 /**
- * E-Attendance page → Enrolment Requests. Shows the class's enrolment QR code for the trainer
+ * Class page → SWDA Enrolment → Enrolment Requests (the QR itself is shown by the section;
+ * pass showQr to show it here too). Shows the class's enrolment QR code for the trainer
  * to flash: learners scan it, and those with no SSG enrolment submit their details. Staff then
  * enrol them on TPGateway (or record a ref obtained elsewhere).
  */
@@ -45,7 +46,9 @@ export const EnrolmentRequestsPanel: React.FC<{
   courseRunUuid: string;
   isAdminMode: boolean;
   onEnrolled?: () => void;
-}> = ({ courseRunUuid, isAdminMode, onEnrolled }) => {
+  /** Show the enrolment QR block inside the panel (off when the host already shows the QR). */
+  showQr?: boolean;
+}> = ({ courseRunUuid, isAdminMode, onEnrolled, showQr = true }) => {
   const [requests, setRequests] = useState<EnrolmentRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +175,7 @@ export const EnrolmentRequestsPanel: React.FC<{
               {pending} pending
             </span>
           )}
-          <span className="text-xs text-muted hidden md:inline">Learners scan the QR code; those not enrolled yet submit their details here</span>
+          <span className="text-xs text-muted hidden md:inline">Learners not enrolled yet who submitted the SWDA Enrolment form, for enrolment on TPGateway</span>
           {loading && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary ml-1" />}
         </div>
         <div className="flex items-center gap-2">
@@ -204,7 +207,7 @@ export const EnrolmentRequestsPanel: React.FC<{
           {error && <p className="px-4 py-2 text-xs text-red-500 border-b border-default">{error}</p>}
 
           {/* Enrolment QR code for the trainer to show the class */}
-          {qrAvailable && enrolUrl && (
+          {showQr && qrAvailable && enrolUrl && (
             <div className="flex flex-col sm:flex-row gap-4 px-4 py-4 border-b border-default">
               <button
                 type="button"

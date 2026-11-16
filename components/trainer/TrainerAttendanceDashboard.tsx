@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
-import { EnrolmentRequestsPanel } from './EnrolmentRequestsPanel';
 import { labelSessions, pickCurrentSession } from '../../lib/attendance/sessionLabel';
 
 interface Session {
@@ -1562,17 +1561,15 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       {/* ── Class: fixed header for the open class, with the SSG attendance links ── */}
       {selectedCourse && (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-5 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0 space-y-3">
               <div>
                 <p className="text-xs font-semibold text-on-surface-secondary">Class</p>
-                <h2 className="text-lg font-semibold text-on-surface mt-0.5">
-                  {[selectedCourse.courseRunCode, selectedCourse.title].filter(Boolean).join(' · ')}
-                </h2>
+                <h2 className="text-lg font-semibold text-on-surface mt-0.5">{selectedCourse.title}</h2>
               </div>
               <div className="flex flex-wrap gap-2">
                 {([
-                  ['Class ID', selectedCourse.courseRunCode],
+                  ['Course Run ID', selectedCourse.courseRunCode],
                   ['Code', selectedCourse.courseCode],
                   ['Start', fmtDay(selectedCourse.startDate)],
                   ['End', fmtDay(selectedCourse.endDate)],
@@ -1585,7 +1582,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 flex-shrink-0">
               {sourceCourse && !isAdminMode && (
                 <button
                   type="button"
@@ -1715,15 +1712,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             </p>
           )}
         </div>
-      )}
-
-      {/* ── Enrolment Requests: enrolment QR code + the details learners without an enrolment submitted through it ── */}
-      {selectedCourseRunId && (
-        <EnrolmentRequestsPanel
-          courseRunUuid={selectedCourseRunId}
-          isAdminMode={isAdminMode}
-          onEnrolled={() => { if (selectedCourse?.courseRunCode) fetchEnrolments(selectedCourse.courseRunCode); }}
-        />
       )}
 
       {/* ── Class Enrolments (per class, not per session — collapsible) ── */}
