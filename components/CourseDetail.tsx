@@ -2891,8 +2891,8 @@ export const CourseDetail: React.FC = () => {
                                     ? !!(zoomStartUrl || zoomJoinUrl)
                                     : !!convertedCourse.virtualMeetingLink;
                                 return (
-                            <div id={toId("Google Meet")}>
-                                <ContentSection title={providerLabel} collapsible defaultOpen={false}>
+                            <div id={toId("Virtual Class Link")}>
+                                <ContentSection title="Virtual Class Link" collapsible defaultOpen={false}>
                                     {/* A link that was entered manually shows even on a Physical class —
                                         the trainer set it deliberately, so surface it either way. */}
                                     {hasVirtualMeetingLink ? (
