@@ -29,9 +29,20 @@ const saveProfile = (p: Profile) => {
   } catch { /* private mode */ }
 };
 
-const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
-const roCls = 'w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 text-base bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300';
+const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-slate-400 text-base bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500';
+// Read-only boxes are divs, not inputs, so a long session name wraps instead of being cut off.
+const roCls = 'w-full min-h-[2.875rem] px-3 py-2.5 rounded-lg border border-slate-300 text-base bg-slate-100 text-slate-700 break-words';
 const nowSgt = () => new Date().toLocaleString('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+const sgtDate = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' });
+const sgtTime = () => new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Singapore', hour: 'numeric', minute: '2-digit', hour12: true });
+
+/** A pre-filled, read-only field (class info the QR code already knows). */
+const ReadOnly: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="min-w-0">
+    <p className="block text-sm font-semibold text-gray-900 mb-1.5">{label}</p>
+    <div className={roCls} aria-label={label}>{value || '—'}</div>
+  </div>
+);
 
 export default function CheckinPage() {
   const router = useRouter();
@@ -46,7 +57,7 @@ export default function CheckinPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Done | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [clock, setClock] = useState('');
+  const [clock, setClock] = useState<{ date: string; time: string }>({ date: '', time: '' });
   const honeypot = useRef<HTMLInputElement>(null);
   const lastLookup = useRef('');
 
@@ -59,8 +70,9 @@ export default function CheckinPage() {
   }, [token]);
 
   useEffect(() => {
-    setClock(nowSgt());
-    const t = setInterval(() => setClock(nowSgt()), 30000);
+    const tick = () => setClock({ date: sgtDate(), time: sgtTime() });
+    tick();
+    const t = setInterval(tick, 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -136,21 +148,21 @@ export default function CheckinPage() {
   } else if (done) {
     body = (
       <div className="space-y-4">
-        <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/20 dark:border-green-700 p-4">
-          <p className="font-semibold text-green-800 dark:text-green-300">{done.message}</p>
+        <div className="rounded-lg border border-green-300 bg-green-50 p-4">
+          <p className="font-semibold text-green-800">{done.message}</p>
         </div>
         <dl className="grid grid-cols-[6rem_1fr] gap-y-2 text-sm">
-          <dt className="text-gray-500 dark:text-gray-400">Name</dt><dd className="font-medium text-gray-900 dark:text-white">{done.name}</dd>
-          <dt className="text-gray-500 dark:text-gray-400">Session</dt><dd className="text-gray-900 dark:text-white">{done.session}</dd>
-          <dt className="text-gray-500 dark:text-gray-400">Time</dt><dd className="text-gray-900 dark:text-white">{done.at}</dd>
+          <dt className="text-gray-500">Name</dt><dd className="font-medium text-gray-900">{done.name}</dd>
+          <dt className="text-gray-500">Session</dt><dd className="text-gray-900">{done.session}</dd>
+          <dt className="text-gray-500">Time</dt><dd className="text-gray-900">{done.at}</dd>
         </dl>
         {done.registered && (
-          <div className="rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 p-4 space-y-2">
-            <p className="text-sm text-blue-800 dark:text-blue-300">
+          <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 space-y-2">
+            <p className="text-sm text-blue-800">
               You are now registered for this class. To get the course material, sign in to the learning portal with
               {done.email ? <> <strong>{done.email}</strong></> : ' your email'} and the one-time code we email you.
             </p>
-            <a href="/" className="inline-block text-sm font-medium text-blue-700 dark:text-blue-300 underline">Open the learning portal</a>
+            <a href="/" className="inline-block text-sm font-medium text-blue-700 underline">Open the learning portal</a>
           </div>
         )}
         <button type="button" onClick={again} className="text-sm text-blue-600 hover:underline">Check in someone else on this phone</button>
@@ -158,7 +170,7 @@ export default function CheckinPage() {
     );
   } else if (ctx.status !== 'open') {
     body = (
-      <p className="text-gray-700 dark:text-gray-300 text-sm">
+      <p className="text-gray-700 text-sm">
         {ctx.status === 'not_yet' ? 'Check-in for this session is not open yet.' : 'Check-in for this class has closed.'} Please speak to your trainer.
       </p>
     );
@@ -166,44 +178,38 @@ export default function CheckinPage() {
     body = (
       <form onSubmit={submit} className="space-y-4" autoComplete="on">
         <div>
-          <label htmlFor="ci-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+          <label htmlFor="ci-phone" className="block text-sm font-semibold text-gray-900 mb-1.5">Phone</label>
           <input id="ci-phone" type="tel" inputMode="tel" autoComplete="tel" maxLength={40} className={inputCls}
             value={phone} onChange={e => setPhone(e.target.value)} onBlur={() => lookup(phone)} />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1" role="status">
+          <p className="text-xs text-gray-500 mt-1" role="status">
             {known ? `Welcome back, ${known.name}. Tap Check In.` : 'Checked in before? Enter your phone number and we fill in the rest.'}
           </p>
         </div>
         <div>
-          <label htmlFor="ci-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+          <label htmlFor="ci-name" className="block text-sm font-semibold text-gray-900 mb-1.5">Name</label>
           <input id="ci-name" type="text" autoComplete="name" maxLength={200} list="ci-saved" className={inputCls}
             required={!known} placeholder={known?.name || ''} value={name} onChange={e => onNameInput(e.target.value)} />
           <datalist id="ci-saved">{profiles.map(p => <option key={`${p.name}|${p.email}`} value={p.name} />)}</datalist>
         </div>
         <div>
-          <label htmlFor="ci-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+          <label htmlFor="ci-email" className="block text-sm font-semibold text-gray-900 mb-1.5">Email</label>
           <input id="ci-email" type="email" autoComplete="email" maxLength={255} className={inputCls}
             required={!known} placeholder={known?.email || ''} value={email} onChange={e => setEmail(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="ci-class" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class</label>
-            <input id="ci-class" readOnly className={roCls} value={ctx.course.courseRunId} />
-          </div>
-          <div>
-            <label htmlFor="ci-sess" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Session</label>
-            <input id="ci-sess" readOnly className={roCls} value={ctx.session.label} />
-          </div>
+          <ReadOnly label="Class Code" value={ctx.course.courseRunId} />
+          <ReadOnly label="Session" value={ctx.session.label} />
         </div>
-        <div>
-          <label htmlFor="ci-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date &amp; Time</label>
-          <input id="ci-time" readOnly className={roCls} value={clock} />
+        <div className="grid grid-cols-2 gap-3">
+          <ReadOnly label="Date" value={clock.date} />
+          <ReadOnly label="Time" value={clock.time} />
         </div>
         <input ref={honeypot} name="website" type="text" tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: '-9999px' }} />
         {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
         <button type="submit" disabled={busy} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg disabled:opacity-50">
           {busy ? 'Checking in…' : 'Check In'}
         </button>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500">
           First time? You are registered for this class when you check in. Next session, your phone number is enough.
           This does not replace the SSG e-attendance: scan the SSG QR code too if your trainer shows it.
         </p>
@@ -217,12 +223,12 @@ export default function CheckinPage() {
         <title>Class Check-in</title>
         <meta name="robots" content="noindex" />
       </Head>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4">
-        <div className="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-xl shadow p-6 space-y-5">
+      <div className="min-h-screen bg-gray-50 py-6 px-4">
+        <div className="max-w-md mx-auto bg-white rounded-xl shadow p-6 space-y-5">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Class Check-in</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Class Check-in</h1>
             {ctx && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 {ctx.course.title}
                 {ctx.course.code && <><br />Course Code {ctx.course.code}</>}
               </p>
