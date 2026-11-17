@@ -13,7 +13,7 @@ interface FeedbackData {
   commentLabel: string;
   averages: Array<number | null>;
   overallAverage: number | null;
-  responses: Array<{ id: string; learner: string; ratings: Array<number | null>; comment: string; submittedAt: string }>;
+  responses: Array<{ id: string }>;
 }
 
 const fmtDay = (ymd: string | null) => {
@@ -21,15 +21,13 @@ const fmtDay = (ymd: string | null) => {
   const [y, m, d] = ymd.slice(0, 10).split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 };
-const fmtSubmitted = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' })
-    .replace(' am', 'am').replace(' pm', 'pm');
 const score = (v: number | null) => (v === null ? '—' : `${Number.isInteger(v) ? v : v.toFixed(1)} / 5`);
 
 /**
- * Class page → Course Feedback (after the Assessment Summary Record). Collapsed by default; when
- * opened it loads every learner's Course Feedback response for the class: the average per question
- * and each response (trainers see "Learner 1, 2, …", staff see names).
+ * Class page → Post Course Feedback Summary (after the Assessment Summary Record). Collapsed by
+ * default; when opened it loads the class's Course Feedback summary: the class details and the
+ * average per question. "View all feedback" opens /class-feedback/[runId], which lists every
+ * response in full (trainers see "Learner 1, 2, …", staff see names).
  */
 export const ClassFeedbackSection: React.FC<{ courseRunUuid: string }> = ({ courseRunUuid }) => {
   const [open, setOpen] = useState(false);
@@ -60,6 +58,7 @@ export const ClassFeedbackSection: React.FC<{ courseRunUuid: string }> = ({ cour
   };
 
   const dates = data ? [fmtDay(data.startDate), fmtDay(data.endDate)].filter(Boolean).filter((d, i, a) => a.indexOf(d) === i).join(' – ') : '';
+  const pageHref = `/class-feedback/${encodeURIComponent(courseRunUuid)}`;
   const pills: Array<[string, string]> = data ? ([
     ['Class', data.classId],
     ['Course Code', data.courseCode || ''],
@@ -72,7 +71,18 @@ export const ClassFeedbackSection: React.FC<{ courseRunUuid: string }> = ({ cour
     <Card className="p-6">
       <div className="flex items-center gap-2">
         <button type="button" onClick={toggle} className="flex-1 min-w-0 flex items-center justify-between text-left" aria-expanded={open}>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Course Feedback</h3>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Post Course Feedback Summary</h3>
+        </button>
+        <a
+          href={pageHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 whitespace-nowrap"
+        >
+          View all feedback
+          <Icon name={IconName.ExternalLink} className="w-4 h-4" />
+        </a>
+        <button type="button" onClick={toggle} aria-label={open ? 'Collapse' : 'Expand'} className="p-1">
           <Icon
             name={IconName.ChevronDown}
             className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
@@ -130,32 +140,19 @@ export const ClassFeedbackSection: React.FC<{ courseRunUuid: string }> = ({ cour
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-default overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="border-b border-default">
-                        <tr className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                          <th className="px-4 py-3 text-left font-semibold">Learner</th>
-                          {data.questions.map((q, i) => (
-                            <th key={q} className="px-4 py-3 text-left font-semibold" title={q}>Q{i + 1}</th>
-                          ))}
-                          <th className="px-4 py-3 text-left font-semibold">{data.commentLabel}</th>
-                          <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Submitted</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.responses.map(r => (
-                          <tr key={r.id} className="border-b border-default last:border-0">
-                            <td className="px-4 py-3 font-medium text-gray-900 dark:text-white whitespace-nowrap">{r.learner}</td>
-                            {r.ratings.map((v, i) => (
-                              <td key={i} className="px-4 py-3 text-gray-800 dark:text-gray-200 whitespace-nowrap">{v === null ? '—' : `${v}/5`}</td>
-                            ))}
-                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-pre-line min-w-[12rem]">{r.comment || '—'}</td>
-                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">{fmtSubmitted(r.submittedAt)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <a
+                    href={pageHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-default px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                  >
+                    <span className="text-sm text-gray-800 dark:text-gray-200">
+                      See all {data.responses.length} response{data.responses.length === 1 ? '' : 's'} in full — every rating and comment
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                      Open feedback page <Icon name={IconName.ExternalLink} className="w-4 h-4" />
+                    </span>
+                  </a>
                 </>
               )}
             </>

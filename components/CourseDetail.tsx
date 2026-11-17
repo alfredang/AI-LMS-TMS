@@ -1872,7 +1872,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
         { type: 'link', label: "Assessment Summary Record", icon: IconName.ClipboardCheck },
-        { type: 'link', label: "Course Feedback", icon: IconName.Edit },
+        { type: 'link', label: "Post Course Feedback Summary", icon: IconName.Edit },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
@@ -3645,9 +3645,9 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Course Feedback — every learner's feedback for this class */}
+                            {/* Post Course Feedback Summary — links to /class-feedback/[runId] for every response in full */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId) && (
-                                <div id={toId("Course Feedback")}>
+                                <div id={toId("Post Course Feedback Summary")}>
                                     <ClassFeedbackSection courseRunUuid={String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '')} />
                                 </div>
                             )}

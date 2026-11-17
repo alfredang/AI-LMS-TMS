@@ -10,7 +10,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /**
  * GET ?courseRunUuid= → every Course Feedback response for one class, for the class page's
  * Course Feedback section: the class header, the average per rating question and each response.
- * The class's assigned trainers see "Learner 1, 2, …" in place of names; staff see names.
+ * Each response also carries every answer on its form (`details`) for the feedback page
+ * (/class-feedback/[runId]). The class's assigned trainers see "Learner 1, 2, …" in place of
+ * names and no identity answers; staff see names and emails.
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -36,7 +38,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!run) return res.status(404).json({ success: false, error: 'Class not found' });
 
     const rows = (await pool.query(
-      `SELECT id, template_id, learner_name, answers, submitted_at
+      `SELECT id, template_id, learner_name, learner_email, answers, submitted_at
          FROM feedback_form_response
         WHERE course_run_id = $1
         ORDER BY submitted_at ASC`,
@@ -59,16 +61,43 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const ratingFields = fields.filter(f => f.type === 'rating1to5');
     const commentFields = fields.filter(f => f.type === 'textarea');
 
+    // Every form a response was given on, so each response's full answers are labelled by its own form.
+    const distinctIds = Array.from(new Set(templateIds.map(String)));
+    const formById = new Map<string, FeedbackFormSection[]>();
+    if (distinctIds.length) {
+      const forms = await pool.query(
+        `SELECT id::text AS id, sections FROM feedback_form_template WHERE id = ANY($1::uuid[])`,
+        [distinctIds]
+      );
+      for (const f of forms.rows) if (f.sections?.length) formById.set(f.id, f.sections);
+    }
     const num = (v: unknown) => {
       const n = Number(v);
       return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null;
     };
     const showNames = isStaff(user);
+    // Course details the form fills in itself are already in the class header, and the learner's
+    // name / email sit in each response's header (staff only — trainers see "Learner 1, 2, …"),
+    // so neither is repeated in a response's answers.
+    const isIdentity = (f: FeedbackFormField) =>
+      f.type === 'email' || f.id === 'learner_name' || /\b(name|e-?mail|nric|phone|mobile|contact)\b/i.test(f.label);
+    const detailsOf = (answers: Record<string, unknown> | null, form: FeedbackFormSection[]) =>
+      form.flatMap(sec => (sec.fields || [])
+        .filter(f => !f.autofill && !f.readonly)
+        .filter(f => !isIdentity(f))
+        .map(f => ({
+          section: sec.title || '',
+          label: f.label,
+          type: f.type,
+          value: String(answers?.[f.id] ?? '').trim(),
+        })));
     const responses = rows.map((r, i) => ({
       id: r.id,
-      learner: showNames ? (String(r.learner_name || '').trim() || `Learner ${i + 1}`) : `Learner ${i + 1}`,
+      learner: showNames ? (String(r.learner_name || r.answers?.learner_name || '').trim() || `Learner ${i + 1}`) : `Learner ${i + 1}`,
+      email: showNames ? (String(r.learner_email || '').trim() || null) : null,
       ratings: ratingFields.map(f => num(r.answers?.[f.id])),
       comment: commentFields.map(f => String(r.answers?.[f.id] ?? '').trim()).filter(Boolean).join('\n'),
+      details: detailsOf(r.answers, (r.template_id && formById.get(String(r.template_id))) || sections),
       submittedAt: r.submitted_at,
     }));
 
@@ -88,6 +117,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         startDate: run.start_date,
         endDate: run.end_date,
         trainer: run.trainer_name || '',
+        namesShown: showNames,
         questions: ratingFields.map(f => f.label),
         commentLabel: commentFields[0]?.label || 'Comments',
         averages,
