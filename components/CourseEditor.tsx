@@ -1327,6 +1327,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: course.trainerSlidesUrl,
                 activitiesUrl: course.activitiesUrl || null,
+                // '' clears a removed link; null (never set) leaves the column alone.
+                labSimulatorUrl: course.labSimulatorUrl ?? null,
+                practiceExamUrl: course.practiceExamUrl ?? null,
                 lessonPlanUrl: course.lessonPlanUrl || null,
                 learnerGuideUrl: course.learnerGuideUrl || null,
                 facilitatorGuideUrl: course.facilitatorGuideUrl || null,
@@ -1958,12 +1961,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <LinkCard label="Learner Slides" value={course.slidesUrl} />
                                 <LinkCard label="Trainer Slides" value={course.trainerSlidesUrl} />
                                 <LinkCard label="Activities/Lab" value={course.activitiesUrl} />
+                                <LinkCard label="Lab Simulator" value={course.labSimulatorUrl} />
+                                <LinkCard label="Practice Exam" value={course.practiceExamUrl} />
                                 <LinkCard label="Courseware Link" value={course.courseLink} />
                                 <LinkCard label="Brochure Link" value={course.brochureLink} />
                                 <LinkCard label="SkillsFuture Link" value={course.skillsfutureLink} />
                                 <LinkCard label="Assessment Record Link" value={course.assessmentRecordLink} />
                                 <LinkCard label="Assessment Summary Record" value={course.assessmentSummaryRecordUrl} />
-                                {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
+                                {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.labSimulatorUrl, course.practiceExamUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
                                     <div className="text-gray-500 dark:text-gray-400">No courseware links available.</div>
                                 )}
                             </div>
@@ -2441,6 +2446,32 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     className={inputClasses}
                                     placeholder="https://drive.google.com/..."
                                 />
+                            </div>
+                            <div>
+                                <label htmlFor="labSimulatorUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lab Simulator URL</label>
+                                <input
+                                    type="url"
+                                    id="labSimulatorUrl"
+                                    name="labSimulatorUrl"
+                                    value={course.labSimulatorUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, labSimulatorUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Optional. When set, learners and trainers see a Lab Simulator link on the class page.</p>
+                            </div>
+                            <div>
+                                <label htmlFor="practiceExamUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practice Exam URL</label>
+                                <input
+                                    type="url"
+                                    id="practiceExamUrl"
+                                    name="practiceExamUrl"
+                                    value={course.practiceExamUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, practiceExamUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Optional. When set, learners and trainers see a Practice Exam link on the class page.</p>
                             </div>
                             <div>
                                 <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>

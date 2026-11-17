@@ -78,7 +78,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Learner Features
 - Course browsing and enrollment
-- Courseware access — Learner Guide, Learner Slides, Activities/Lab and SkillsFuture link cards, unlocked from 8:30 AM SGT on the course start date
+- Courseware access — Learner Guide, Learner Slides, Activities/Lab, Lab Simulator, Practice Exam and SkillsFuture link cards, unlocked from 8:30 AM SGT on the course start date (a card shows only when the course has that link)
 - Progress tracking through learning units and subtopics
 - Assessment submission and grade viewing — the course page re-reads the trainer's publish state every minute while visible and on tab focus, so a Written/Practical exam published mid-class appears without a reload. Learners upload answer files through one drop box (`components/learner/AssessmentUploadZone.tsx`) that starts uploading the moment files are chosen — no separate Upload button — by click / **Choose files**, drag-and-drop, paste (Ctrl/Cmd+V) or **Take photo** on phones. It shows per-file progress and a green "uploaded successfully" alert, rejects empty or over-100 MB files up front, retries a failed file once automatically, records each file as soon as it lands (so a later failure never loses earlier ones), and offers **Retry** for just the files that failed without re-uploading to Drive
 - AI chatbot for personalized course assistance (external OpenClaw/Hermes agent via WhatsApp/Telegram)
@@ -199,6 +199,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
 - **Courseware link cards** — in course view mode, courseware documents (lesson plan, guides, slides, brochure, SkillsFuture link, etc.) render as click-to-open cards; empty links are hidden
+- **Lab Simulator & Practice Exam links** — two optional course links in the course editor, right after **Activities/Lab URL**: **Lab Simulator URL** (an interactive browser lab, e.g. a GitHub Pages simulator) and **Practice Exam URL**. When set, each appears as a click-to-open card in the Courseware section of the Learner and Trainer class pages, after Activities/Lab; clearing the field and saving removes the card. Columns `course.lab_simulator_url` / `course.practice_exam_url` (`database/migrations/add_course_lab_simulator_and_practice_exam_url.sql`, also added at app start by `lib/db.ts`). The Practice Exam URL is a plain link, separate from the Tertiary Exams registration (`course.practice_exam_code`)
 - **"On This Page" section menu** — course view mode shows a jump menu (Learning Outcomes, Courseware, Lesson, Assessment Links, Approved Trainers) that smooth-scrolls to the matching card; topics mount collapsed for a compact overview
 - **SEO Metadata Generator** — AI-powered SEO metadata generation for WSQ and non-WSQ courses using Claude Agent SDK
   - WSQ: Meta title (with WSQ prefix), keywords, description with 70% funding subsidy, course description, and 20 job roles

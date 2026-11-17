@@ -63,6 +63,8 @@ interface CourseData {
   renewedStatus?: string;
   trainerSlidesUrl?: string; // For Google Slides links
   activitiesUrl?: string; // Link to hands-on lab worksheets / activities folder
+  labSimulatorUrl?: string | null; // Interactive lab simulator; '' clears, null/absent keeps
+  practiceExamUrl?: string | null; // Practice exam link; '' clears, null/absent keeps
   lessonPlanUrl?: string;
   learnerGuideUrl?: string;
   facilitatorGuideUrl?: string;
@@ -558,6 +560,12 @@ async function handler(
           trainers_list = $36,
           trainers_email_list = $37,
           activities_url = COALESCE($38, activities_url),
+          -- Lab Simulator / Practice Exam: absent/null keeps the stored link
+          -- (older clients do not send it); an explicit blank clears it.
+          lab_simulator_url = CASE WHEN $41::text IS NULL THEN lab_simulator_url
+                                   ELSE NULLIF(btrim($41::text), '') END,
+          practice_exam_url = CASE WHEN $42::text IS NULL THEN practice_exam_url
+                                   ELSE NULLIF(btrim($42::text), '') END,
           -- The code issued at funding renewal. course_code above keeps the
           -- ORIGINAL code so history stays traceable.
           --
@@ -614,7 +622,9 @@ async function handler(
         courseData.trainersEmailList || null,
         fileUrls.activitiesUrl || courseData.activitiesUrl || null,
         courseId,
-        courseData.newCourseCode === undefined ? null : courseData.newCourseCode
+        courseData.newCourseCode === undefined ? null : courseData.newCourseCode,
+        courseData.labSimulatorUrl ?? null,
+        courseData.practiceExamUrl ?? null
       ]);
 
       // Keep the canonical title history in lockstep with course.title. Some

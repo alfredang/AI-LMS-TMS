@@ -91,6 +91,8 @@ interface Course {
     slidesUrl?: string;
     trainerSlidesUrl?: string;
     activitiesUrl?: string;
+    labSimulatorUrl?: string;
+    practiceExamUrl?: string;
     assessmentPlanUrl?: string;
     courseLink?: string;
     assessmentRecordLink?: string;
@@ -2493,6 +2495,8 @@ export const CourseDetail: React.FC = () => {
         facilitatorGuideUrl?: string;
         trainerSlidesUrl?: string;
         activitiesUrl?: string;
+        labSimulatorUrl?: string;
+        practiceExamUrl?: string;
         assessmentPlanUrl?: string;
     } = {
         id: selectedCourse.id || '1',
@@ -2519,6 +2523,8 @@ export const CourseDetail: React.FC = () => {
         facilitatorGuideUrl: effectiveDetail?.facilitatorGuideUrl,
         trainerSlidesUrl: effectiveDetail?.trainerSlidesUrl,
         activitiesUrl: effectiveDetail?.activitiesUrl,
+        labSimulatorUrl: effectiveDetail?.labSimulatorUrl,
+        practiceExamUrl: effectiveDetail?.practiceExamUrl,
         assessmentPlanUrl: effectiveDetail?.assessmentPlanUrl,
         courseLink: effectiveDetail?.courseLink,
         skillsfutureLink: effectiveDetail?.skillsfutureLink,
@@ -3143,6 +3149,28 @@ export const CourseDetail: React.FC = () => {
                                                 )
                                             )}
 
+                                            {/* Lab Simulator */}
+                                            {convertedCourse.labSimulatorUrl && (
+                                                <a href={convertedCourse.labSimulatorUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Lab Simulator</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            )}
+
+                                            {/* Practice Exam */}
+                                            {convertedCourse.practiceExamUrl && (
+                                                <a href={convertedCourse.practiceExamUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Practice Exam</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            )}
+
                                             {/* Assessment Plan */}
                                             {convertedCourse.assessmentPlanUrl && (
                                                 isAssessmentPlanExternal ? (
@@ -3181,7 +3209,7 @@ export const CourseDetail: React.FC = () => {
                                             )}
 
                                             {/* Show message if nothing available */}
-                                            {!convertedCourse.courseLink && !convertedCourse.skillsfutureLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.assessmentPlanUrl && (
+                                            {!convertedCourse.courseLink && !convertedCourse.skillsfutureLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.labSimulatorUrl && !convertedCourse.practiceExamUrl && !convertedCourse.assessmentPlanUrl && (
                                                 <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
                                             )}
                                         </div>
@@ -3298,6 +3326,28 @@ export const CourseDetail: React.FC = () => {
                                                     )
                                                 )}
 
+                                                {/* Lab Simulator */}
+                                                {convertedCourse.labSimulatorUrl && (
+                                                    <a href={convertedCourse.labSimulatorUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Lab Simulator</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                )}
+
+                                                {/* Practice Exam */}
+                                                {convertedCourse.practiceExamUrl && (
+                                                    <a href={convertedCourse.practiceExamUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Practice Exam</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                )}
+
                                                 {/* SkillsFuture Link */}
                                                 {convertedCourse.skillsfutureLink && (
                                                     <a href={convertedCourse.skillsfutureLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
@@ -3310,7 +3360,7 @@ export const CourseDetail: React.FC = () => {
                                                 )}
 
                                                 {/* Empty state */}
-                                                {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.skillsfutureLink && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
+                                                {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.labSimulatorUrl && !convertedCourse.practiceExamUrl && !convertedCourse.skillsfutureLink && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
                                                     <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
                                                 )}
                                             </div>

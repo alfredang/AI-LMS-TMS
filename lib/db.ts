@@ -148,6 +148,17 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+// Optional courseware links shown on the Learner/Trainer class page.
+// See database/migrations/add_course_lab_simulator_and_practice_exam_url.sql.
+pool
+  .query(`
+    ALTER TABLE course ADD COLUMN IF NOT EXISTS lab_simulator_url text;
+    ALTER TABLE course ADD COLUMN IF NOT EXISTS practice_exam_url text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 // Durable course_run -> Google Calendar event mapping (per session date).
 // See database/migrations/create_course_run_calendar_event.sql.
 pool

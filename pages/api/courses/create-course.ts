@@ -95,6 +95,8 @@ interface CourseData {
   learningOutcomes: string;
   trainerSlidesUrl?: string;
   activitiesUrl?: string;
+  labSimulatorUrl?: string;
+  practiceExamUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   courseLink?: string;
@@ -213,11 +215,13 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
             written_assessment_link, practical_performance_assessment_link,
             courseware_link, assessment_record_link, assessment_summary_record_url, resource_links,
             activities_url,
+            lab_simulator_url,
+            practice_exam_url,
             -- The code in force starts equal to the registration code; a funding
             -- renewal overwrites it later. Kept populated so "current code" is
             -- never empty anywhere it is displayed.
             new_course_code
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $3)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $3)
           RETURNING id
         `;
 
@@ -246,6 +250,8 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           courseData.assessmentSummaryRecordUrl || null,
           courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
           filesByFieldname?.activities ? `/uploads/plans/${filesByFieldname.activities[0].filename}` : courseData.activitiesUrl || null,
+          courseData.labSimulatorUrl?.trim() || null,
+          courseData.practiceExamUrl?.trim() || null,
         ];
 
         console.log('🔍 About to execute course insert with values:', courseValues);

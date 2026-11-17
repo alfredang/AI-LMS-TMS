@@ -36,6 +36,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.slides_url           AS learner_slides,
           c.trainer_slides_url   AS trainer_slides,
           c.activities_url       AS activities,
+          c.lab_simulator_url    AS lab_simulator,
+          c.practice_exam_url    AS practice_exam,
           c.assessment_plan_url  AS assessment_plan
       FROM course c
       JOIN course_run cr 
@@ -75,6 +77,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         facilitatorGuideUrl: courseDetail.facilitator_guide,
         trainerSlidesUrl: courseDetail.trainer_slides,
         activitiesUrl: courseDetail.activities,
+        labSimulatorUrl: courseDetail.lab_simulator,
+        practiceExamUrl: courseDetail.practice_exam,
         assessmentPlanUrl: courseDetail.assessment_plan,
         certificate: ''
       }
