@@ -1,6 +1,7 @@
 import { displayCourseCodes } from '@lib/utils/courseCodes';
 import { isLabsUnit } from '@lib/courseLessonUnits';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { createPortal } from 'react-dom';
 import { useLms } from '@contexts/LmsContext';
 import { Button } from './ui/Button';
@@ -2286,7 +2287,10 @@ export const CourseDetail: React.FC = () => {
         currentUser,
         role,
         trainingProviderProfile,
+        userRoles,
+        switchRole,
     } = useLms();
+    const router = useRouter();
 
     const handleFileDownload = (filePath: string, e?: React.MouseEvent) => {
         if (e) {
@@ -2862,9 +2866,15 @@ export const CourseDetail: React.FC = () => {
                                             setSelectedCourse(null);
                                             setTrainerPage(TrainerPage.EAttendance);
                                         } : undefined}
-                                        viewEnrolmentsHref={userRole === UserRole.Admin && (selectedCourse?.courseRunCode || convertedCourse.courseRunId)
-                                            ? `/?adminPage=checkAttendance&courseRunId=${encodeURIComponent(String(selectedCourse?.courseRunCode || convertedCourse.courseRunId))}&section=swda-enrolment`
-                                            : undefined}
+                                        onViewEnrolmentsAsAdmin={userRole !== UserRole.Trainer && userRoles.includes(UserRole.Admin) && (selectedCourse?.courseRunCode || convertedCourse.courseRunId) ? async () => {
+                                            // Staff (any view, if they hold Admin): Admin → Check Attendance for this run,
+                                            // scrolled to SWDA Enrolment. The query is set first so the page reads it on mount.
+                                            const code = String(selectedCourse?.courseRunCode || convertedCourse.courseRunId);
+                                            await router.replace(`/?adminPage=checkAttendance&courseRunId=${encodeURIComponent(code)}&section=swda-enrolment`, undefined, { shallow: true });
+                                            if (role !== UserRole.Admin) await switchRole(UserRole.Admin);
+                                            setSelectedCourse(null);
+                                            setAdminPage(AdminPage.CheckAttendance);
+                                        } : undefined}
                                     />
                                 </div>
                             )}

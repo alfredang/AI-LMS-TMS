@@ -19,9 +19,9 @@ export const SwdaEnrolmentSection: React.FC<{
   courseRunUuid: string; courseRunId?: string; courseCode?: string; isStaff?: boolean;
   /** Trainer: open E-Attendance → SWDA Enrolment for this class (in-app navigation). */
   onViewEnrolments?: () => void;
-  /** Admin: link to the admin attendance lookup for this class (opens in a new tab). */
-  viewEnrolmentsHref?: string;
-}> = ({ courseRunUuid, courseRunId, courseCode, isStaff = false, onViewEnrolments, viewEnrolmentsHref }) => {
+  /** Staff holding the Admin role (any view): switch to Admin → Check Attendance for this class. */
+  onViewEnrolmentsAsAdmin?: () => void | Promise<void>;
+}> = ({ courseRunUuid, courseRunId, courseCode, isStaff = false, onViewEnrolments, onViewEnrolmentsAsAdmin }) => {
   const [open, setOpen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -119,13 +119,16 @@ export const SwdaEnrolmentSection: React.FC<{
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
-                  {(onViewEnrolments || viewEnrolmentsHref) && (() => {
-                    const cls = 'w-full inline-flex items-center justify-center gap-2 text-sm font-medium border border-indigo-500 text-indigo-400 hover:bg-indigo-500/10 rounded-lg py-2 transition-colors';
-                    const label = (<><Icon name={IconName.ClipboardCheck} className="w-4 h-4" />View Enrolments</>);
-                    return onViewEnrolments
-                      ? <button type="button" onClick={onViewEnrolments} className={cls} title="Open this class's SWDA Enrolment list on E-Attendance">{label}</button>
-                      : <a href={viewEnrolmentsHref} target="_blank" rel="noopener noreferrer" className={cls} title="Open this class's SWDA Enrolment list">{label}</a>;
-                  })()}
+                  {(onViewEnrolments || onViewEnrolmentsAsAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => { void (onViewEnrolments ?? onViewEnrolmentsAsAdmin)?.(); }}
+                      className="w-full inline-flex items-center justify-center gap-2 text-sm font-medium border border-indigo-500 text-indigo-400 hover:bg-indigo-500/10 rounded-lg py-2 transition-colors"
+                      title={onViewEnrolments ? "Open this class's SWDA Enrolment list on E-Attendance" : "Open this class's SWDA Enrolment list (Admin → Check Attendance)"}
+                    >
+                      <Icon name={IconName.ClipboardCheck} className="w-4 h-4" />View Enrolments
+                    </button>
+                  )}
                   {ref && <p className="text-xs text-on-surface-secondary text-center mt-1">{ref}</p>}
                 </div>
               </div>
