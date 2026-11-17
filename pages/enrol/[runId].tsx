@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { NATIONALITY_OPTIONS } from '../../lib/learner/nationality';
 
 // PUBLIC page behind the class's SWDA Enrolment QR code (class page → SWDA Enrolment).
 // One page, in the same format as the class check-in page (white, ai-mms style): the learner fills
@@ -33,11 +34,6 @@ const EMPTY: FormState = {
   employerName: '', employerUen: '', employerContactName: '', employerContactEmail: '', employerContactNumber: '',
 };
 
-const NATIONALITIES = [
-  'Singaporean', 'Malaysian', 'Chinese', 'Indian', 'Filipino', 'Indonesian', 'Vietnamese', 'Thai', 'Myanmar',
-  'Bangladeshi', 'Sri Lankan', 'Pakistani', 'Korean', 'Japanese', 'Taiwanese', 'Hong Konger', 'Australian',
-  'British', 'American', 'Canadian', 'French', 'German',
-];
 
 const inputCls = (err?: string) =>
   `w-full px-3 py-2.5 rounded-lg border text-base bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -193,15 +189,25 @@ export default function EnrolmentRequestPage() {
         <Field id="enr-nric" label="NRIC/FIN" error={fieldErrors.nric}>
           <input {...inp('nric')} placeholder="S1234567A" maxLength={9} autoComplete="off" autoCapitalize="characters" />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field id="enr-dateOfBirth" label="Date of Birth" error={fieldErrors.dateOfBirth}>
-            <input type="date" {...inp('dateOfBirth')} max={new Date().toISOString().slice(0, 10)} />
-          </Field>
-          <Field id="enr-nationality" label="Nationality" error={fieldErrors.nationality}>
-            <input {...inp('nationality')} list="enr-nationalities" placeholder="Singaporean" autoComplete="off" maxLength={60} />
-            <datalist id="enr-nationalities">{NATIONALITIES.map(n => <option key={n} value={n} />)}</datalist>
-          </Field>
-        </div>
+        <Field id="enr-dateOfBirth" label="Date of Birth" error={fieldErrors.dateOfBirth}>
+          <input type="date" {...inp('dateOfBirth')} className={`${inputCls(fieldErrors.dateOfBirth)} h-[2.875rem] appearance-none`} max={new Date().toISOString().slice(0, 10)} />
+        </Field>
+        <Field id="enr-nationality" label="Nationality" error={fieldErrors.nationality}>
+          <select
+            id="enr-nationality"
+            value={form.nationality}
+            onChange={e => {
+              setForm(f => ({ ...f, nationality: e.target.value }));
+              if (fieldErrors.nationality) setFieldErrors(fe => { const n = { ...fe }; delete n.nationality; return n; });
+            }}
+            aria-invalid={!!fieldErrors.nationality || undefined}
+            aria-describedby={fieldErrors.nationality ? 'enr-nationality-err' : undefined}
+            className={`${inputCls(fieldErrors.nationality)} h-[2.875rem] ${form.nationality ? '' : 'text-gray-400'}`}
+          >
+            <option value="" disabled>Select…</option>
+            {NATIONALITY_OPTIONS.map(n => <option key={n} value={n} className="text-gray-900">{n}</option>)}
+          </select>
+        </Field>
         <Field id="enr-email" label="Email" error={fieldErrors.email}>
           <input type="email" {...inp('email')} autoComplete="email" maxLength={255} />
         </Field>

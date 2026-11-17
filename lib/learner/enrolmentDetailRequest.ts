@@ -1,5 +1,6 @@
 import pool from '../db';
 import { enrolLearner } from './selfEnrolment';
+import { NATIONALITY_OPTIONS } from './nationality';
 
 // Enrolment-details requests: a learner with no SSG/TPGateway enrolment for a class scans the
 // class's enrolment QR code (shown by the trainer on the E-Attendance page) and submits their
@@ -90,7 +91,9 @@ export function validateEnrolmentDetails(body: any): { ok: true; data: Enrolment
   if (data.contactNumber.length === 10 && data.contactNumber.startsWith('65')) data.contactNumber = data.contactNumber.slice(2);
   if (!/^[3689]\d{7}$/.test(data.contactNumber)) errors.contactNumber = 'Enter an 8-digit Singapore number.';
   if (!EMAIL_RE.test(data.email)) errors.email = 'Enter a valid email address.';
-  if (data.nationality.length < 2) errors.nationality = 'Enter your nationality.';
+  if (!(NATIONALITY_OPTIONS as readonly string[]).includes(data.nationality)) {
+    errors.nationality = 'Select Singapore Citizen, Singapore PR or Foreigner.';
+  }
 
   const dob = /^\d{4}-\d{2}-\d{2}$/.test(data.dateOfBirth) ? new Date(`${data.dateOfBirth}T00:00:00Z`) : null;
   if (!dob || isNaN(dob.getTime())) {

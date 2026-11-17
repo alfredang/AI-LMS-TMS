@@ -93,7 +93,7 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode; width?: strin
   </div>
 );
 
-const SectionHeader: React.FC<{ title: string; count?: number; right?: React.ReactNode; loading?: boolean; info?: string; infoContent?: React.ReactNode }> = ({ title, count, right, loading, info, infoContent }) => (
+const SectionHeader: React.FC<{ title: string; count?: number; badges?: React.ReactNode; right?: React.ReactNode; loading?: boolean; info?: string; infoContent?: React.ReactNode }> = ({ title, count, badges, right, loading, info, infoContent }) => (
   <div className="flex items-center justify-between px-4 py-3 border-b border-default">
     <div className="flex items-center gap-2">
       <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
@@ -102,6 +102,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
           {count}
         </span>
       )}
+      {badges}
       {infoContent ? (
         <div className="relative inline-flex items-center group/sinfo">
           <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-elevated border border-default text-on-surface-secondary text-xs cursor-help hover:bg-surface-hover transition-colors select-none">?</span>
@@ -156,7 +157,7 @@ const SessionKpis: React.FC<{ kpis: SessionKpiData }> = ({ kpis }) => {
   const allMatch = !loading && enrolments > 0 && eAttendance === enrolments && manual === enrolments;
   const tiles: Array<{ label: string; value: number; hint: string }> = [
     { label: 'E-Attendance Taken', value: eAttendance, hint: 'Trainees signed in on SSG for this session' },
-    { label: 'Enrolments', value: enrolments, hint: 'Active SSG enrolments for this class' },
+    { label: 'Confirmed Enrolments', value: enrolments, hint: 'Confirmed SSG enrolments for this class (pending enrolment-form submissions are not counted)' },
     { label: 'Manual Attendance', value: manual, hint: 'Marked present in Manual Attendance Taking' },
   ];
   return (
@@ -195,7 +196,7 @@ const SessionKpis: React.FC<{ kpis: SessionKpiData }> = ({ kpis }) => {
               <p><span className="font-semibold">Not marked present manually ({missingManual.length}):</span> {missingManual.join(', ')}</p>
             )}
             {eAttendance > enrolments && (
-              <p>More e-attendance than enrolments: someone signed in without an active SSG enrolment (check Class Enrolments).</p>
+              <p>More e-attendance than confirmed enrolments: someone signed in without a confirmed SSG enrolment (check SWDA Enrolment).</p>
             )}
             {missingEAttendance.length === 0 && missingManual.length === 0 && manual > enrolments && (
               <p>Manual attendance includes learners added by hand who are not in the SSG enrolments.</p>
@@ -273,6 +274,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
   const [showEnrolContact, setShowEnrolContact]        = useState(false);
   const [enrolmentsOpen, setEnrolmentsOpen]            = useState(true);
+  // SWDA Enrolment form submissions for this class (public /enrol QR): shown as Pending rows
+  const [enrolmentRequests, setEnrolmentRequests]      = useState<any[]>([]);
   const [sessionAttendanceOpen, setSessionAttendanceOpen] = useState(true);
   const [manualOpen, setManualOpen]                    = useState(true);
 
@@ -1069,7 +1072,30 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     }
   };
 
+  const fetchEnrolmentRequests = async (courseRunUuid?: string) => {
+    if (!courseRunUuid) { setEnrolmentRequests([]); return; }
+    try {
+      const res = await fetch(`/api/enrolments/detail-requests?courseRunUuid=${encodeURIComponent(courseRunUuid)}`);
+      const json = await res.json();
+      if (json.success && courseRunUuid === selectedCourseRunIdRef.current) setEnrolmentRequests(json.data || []);
+    } catch { /* silent */ }
+  };
+  const selectedCourseRunIdRef = useRef('');
+  selectedCourseRunIdRef.current = selectedCourseRunId;
+
+  // New SWDA Enrolment submissions arrive while the trainer has the page open
+  useEffect(() => {
+    setEnrolmentRequests([]);
+    if (!selectedCourseRunId) return;
+    fetchEnrolmentRequests(selectedCourseRunId);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchEnrolmentRequests(selectedCourseRunId);
+    }, 30000);
+    return () => clearInterval(t);
+  }, [selectedCourseRunId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchEnrolments = async (courseRunCode: string, courseOverride?: typeof selectedCourse) => {
+    fetchEnrolmentRequests((courseOverride ?? selectedCourse)?.courseRunId);
     setIsLoadingEnrolments(true);
     setEnrolmentError(null);
     setEnrolmentRecords([]);
@@ -1370,12 +1396,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     const norm = (v: unknown) => String(v ?? '').trim().toUpperCase();
     const isPresentStatus = (st: unknown) => ['confirmed', 'present', 'attended'].includes(String(st ?? '').toLowerCase());
 
-    // Active enrolments, one per NRIC (cancelled excluded) — same rule as Manual Attendance
+    // Confirmed SSG enrolments, one per NRIC (the "Confirmed Enrolments" tile)
     const enrolled = new Map<string, string>();
     for (const item of enrolmentRecords) {
       const enrol = item?.enrolment ?? item;
       const status = String(enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
-      if (status === 'cancelled') continue;
+      if (status !== 'confirmed') continue;
       const trainee = enrol?.trainee ?? {};
       const nric = norm(trainee?.id || trainee?.nric);
       if (nric && !enrolled.has(nric)) enrolled.set(nric, trainee?.fullName || trainee?.name || nric);
@@ -1405,6 +1431,80 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       loading: isLoadingAttendance || isLoadingEnrolments || loadingManualAttendance,
     };
   }, [enrolmentRecords, attendanceRecords, manualAttendance, extraAttendees, isLoadingAttendance, isLoadingEnrolments, loadingManualAttendance]);
+
+  // SWDA Enrolment table: SSG enrolments + enrolment-form submissions not on SSG yet (Pending).
+  // Display only — Manual Attendance, KPIs and account creation keep using the SSG list.
+  const enrolmentTableRows: any[] = (() => {
+    const ssgNrics = new Set(enrolmentRecords.map((item: any) => {
+      const t = (item?.enrolment ?? item)?.trainee ?? {};
+      return String(t?.id || t?.nric || '').trim().toUpperCase();
+    }).filter(Boolean));
+    // Singapore calendar date: class dates and submit times arrive as UTC timestamps
+    const toYmd = (d?: string | null) => {
+      if (!d) return '';
+      const v = String(d);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      const dt = new Date(v);
+      return isNaN(dt.getTime()) ? v.slice(0, 10) : dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
+    };
+    const fromRequests = enrolmentRequests
+      .filter(r => r.status !== 'dismissed' && !ssgNrics.has(String(r.nric || '').toUpperCase()))
+      .map(r => ({
+        _request: { userId: r.userId },
+        enrolment: {
+          referenceNumber: r.enrolmentRef || '',
+          status: r.status === 'enrolled' ? 'Confirmed' : 'Pending',
+          course: { run: { id: selectedCourse?.courseRunCode || '', startDate: toYmd(selectedCourse?.startDate), endDate: toYmd(selectedCourse?.endDate) } },
+          trainee: {
+            id: r.nric, fullName: r.traineeName, email: { full: r.email }, contactNumber: r.contactNumber,
+            sponsorshipType: r.sponsorshipType, employer: r.employerName ? { name: r.employerName } : undefined,
+            enrolmentDate: toYmd(r.submittedAt),
+          },
+        },
+      }));
+    return [...enrolmentRecords, ...fromRequests];
+  })();
+  const enrolmentCounts = enrolmentTableRows.reduce((acc, item: any) => {
+    const st = String((item?.enrolment ?? item)?.status || (item?.enrolment ?? item)?.enrolmentStatus || '').toLowerCase();
+    if (st === 'confirmed') acc.confirmed++;
+    else if (st.includes('pending')) acc.pending++;
+    else if (st === 'cancelled' || st === 'withdrawn') acc.cancelled++;
+    return acc;
+  }, { confirmed: 0, pending: 0, cancelled: 0 });
+
+  /** Download the SWDA Enrolment table (SSG enrolments + pending form submissions) as Excel. */
+  const downloadEnrolmentsExcel = async () => {
+    const XLSX = await import('xlsx');
+    const rows = enrolmentTableRows.map((item: any, idx: number) => {
+      const enrol = item?.enrolment ?? item;
+      const trainee = enrol?.trainee ?? {};
+      const run = enrol?.course?.run ?? {};
+      const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
+      return {
+        'No.': idx + 1,
+        'Course Run ID': run?.id || selectedCourse?.courseRunCode || '',
+        'Start Date': run?.startDate || '',
+        'End Date': run?.endDate || '',
+        'Enrolment Ref': enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '',
+        'Trainee Name': trainee?.fullName || trainee?.name || '',
+        // Full NRIC for staff only, as on screen
+        'NRIC': isAdminMode ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric),
+        'Contact Number': extractContact(trainee).phone,
+        'Email': trainee?.email?.full || (typeof trainee?.email === 'string' ? trainee.email : '') || '',
+        'Sponsorship': trainee?.sponsorshipType || '',
+        'Employer': trainee?.employer?.name || '',
+        'Enrolment Status': enrol?.status || enrol?.enrolmentStatus || '',
+        'Enrolment Date': trainee?.enrolmentDate || '',
+        'Source': item?._request ? 'SWDA Enrolment form' : 'SSG',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [5, 14, 12, 12, 20, 32, 12, 16, 32, 13, 28, 16, 14, 20].map(wch => ({ wch }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'SWDA Enrolment');
+    const stamp = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
+    XLSX.writeFile(wb, `SWDA-Enrolment-${selectedCourse?.courseRunCode || 'class'}-${stamp}.xlsx`);
+  };
 
   const labelledSessions = labelSessions(manualSessions.filter(s => !s.deleted));
   // Manual Attendance rows: enrolled learners + manually added / checked-in learners
@@ -1714,14 +1814,33 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </div>
       )}
 
-      {/* ── Class Enrolments (per class, not per session — collapsible) ── */}
+      {/* ── SWDA Enrolment: SSG enrolments + enrolment-form submissions (Pending), per class — collapsible ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
         <SectionHeader
-          title="Class Enrolments"
-          count={enrolmentRecords.length > 0 ? enrolmentRecords.length : undefined}
+          title="SWDA Enrolment"
+          count={enrolmentTableRows.length > 0 ? enrolmentTableRows.length : undefined}
+          badges={enrolmentTableRows.length > 0 ? (
+            <div className="flex items-center gap-1.5 text-xs ml-1">
+              <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 font-semibold">{enrolmentCounts.confirmed} Confirmed</span>
+              <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 font-semibold">{enrolmentCounts.pending} Pending</span>
+              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">{enrolmentCounts.cancelled} Cancelled</span>
+            </div>
+          ) : undefined}
           loading={isLoadingEnrolments}
           right={
             <>
+              {enrolmentTableRows.length > 0 && (
+                <button
+                  onClick={() => { downloadEnrolmentsExcel().catch(err => console.error('Excel download failed:', err)); }}
+                  title="Download all enrolments in this table as an Excel file"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  Download Excel
+                </button>
+              )}
               {selectedCourse?.courseRunCode && (
                 <button
                   onClick={() => fetchEnrolments(selectedCourse.courseRunCode!)}
@@ -1794,8 +1913,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   ))}
                 </tr>
               ))
-            ) : enrolmentRecords.length > 0 ? (
-              enrolmentRecords.map((item: any, idx: number) => {
+            ) : enrolmentTableRows.length > 0 ? (
+              enrolmentTableRows.map((item: any, idx: number) => {
                 const enrol = item?.enrolment ?? item;
                 const trainee = enrol?.trainee ?? {};
                 const run = enrol?.course?.run ?? {};
@@ -1831,7 +1950,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     <td className="px-3 py-3"><StatusBadge value={enrol?.status || enrol?.enrolmentStatus || '—'} /></td>
                     {/* <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td> */}
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">{(() => {
+                    <td className="px-3 py-3 whitespace-nowrap">{item?._request ? (
+                      item._request.userId ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400" title="Registered on the class from the SWDA Enrolment form">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Registered
+                        </span>
+                      ) : <span className="text-muted text-xs">—</span>
+                    ) : (() => {
                       const email: string = trainee?.email?.full || trainee?.email || '';
                       if (!email) return <span className="text-muted text-xs">—</span>;
                       const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
