@@ -277,7 +277,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   // SWDA Enrolment form submissions for this class (public /enrol QR): shown as Pending rows
   const [enrolmentRequests, setEnrolmentRequests]      = useState<any[]>([]);
   const [sessionAttendanceOpen, setSessionAttendanceOpen] = useState(true);
-  const [manualOpen, setManualOpen]                    = useState(true);
 
   // Local admin manual assignments
   const [localAssignments, setLocalAssignments]        = useState<any[]>([]);
@@ -2011,88 +2010,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </>)}
       </div>
 
-      {/* ── Sessions: one tab per session + Take Attendance QR + per-session KPIs (drive the two sections below) ── */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-5 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-wrap gap-2 flex-1 min-w-0">
-            {labelledSessions.length > 0 ? labelledSessions.map(s => {
-              const active = s.id === selectedManualSession;
-              const count = sessionCounts[s.id] || 0;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => selectSessionTab(s)}
-                  aria-pressed={active}
-                  className={`px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
-                    active
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'border-default text-on-surface-secondary hover:bg-surface-elevated'
-                  }`}
-                >
-                  {s.label}
-                  {count > 0 && (
-                    <span className={`ml-2 ${active ? 'text-blue-100' : 'text-blue-400'}`}>({count}✓)</span>
-                  )}
-                </button>
-              );
-            }) : (
-              <p className="text-sm text-muted italic py-2">
-                {!selectedCourse
-                  ? 'Select a class to see its sessions.'
-                  : isFetchingSessions || loadingManualSessions ? 'Loading sessions…' : 'No sessions found for this class.'}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedSession && (
-              <button
-                type="button"
-                onClick={() => handleFetchAttendance(selectedSession)}
-                disabled={isLoadingAttendance}
-                title="Fetch the latest e-attendance for this session from SSG"
-                className="flex items-center gap-1.5 px-3 py-2.5 border border-default text-on-surface-secondary rounded-lg text-sm font-medium hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshIcon className={`w-4 h-4 ${isLoadingAttendance ? 'animate-spin' : ''}`} />
-                {isLoadingAttendance ? 'Refreshing...' : 'Refresh E-Attendance'}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={openTakeAttendance}
-              disabled={!selectedManualSession}
-              title="Show the check-in QR code for this session"
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
-              </svg>
-              Take Attendance
-            </button>
-          </div>
-        </div>
-
-        {/* Per-session KPIs — the three numbers should match */}
-        {selectedSession && <SessionKpis kpis={sessionKpis} />}
-
-        {attendanceError && (
-          <p className="text-sm text-red-500 flex items-center gap-1.5">
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {attendanceError}
-          </p>
-        )}
-        {attendanceSuccess && !attendanceError && (
-          <p className="text-sm text-green-600 flex items-center gap-1.5">
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            {attendanceSuccess}
-          </p>
-        )}
-      </div>
-
       {/* Take Attendance: the check-in QR of the selected session */}
       {checkinOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setCheckinOpen(false)}>
@@ -2189,128 +2106,61 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </div>
       )}
 
-      {/* ── Course Session Attendance (SSG QR / e-attendance records) ── */}
-      <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader
-          title="Course Session Attendance"
-          count={attendanceRecords.length > 0 ? attendanceRecords.length : undefined}
-          loading={isLoadingAttendance}
-          right={
-            <>
-              {selectedSession && (
-                <button
-                  onClick={() => handleFetchAttendance(selectedSession)}
-                  disabled={isLoadingAttendance}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshIcon className="w-3.5 h-3.5" />
-                  Refetch Attendance
-                </button>
-              )}
-              <CollapseToggle open={sessionAttendanceOpen} onToggle={() => setSessionAttendanceOpen(v => !v)} />
-            </>
-          }
-        />
-        {sessionAttendanceOpen && (
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-elevated border-b border-default">
-            <tr>
-              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Name</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  NRIC
-                  {isAdminMode && (
-                    <button onClick={() => setShowNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                      {showNric ? 'Hide' : 'Show'}
-                    </button>
-                  )}
-                </div>
-              </th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Phone</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Type</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Status</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Entry Mode</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">TRAQOM</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoadingAttendance ? (
-              Array.from({ length: 5 }).map((_, idx) => (
-                <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 9 }).map((__, col) => (
-                    <td key={col} className="px-3 py-3">
-                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '70%' : '50%' }} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : attendanceRecords.length > 0 ? (
-              attendanceRecords.map((record: any, idx: number) => {
-                const nric: string = record.nric || record.trainee?.id || '';
-                const enrolMatch = enrolmentRecords.find((item: any) => {
-                  const t = (item?.enrolment ?? item)?.trainee ?? {};
-                  return (t?.id || t?.nric) === nric;
-                });
-                const enrolTrainee = enrolMatch ? ((enrolMatch?.enrolment ?? enrolMatch)?.trainee ?? {}) : {};
-                const inline = extractContact(record.trainee);
-                const looked = extractContact(enrolTrainee);
-                const email = inline.email || looked.email || '—';
-                const phone = inline.phone || looked.phone || '—';
-                return (
-                  <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
-                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
-                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{record.trainee?.name || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">
-                      {nric
-                        ? (showNric ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric))
-                        : '—'}
-                    </td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{email}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{phone}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.trainee?.attendeeType || '—'}</td>
-                    <td className="px-3 py-3"><StatusBadge value={record.status || '—'} /></td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.entryMode || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.sentToTraqom || '—'}</td>
-                  </tr>
-                );
-              })
-            ) : attendanceCourseRun ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
-                  No attendance records found for this session.
-                </td>
-              </tr>
-            ) : (
-              <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
-                  Select a class and session to load attendance.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        </div>
-        )}
-      </div>
-
-      {/* ── Manual Attendance Taking (the selected session; QR check-ins and SSG e-attendance land here too) ── */}
+      {/* ── Manual Attendance Taking: session tabs + Take Attendance QR, then the selected session's roster
+           (QR check-ins and SSG e-attendance land here too) ── */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-default">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-on-surface">Manual Attendance Taking</h2>
-            {selectedSessionLabel && <span className="text-xs text-on-surface-secondary">· {selectedSessionLabel}</span>}
-            {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
-              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary" />
+        <div className="px-5 pt-5 pb-4 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+            {labelledSessions.length > 0 ? labelledSessions.map(s => {
+              const active = s.id === selectedManualSession;
+              const count = sessionCounts[s.id] || 0;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => selectSessionTab(s)}
+                  aria-pressed={active}
+                  className={`px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+                    active
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'border-default text-on-surface-secondary hover:bg-surface-elevated'
+                  }`}
+                >
+                  {s.label}
+                  {count > 0 && (
+                    <span className={`ml-2 ${active ? 'text-blue-100' : 'text-blue-400'}`}>({count}✓)</span>
+                  )}
+                </button>
+              );
+            }) : (
+              <p className="text-sm text-muted italic py-2">
+                {!selectedCourse
+                  ? 'Select a class to see its sessions.'
+                  : isFetchingSessions || loadingManualSessions ? 'Loading sessions…' : 'No sessions found for this class.'}
+              </p>
             )}
-            {manualRows.length > 0 && (
-              <div className="flex items-center gap-2 text-xs ml-1">
-                <span className="px-2.5 py-1 rounded-full bg-green-500/15 text-green-400 font-semibold">Present: {manualPresent}</span>
-                <span className="px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 font-semibold">Absent: {manualRows.length - manualPresent}</span>
-                <span className="px-2.5 py-1 rounded-full bg-gray-500/15 text-muted font-semibold">Total: {manualRows.length}</span>
-              </div>
+          </div>
+          <button
+            type="button"
+            onClick={openTakeAttendance}
+            disabled={!selectedManualSession}
+            title="Show the check-in QR code for this session"
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
+            </svg>
+            Take Attendance
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="px-3 py-1 rounded-full bg-green-500/15 text-green-500 font-semibold">Present: {manualPresent}</span>
+            <span className="px-3 py-1 rounded-full bg-red-500/15 text-red-400 font-semibold">Absent: {manualRows.length - manualPresent}</span>
+            <span className="px-3 py-1 rounded-full bg-gray-500/15 text-on-surface-secondary font-semibold">Total: {manualRows.length}</span>
+            {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary ml-1" />
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2323,7 +2173,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               <button
                 onClick={() => { setShowDeleteLearnerModal(true); setDeleteLearnerNric(''); setDeleteLearnerError(null); }}
                 disabled={manualBusy}
-                className="px-3 py-1.5 rounded-lg border border-red-500/60 text-red-400 text-xs font-medium hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-red-500/60 text-red-400 hover:bg-red-500/10"
               >
                 Remove Learner
               </button>
@@ -2332,7 +2182,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               onClick={() => { setPresence(Object.keys(selectedRows), true); setSelectedRows({}); }}
               disabled={manualBusy || selectedCount === 0}
               title="Mark the ticked learners present"
-              className="px-3 py-1.5 rounded-lg border border-default text-on-surface-secondary text-xs font-medium hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
             >
               Mark Present
             </button>
@@ -2340,7 +2190,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               onClick={() => { setPresence(Object.keys(selectedRows), false); setSelectedRows({}); }}
               disabled={manualBusy || selectedCount === 0}
               title="Mark the ticked learners absent"
-              className="px-3 py-1.5 rounded-lg border border-default text-on-surface-secondary text-xs font-medium hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
             >
               Mark Absent
             </button>
@@ -2348,19 +2198,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               onClick={() => setPresence(null, true)}
               disabled={manualBusy || manualRows.length === 0}
               title="Mark all learners present"
-              className="px-3 py-1.5 rounded-lg border border-blue-500 text-blue-400 text-xs font-semibold hover:bg-blue-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-blue-500 text-blue-400 font-semibold hover:bg-blue-500/10"
             >
               All Present
             </button>
             <button
               onClick={() => { setShowAddLearnerModal(true); setAddLearnerError(null); setAddLearnerForm({ fullName: '', email: '', nric: '' }); }}
               disabled={manualBusy}
-              className="px-3 py-1.5 rounded-lg border border-default text-on-surface text-xs font-medium hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-default text-on-surface hover:bg-surface-elevated"
             >
               + Add Learner
             </button>
-            <CollapseToggle open={manualOpen} onToggle={() => setManualOpen(v => !v)} />
           </div>
+        </div>
         </div>
 
         {/* Add Learner Modal */}
@@ -2481,7 +2331,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
         )}
 
-        {manualOpen && (<>
+        {(<>
         {/* Feedback banner */}
         {manualAttendanceMsg && (
           <div className={`px-4 py-2 text-xs border-b border-default ${manualAttendanceMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
@@ -2492,9 +2342,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         {/* Attendance table */}
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-default">
+          <thead className="border-y border-default">
             <tr className="text-xs uppercase tracking-wider">
-              <th className="px-4 py-3 w-10">
+              <th className="px-5 py-2.5 w-10">
                 <input
                   type="checkbox"
                   aria-label="Select all learners on this page"
@@ -2508,12 +2358,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   className="w-4 h-4 rounded border-default accent-primary cursor-pointer"
                 />
               </th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary w-10">#</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary">Learner</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary">Email</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Attendance</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Reason of Absence</th>
-              <th className="px-3 py-3 w-10"></th>
+              <th className="px-3 py-2.5 text-left font-semibold text-on-surface-secondary w-10">#</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-on-surface-secondary">Learner</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-on-surface-secondary">Email</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Attendance</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Reason of Absence</th>
+              <th className="px-3 py-2.5 w-10"></th>
             </tr>
           </thead>
           <tbody>
@@ -2542,7 +2392,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                 const shownNric = isUidKey ? '' : (showManualNric ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric));
                 return (
                   <tr key={nric || globalIdx} className={`border-b border-default hover:bg-surface-elevated transition-colors ${selectedRows[nric] ? 'bg-blue-500/5' : ''}`}>
-                    <td className="px-4 py-3">
+                    <td className="px-5 py-2">
                       <input
                         type="checkbox"
                         aria-label={`Select ${record.fullName || 'learner'}`}
@@ -2555,20 +2405,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                         className="w-4 h-4 rounded border-default accent-primary cursor-pointer"
                       />
                     </td>
-                    <td className="px-3 py-3 text-on-surface-secondary">{globalIdx + 1}</td>
-                    <td className="px-3 py-3 text-on-surface">
+                    <td className="px-3 py-2 text-on-surface-secondary">{globalIdx + 1}</td>
+                    <td className="px-3 py-2 text-on-surface">
                       <div className="flex items-center gap-1.5 font-medium">
                         {record.fullName || '—'}
                         {isExtra && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-medium">Manual</span>}
                         {dirty[nric] && <span className="text-xs text-amber-500" title="Not saved yet">•</span>}
                       </div>
-                      {shownNric && <div className="text-xs text-muted font-mono mt-0.5">{shownNric}</div>}
+                      {showManualNric && shownNric && <div className="text-xs text-muted font-mono">{shownNric}</div>}
                     </td>
-                    <td className="px-3 py-3 text-on-surface-secondary">
+                    <td className="px-3 py-2 text-on-surface-secondary">
                       <div>{record.email || '—'}</div>
-                      {record.phone && <div className="text-xs text-muted mt-0.5">{record.phone}</div>}
+                      {record.phone && <div className="text-xs text-muted">{record.phone}</div>}
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-2">
                       <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                         <input
                           type="checkbox"
@@ -2581,18 +2431,18 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                         </span>
                       </label>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-2">
                       {!record.isPresent && (
                         <input
                           type="text"
                           value={record.reasonOfAbsence}
                           onChange={e => handleReasonChange(nric, e.target.value)}
                           placeholder="Enter reason..."
-                          className="input-themed w-full min-w-[12rem] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          className="input-themed w-full min-w-[12rem] max-w-sm border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         />
                       )}
                     </td>
-                    <td className="px-3 py-3 text-center">
+                    <td className="px-3 py-2 text-center">
                       {isExtra && (
                         confirmRemoveNric === nric ? (
                           <div className="flex items-center gap-1 justify-center">
@@ -2676,6 +2526,153 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
         )}
         </>)}
+      </div>
+
+      {/* ── SSG e-attendance check for the selected session: three KPIs that should match ── */}
+      {selectedSession && (
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-on-surface">
+            SSG E-Attendance Check{selectedSessionLabel && <span className="font-normal text-on-surface-secondary"> · {selectedSessionLabel}</span>}
+          </h2>
+          <button
+            type="button"
+            onClick={() => handleFetchAttendance(selectedSession)}
+            disabled={isLoadingAttendance}
+            title="Fetch the latest e-attendance for this session from SSG"
+            className="flex items-center gap-1.5 px-3 py-2 border border-default text-on-surface-secondary rounded-lg text-sm font-medium hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshIcon className={`w-4 h-4 ${isLoadingAttendance ? 'animate-spin' : ''}`} />
+            {isLoadingAttendance ? 'Refreshing...' : 'Refresh E-Attendance'}
+          </button>
+        </div>
+        {/* Per-session KPIs — the three numbers should match */}
+        <SessionKpis kpis={sessionKpis} />
+
+        {attendanceError && (
+          <p className="text-sm text-red-500 flex items-center gap-1.5">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {attendanceError}
+          </p>
+        )}
+        {attendanceSuccess && !attendanceError && (
+          <p className="text-sm text-green-600 flex items-center gap-1.5">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            {attendanceSuccess}
+          </p>
+        )}
+      </div>
+      )}
+
+      {/* ── Course Session Attendance (SSG QR / e-attendance records) ── */}
+      <div className="bg-surface rounded-lg border border-default shadow-sm">
+        <SectionHeader
+          title="Course Session Attendance"
+          count={attendanceRecords.length > 0 ? attendanceRecords.length : undefined}
+          loading={isLoadingAttendance}
+          right={
+            <>
+              {selectedSession && (
+                <button
+                  onClick={() => handleFetchAttendance(selectedSession)}
+                  disabled={isLoadingAttendance}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshIcon className="w-3.5 h-3.5" />
+                  Refetch Attendance
+                </button>
+              )}
+              <CollapseToggle open={sessionAttendanceOpen} onToggle={() => setSessionAttendanceOpen(v => !v)} />
+            </>
+          }
+        />
+        {sessionAttendanceOpen && (
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-elevated border-b border-default">
+            <tr>
+              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Name</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  NRIC
+                  {isAdminMode && (
+                    <button onClick={() => setShowNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                      {showNric ? 'Hide' : 'Show'}
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Phone</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Type</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Status</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Entry Mode</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">TRAQOM</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoadingAttendance ? (
+              Array.from({ length: 5 }).map((_, idx) => (
+                <tr key={idx} className="border-b border-default">
+                  {Array.from({ length: 9 }).map((__, col) => (
+                    <td key={col} className="px-3 py-3">
+                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '70%' : '50%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : attendanceRecords.length > 0 ? (
+              attendanceRecords.map((record: any, idx: number) => {
+                const nric: string = record.nric || record.trainee?.id || '';
+                const enrolMatch = enrolmentRecords.find((item: any) => {
+                  const t = (item?.enrolment ?? item)?.trainee ?? {};
+                  return (t?.id || t?.nric) === nric;
+                });
+                const enrolTrainee = enrolMatch ? ((enrolMatch?.enrolment ?? enrolMatch)?.trainee ?? {}) : {};
+                const inline = extractContact(record.trainee);
+                const looked = extractContact(enrolTrainee);
+                const email = inline.email || looked.email || '—';
+                const phone = inline.phone || looked.phone || '—';
+                return (
+                  <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
+                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
+                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{record.trainee?.name || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">
+                      {nric
+                        ? (showNric ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric))
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{email}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{phone}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.trainee?.attendeeType || '—'}</td>
+                    <td className="px-3 py-3"><StatusBadge value={record.status || '—'} /></td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.entryMode || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.sentToTraqom || '—'}</td>
+                  </tr>
+                );
+              })
+            ) : attendanceCourseRun ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
+                  No attendance records found for this session.
+                </td>
+              </tr>
+            ) : (
+              <tr>
+                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
+                  Select a class and session to load attendance.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        </div>
+        )}
       </div>
 
     </div>
