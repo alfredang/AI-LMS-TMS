@@ -1,5 +1,10 @@
 import { Html, Head, Main, NextScript } from 'next/document'
 
+// Applies the saved Light / Dark / System preference before first paint, so a
+// light-theme user never sees a dark flash. Mirrors getThemePreference() /
+// resolveThemePreference() in utils/colorUtils.ts (same key, dark by default).
+const THEME_INIT = `(function(){try{var p=localStorage.getItem('trainingProviderTheme');if(p!=='light'&&p!=='dark'&&p!=='system')p='dark';var t=p==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;var d=document.documentElement;d.setAttribute('data-theme',t);if(t==='dark')d.classList.add('dark');else d.classList.remove('dark');}catch(e){}})();`
+
 export default function Document() {
   return (
     <Html lang="en">
@@ -8,6 +13,7 @@ export default function Document() {
         <link rel="icon" type="image/png" sizes="16x16" href="/api/favicon.png?size=16" />
       </Head>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <Main />
         <NextScript />
       </body>

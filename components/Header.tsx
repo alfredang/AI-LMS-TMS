@@ -7,6 +7,7 @@ import { getFileUrl } from '@/lib/urlHelpers';
 import AdminSearchPalette from './admin/AdminSearchPalette';
 import FinanceSearchPalette from './finance/FinanceSearchPalette';
 import TrainingProviderSearchPalette from './training-provider/TrainingProviderSearchPalette';
+import HeaderThemeToggle from './common/HeaderThemeToggle';
 
 // ── Live SGT clock ───────────────────────────────────────────────────────────
 // Two-line compact clock shown in the header next to the profile picture.
@@ -70,17 +71,17 @@ const getRoleDisplayName = (role: UserRole): string => {
   }
 };
 
-// Helper to get role icon
-const getRoleIcon = (role: UserRole): string => {
+// Helper to get role icon — line icons from the same set as the sidebar (no emoji)
+const getRoleIcon = (role: UserRole): IconName => {
   switch (role) {
-    case UserRole.Learner: return '📚';
-    case UserRole.Trainer: return '👨‍🏫';
-    case UserRole.Developer: return '💻';
-    case UserRole.Admin: return '⚙️';
-    case UserRole.Finance: return '💰';
-    case UserRole.Payroll: return '🧾';
-    case UserRole.TrainingProvider: return '🏢';
-    default: return '👤';
+    case UserRole.Learner: return IconName.GraduationCap;
+    case UserRole.Trainer: return IconName.Presentation;
+    case UserRole.Developer: return IconName.BookOpen;
+    case UserRole.Admin: return IconName.Shield;
+    case UserRole.Finance: return IconName.DollarSign;
+    case UserRole.Payroll: return IconName.Calculator;
+    case UserRole.TrainingProvider: return IconName.Building;
+    default: return IconName.User;
   }
 };
 
@@ -114,7 +115,7 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
           >
-            <span className="text-lg">{getRoleIcon(r)}</span>
+            <Icon name={getRoleIcon(r)} className={`w-5 h-5 flex-shrink-0 ${r === role ? 'text-primary' : 'text-gray-500 dark:text-gray-400'}`} />
             <span>{getRoleDisplayName(r)}</span>
             {r === role && (
               <svg className="w-4 h-4 ml-auto text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -427,6 +428,9 @@ const Header: React.FC = () => {
 
           {/* Right Section: Actions */}
           <div className="flex items-center justify-end space-x-1.5 sm:space-x-2">
+
+            {/* Light / dark switch (all roles); System is on the profile page */}
+            <HeaderThemeToggle />
 
             {/* Role Switcher - only show if user has multiple roles */}
             {hasMultipleRoles && (

@@ -4,6 +4,8 @@
  */
 
 export type ThemeMode = 'light' | 'dark';
+/** What the user picked on their profile; 'system' follows the device setting. */
+export type ThemePreference = ThemeMode | 'system';
 
 const THEME_STORAGE_KEY = 'trainingProviderTheme';
 const COLOR_STORAGE_KEY = 'trainingProviderPrimaryColor';
@@ -71,7 +73,7 @@ export const getCurrentTheme = (): ThemeMode => {
 /**
  * Applies the theme mode to the document
  */
-export const applyTheme = (theme: ThemeMode): void => {
+export const applyTheme = (theme: ThemeMode, persist: boolean = true): void => {
     if (typeof document === 'undefined') return;
 
     // Temporarily disable transitions for instant theme switch
@@ -90,10 +92,53 @@ export const applyTheme = (theme: ThemeMode): void => {
         document.documentElement.classList.remove('no-transitions');
     }, 50);
 
-    // Store in localStorage
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    if (persist) localStorage.setItem(THEME_STORAGE_KEY, theme);
+};
 
-    console.log(`🌓 Applied theme: ${theme}`);
+/** Fired on window when the saved preference changes (header button or profile picker). */
+export const THEME_PREFERENCE_EVENT = 'themepreferencechange';
+
+const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
+let systemListener: ((e: MediaQueryListEvent) => void) | null = null;
+
+/** The stored preference ('light' | 'dark' | 'system'); dark when nothing is stored. */
+export const getThemePreference = (): ThemePreference => {
+    if (typeof window === 'undefined') return DEFAULT_THEME;
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : DEFAULT_THEME;
+};
+
+/** The light/dark theme a preference resolves to right now. */
+export const resolveThemePreference = (pref: ThemePreference): ThemeMode => {
+    if (pref !== 'system') return pref;
+    if (typeof window === 'undefined' || !window.matchMedia) return DEFAULT_THEME;
+    return window.matchMedia(SYSTEM_DARK_QUERY).matches ? 'dark' : 'light';
+};
+
+/**
+ * Applies a preference without storing it. For 'system' it also follows the
+ * device live (e.g. macOS switching to dark at sunset).
+ */
+const applyPreference = (pref: ThemePreference): void => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia ? window.matchMedia(SYSTEM_DARK_QUERY) : null;
+    if (mq && systemListener) {
+        mq.removeEventListener('change', systemListener);
+        systemListener = null;
+    }
+    applyTheme(resolveThemePreference(pref), false);
+    if (pref === 'system' && mq) {
+        systemListener = (e) => applyTheme(e.matches ? 'dark' : 'light', false);
+        mq.addEventListener('change', systemListener);
+    }
+};
+
+/** Saves the user's Light / Dark / System choice (this browser) and applies it. */
+export const setThemePreference = (pref: ThemePreference): void => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(THEME_STORAGE_KEY, pref);
+    applyPreference(pref);
+    window.dispatchEvent(new CustomEvent(THEME_PREFERENCE_EVENT, { detail: pref }));
 };
 
 /**
@@ -166,20 +211,13 @@ export const initializeColorScheme = (trainingProviderProfile?: {
     colorScheme?: string;
     themeMode?: ThemeMode;
 }): void => {
-    // Initialize theme first
-    let theme: ThemeMode = DEFAULT_THEME;
-
+    // Theme first: a tenant-forced mode wins, otherwise the user's stored
+    // preference (Light / Dark / System).
     if (trainingProviderProfile?.themeMode) {
-        theme = trainingProviderProfile.themeMode;
+        applyTheme(trainingProviderProfile.themeMode);
     } else {
-        // Try to load from localStorage
-        const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-        if (storedTheme === 'light' || storedTheme === 'dark') {
-            theme = storedTheme;
-        }
+        applyPreference(getThemePreference());
     }
-
-    applyTheme(theme);
 
     // Initialize color
     let primaryColor: string | undefined;
@@ -267,13 +305,9 @@ export class ColorSchemeManager {
             this.updatePrimaryColor(storedColor);
         }
 
-        const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-        if (storedTheme === 'light' || storedTheme === 'dark') {
-            this.updateTheme(storedTheme);
-        } else {
-            // Apply default dark theme
-            this.updateTheme(DEFAULT_THEME);
-        }
+        const pref = getThemePreference();
+        applyPreference(pref);
+        this.currentTheme = resolveThemePreference(pref);
     }
 
     /**
