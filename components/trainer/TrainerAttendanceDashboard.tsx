@@ -1505,6 +1505,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     XLSX.writeFile(wb, `SWDA-Enrolment-${selectedCourse?.courseRunCode || 'class'}-${stamp}.xlsx`);
   };
 
+  // Arrived from the class page's "View Enrolments": open and scroll to SWDA Enrolment once loaded.
+  const scrollToEnrolmentsDone = useRef(false);
+  useEffect(() => {
+    if (scrollToEnrolmentsDone.current || !selectedCourseRunId || isLoadingEnrolments) return;
+    let wanted = router.query.section === 'swda-enrolment';
+    try { wanted = wanted || sessionStorage.getItem('attendanceScrollTo') === 'swda-enrolment'; } catch {}
+    if (!wanted) return;
+    scrollToEnrolmentsDone.current = true;
+    try { sessionStorage.removeItem('attendanceScrollTo'); } catch {}
+    setEnrolmentsOpen(true);
+    setTimeout(() => document.getElementById('swda-enrolment')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+  }, [selectedCourseRunId, isLoadingEnrolments, router.query.section]);
+
   const labelledSessions = labelSessions(manualSessions.filter(s => !s.deleted));
   // Manual Attendance rows: enrolled learners + manually added / checked-in learners
   const manualEnrolNrics = enrolNricSet(enrolmentRecords);
@@ -1814,7 +1827,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       )}
 
       {/* ── SWDA Enrolment: SSG enrolments + enrolment-form submissions (Pending), per class — collapsible ── */}
-      <div className="bg-surface rounded-lg border border-default shadow-sm">
+      <div id="swda-enrolment" className="bg-surface rounded-lg border border-default shadow-sm scroll-mt-24">
         <SectionHeader
           title="SWDA Enrolment"
           count={enrolmentTableRows.length > 0 ? enrolmentTableRows.length : undefined}

@@ -15,9 +15,13 @@ const qrSrc = (url: string, size: number) =>
  * the QR code.
  * Collapsed by default; the QR opens full screen for projecting to the class.
  */
-export const SwdaEnrolmentSection: React.FC<{ courseRunUuid: string; courseRunId?: string; courseCode?: string; isStaff?: boolean }> = ({
-  courseRunUuid, courseRunId, courseCode, isStaff = false,
-}) => {
+export const SwdaEnrolmentSection: React.FC<{
+  courseRunUuid: string; courseRunId?: string; courseCode?: string; isStaff?: boolean;
+  /** Trainer: open E-Attendance → SWDA Enrolment for this class (in-app navigation). */
+  onViewEnrolments?: () => void;
+  /** Admin: link to the admin attendance lookup for this class (opens in a new tab). */
+  viewEnrolmentsHref?: string;
+}> = ({ courseRunUuid, courseRunId, courseCode, isStaff = false, onViewEnrolments, viewEnrolmentsHref }) => {
   const [open, setOpen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -115,6 +119,13 @@ export const SwdaEnrolmentSection: React.FC<{ courseRunUuid: string; courseRunId
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
+                  {(onViewEnrolments || viewEnrolmentsHref) && (() => {
+                    const cls = 'w-full inline-flex items-center justify-center gap-2 text-sm font-medium border border-indigo-500 text-indigo-400 hover:bg-indigo-500/10 rounded-lg py-2 transition-colors';
+                    const label = (<><Icon name={IconName.ClipboardCheck} className="w-4 h-4" />View Enrolments</>);
+                    return onViewEnrolments
+                      ? <button type="button" onClick={onViewEnrolments} className={cls} title="Open this class's SWDA Enrolment list on E-Attendance">{label}</button>
+                      : <a href={viewEnrolmentsHref} target="_blank" rel="noopener noreferrer" className={cls} title="Open this class's SWDA Enrolment list">{label}</a>;
+                  })()}
                   {ref && <p className="text-xs text-on-surface-secondary text-center mt-1">{ref}</p>}
                 </div>
               </div>

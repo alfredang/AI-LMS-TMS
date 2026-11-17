@@ -2849,6 +2849,22 @@ export const CourseDetail: React.FC = () => {
                                         courseRunId={String(selectedCourse?.courseRunCode || convertedCourse.courseRunId || '')}
                                         courseCode={String(effectiveDetail?.tgsRef || selectedCourse?.courseCode || convertedCourse.courseCode || '')}
                                         isStaff={userRole !== UserRole.Trainer}
+                                        onViewEnrolments={userRole === UserRole.Trainer ? () => {
+                                            // Same hand-off as the E-Attendance card, then scroll to SWDA Enrolment
+                                            const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
+                                            setPendingAttendanceCourseRunId(String(runUuid));
+                                            if (typeof window !== 'undefined') {
+                                                try {
+                                                    if (selectedCourse) sessionStorage.setItem('attendanceSourceCourse', JSON.stringify(selectedCourse));
+                                                    sessionStorage.setItem('attendanceScrollTo', 'swda-enrolment');
+                                                } catch {}
+                                            }
+                                            setSelectedCourse(null);
+                                            setTrainerPage(TrainerPage.EAttendance);
+                                        } : undefined}
+                                        viewEnrolmentsHref={userRole === UserRole.Admin && (selectedCourse?.courseRunCode || convertedCourse.courseRunId)
+                                            ? `/?adminPage=checkAttendance&courseRunId=${encodeURIComponent(String(selectedCourse?.courseRunCode || convertedCourse.courseRunId))}&section=swda-enrolment`
+                                            : undefined}
                                     />
                                 </div>
                             )}
