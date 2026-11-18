@@ -56,7 +56,7 @@ const ManualDateInput: React.FC<ManualDateInputProps> = ({
             fill="none"
             stroke="currentColor"
             strokeWidth={2}
-            className="pointer-events-none h-5 w-5 text-gray-500 dark:text-gray-300"
+            className="pointer-events-none h-5 w-5 text-muted"
             aria-hidden="true"
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
@@ -74,7 +74,7 @@ const ManualDateInput: React.FC<ManualDateInputProps> = ({
         </div>
       </div>
       {showError && (
-        <p id={errorId} className="mt-1 text-xs text-red-600 dark:text-red-400">
+        <p id={errorId} className="mt-1 text-xs text-danger">
           Enter a valid date in dd/mm/yyyy format.
         </p>
       )}

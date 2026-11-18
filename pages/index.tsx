@@ -43,10 +43,10 @@ const Home: NextPage = () => {
   // Show loading spinner while checking authentication
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-screen bg-surface-elevated">
         <div className="flex flex-col items-center gap-4">
           <Spinner size="lg" />
-          <p className="text-gray-600 dark:text-gray-400">Checking your session...</p>
+          <p className="text-on-surface-secondary">Checking your session...</p>
         </div>
       </div>
     );
@@ -176,12 +176,12 @@ const Home: NextPage = () => {
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="border-4 border-dashed border-gray-200 rounded-lg h-96 flex items-center justify-center">
+          <div className="border-4 border-dashed border-default rounded-lg h-96 flex items-center justify-center">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              <h2 className="text-2xl font-bold text-on-surface mb-4">
                 Welcome, {currentUser?.fullName}!
               </h2>
-              <p className="text-gray-600 mb-4">
+              <p className="text-on-surface-secondary mb-4">
                 You are logged in as: <span className="font-semibold capitalize">{role}</span>
               </p>
               <div className="bg-white p-4 rounded-lg shadow">
@@ -190,16 +190,16 @@ const Home: NextPage = () => {
                   <Spinner size="sm" />
                 ) : healthStatus ? (
                   <div className="text-sm">
-                    <p>Status: <span className="text-green-600 font-semibold">{healthStatus.status}</span></p>
-                    <p>Database: <span className="text-green-600 font-semibold">{healthStatus.database || 'Connected'}</span></p>
+                    <p>Status: <span className="text-success font-semibold">{healthStatus.status}</span></p>
+                    <p>Database: <span className="text-success font-semibold">{healthStatus.database || 'Connected'}</span></p>
                     <p>Version: {healthStatus.version}</p>
                     <p>Time: {new Date(healthStatus.timestamp).toLocaleString()}</p>
                   </div>
                 ) : (
-                  <p className="text-red-600">Failed to load system status</p>
+                  <p className="text-danger">Failed to load system status</p>
                 )}
               </div>
-              <p className="text-sm text-gray-500 mt-4">
+              <p className="text-sm text-muted mt-4">
                 Role-specific dashboards for {role} users are coming soon.
               </p>
             </div>

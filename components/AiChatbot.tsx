@@ -280,7 +280,7 @@ const AiChatbot: React.FC = () => {
                         {!selected && (
                             <>
                                 <div className="bg-white rounded-xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
-                                    <p className="text-[13px] leading-relaxed text-gray-800">
+                                    <p className="text-[13px] leading-relaxed text-on-surface">
                                         Hi there.
                                         <br />
                                         What would you like to do in the TMS today?
@@ -288,21 +288,21 @@ const AiChatbot: React.FC = () => {
                                 </div>
 
                                 {!showCategoryHeadings && (
-                                    <p className="mt-4 mb-2 text-[11px] font-bold tracking-wide text-gray-500">
+                                    <p className="mt-4 mb-2 text-[11px] font-bold tracking-wide text-muted">
                                         SUGGESTED QUESTIONS
                                     </p>
                                 )}
 
                                 <div className="space-y-2">
                                     {totalShown === 0 && (
-                                        <p className="py-6 text-center text-sm text-gray-500">
+                                        <p className="py-6 text-center text-sm text-muted">
                                             Nothing matches “{query}”.
                                         </p>
                                     )}
                                     {Object.entries(grouped).map(([category, list]) => (
                                         <div key={category} className="space-y-2">
                                             {showCategoryHeadings && (
-                                                <p className="pt-2 text-[11px] font-bold tracking-wide text-gray-500">
+                                                <p className="pt-2 text-[11px] font-bold tracking-wide text-muted">
                                                     {category.toUpperCase()}
                                                 </p>
                                             )}
@@ -310,7 +310,7 @@ const AiChatbot: React.FC = () => {
                                                 <button
                                                     key={t.id}
                                                     onClick={() => { setSelected(t); setDraft(t.body); setCopyState('idle'); }}
-                                                    className="w-full text-left px-4 py-2.5 rounded-full bg-white border border-gray-200 text-[13px] font-medium text-gray-800 hover:border-gray-300 hover:shadow-sm transition"
+                                                    className="w-full text-left px-4 py-2.5 rounded-full bg-white border border-default text-[13px] font-medium text-on-surface hover:border-gray-300 hover:shadow-sm transition"
                                                 >
                                                     {t.label}
                                                 </button>
@@ -323,7 +323,7 @@ const AiChatbot: React.FC = () => {
                                 {query.trim() === '' && templates.length > starterIds.length && (
                                     <button
                                         onClick={() => setShowAll(v => !v)}
-                                        className="mt-3 text-[12px] font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
+                                        className="mt-3 text-[12px] font-medium text-on-surface-secondary hover:text-on-surface underline underline-offset-2"
                                     >
                                         {showAll
                                             ? 'Show fewer suggestions'
@@ -336,7 +336,7 @@ const AiChatbot: React.FC = () => {
                         {selected && (
                             <>
                                 <div className="bg-white rounded-xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
-                                    <p className="text-[13px] leading-relaxed text-gray-800">
+                                    <p className="text-[13px] leading-relaxed text-on-surface">
                                         {canPrefill ? (
                                             <>Fill in the details below, then send it over on {channel.name}.</>
                                         ) : (
@@ -363,13 +363,13 @@ const AiChatbot: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="px-3 py-2.5 bg-white border-t border-gray-200">
+                    <div className="px-3 py-2.5 bg-white border-t border-default">
                         {selected ? (
                             <>
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={handleCopy}
-                                        className="flex-1 px-3 py-2 text-[13px] font-medium rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                        className="flex-1 px-3 py-2 text-[13px] font-medium rounded-full border border-strong text-on-surface-secondary hover:bg-surface-hover"
                                     >
                                         {copyState === 'copied' ? 'Copied ✓' : copyState === 'failed' ? 'Press Ctrl/⌘+C' : 'Copy'}
                                     </button>
@@ -384,7 +384,7 @@ const AiChatbot: React.FC = () => {
                                         </svg>
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-gray-500 mt-1.5">
+                                <p className="text-[10px] text-muted mt-1.5">
                                     {copyState === 'failed'
                                         ? 'Clipboard blocked by the browser — select the message above and copy it manually, then paste it in the group.'
                                         : canPrefill
@@ -406,7 +406,7 @@ const AiChatbot: React.FC = () => {
                                         if (first) { setSelected(first); setDraft(first.body); setCopyState('idle'); }
                                     }}
                                     placeholder="Type your message..."
-                                    className="flex-1 px-4 py-2 text-[13px] rounded-full bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                    className="flex-1 px-4 py-2 text-[13px] rounded-full bg-white border border-strong text-on-surface placeholder-muted focus:outline-none focus:ring-2 focus:ring-offset-0"
                                 />
                                 <button
                                     onClick={() => {

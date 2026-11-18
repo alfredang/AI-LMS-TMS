@@ -9,7 +9,7 @@ export type ThemePreference = ThemeMode | 'system';
 
 const THEME_STORAGE_KEY = 'trainingProviderTheme';
 const COLOR_STORAGE_KEY = 'trainingProviderPrimaryColor';
-const DEFAULT_THEME: ThemeMode = 'dark';
+const DEFAULT_THEME: ThemeMode = 'light';
 const DEFAULT_COLOR = '#3b82f6';
 
 /**
@@ -93,6 +93,9 @@ export const applyTheme = (theme: ThemeMode, persist: boolean = true): void => {
     }, 50);
 
     if (persist) localStorage.setItem(THEME_STORAGE_KEY, theme);
+
+    // The brand colour's shades differ per theme, so re-derive them on every switch.
+    if (activeBrandColor) applyPrimaryColor(activeBrandColor);
 };
 
 /** Fired on window when the saved preference changes (header button or profile picker). */
@@ -101,7 +104,7 @@ export const THEME_PREFERENCE_EVENT = 'themepreferencechange';
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
 let systemListener: ((e: MediaQueryListEvent) => void) | null = null;
 
-/** The stored preference ('light' | 'dark' | 'system'); dark when nothing is stored. */
+/** The stored preference ('light' | 'dark' | 'system'); light when nothing is stored. */
 export const getThemePreference = (): ThemePreference => {
     if (typeof window === 'undefined') return DEFAULT_THEME;
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
@@ -151,15 +154,52 @@ export const toggleTheme = (): ThemeMode => {
     return newTheme;
 };
 
+/** WCAG relative luminance / contrast ratio of two hex colours. */
+const luminance = (hex: string): number => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return 0;
+    const ch = [rgb.r, rgb.g, rgb.b].map(v => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+};
+export const contrastRatio = (a: string, b: string): number => {
+    const [x, y] = [luminance(a), luminance(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+
+/** Darken (or lighten) in small steps until the colour reaches `min` contrast against `against`. */
+const adjustForContrast = (hex: string, against: string, min: number, direction: 'darken' | 'lighten'): string => {
+    let c = hex;
+    for (let i = 0; i < 40 && contrastRatio(c, against) < min; i++) {
+        c = direction === 'darken' ? darkenHexColor(c, 4) : lightenHexColor(c, 6);
+    }
+    return c;
+};
+
+// Surfaces the brand colour must stay readable on (mirror the tokens in styles/globals.css).
+const LIGHT_BG = '#e8eefa';
+const DARK_SURFACE = '#1e293b';
+
+/** Tenant brand colour last applied, re-derived whenever the theme changes. */
+let activeBrandColor: string | null = null;
+
+const channels = (hex: string): string => {
+    const rgb = hexToRgb(hex);
+    return rgb ? `${rgb.r} ${rgb.g} ${rgb.b}` : '47 91 230';
+};
+
 /**
- * Applies the primary color to the document root
+ * Applies the tenant's brand colour (training_provider colour scheme) for the current theme.
+ * The hue is kept; the shade is adjusted so white text on it, and the colour used as text, both
+ * pass WCAG AA (4.5:1) in the active theme. Sets the design-system tokens
+ * --c-primary (fills), --c-primary-hover and --c-primary-text (links / accent text).
  */
 export const applyPrimaryColor = (primaryColor: string | { primary: string }): void => {
     if (typeof document === 'undefined') return;
-
     const root = document.documentElement;
 
-    // Handle both string and object formats
     let colorHex: string;
     if (typeof primaryColor === 'string') {
         colorHex = primaryColor;
@@ -168,30 +208,18 @@ export const applyPrimaryColor = (primaryColor: string | { primary: string }): v
     } else {
         colorHex = DEFAULT_COLOR;
     }
+    if (!hexToRgb(colorHex)) colorHex = DEFAULT_COLOR;
+    activeBrandColor = colorHex;
 
-    // Convert to RGB for opacity variants
-    const rgb = hexToRgb(colorHex);
-    const rgbString = rgb ? `${rgb.r}, ${rgb.g}, ${rgb.b}` : '59, 130, 246';
+    const fill = adjustForContrast(colorHex, '#ffffff', 4.5, 'darken');
+    const hover = darkenHexColor(fill, 12);
+    const text = getCurrentTheme() === 'dark'
+        ? adjustForContrast(colorHex, DARK_SURFACE, 5.5, 'lighten')
+        : adjustForContrast(fill, LIGHT_BG, 4.5, 'darken');
 
-    // Set CSS custom properties
-    root.style.setProperty('--primary', colorHex);
-    root.style.setProperty('--primary-hover', colorHex);
-    root.style.setProperty('--primary-rgb', rgbString);
-    root.style.setProperty('--border-focus', colorHex);
-
-    // For dark theme, also adjust the lighter variant
-    const currentTheme = getCurrentTheme();
-    if (currentTheme === 'dark') {
-        const lighterColor = lightenHexColor(colorHex, 20);
-        root.style.setProperty('--primary', lighterColor);
-        root.style.setProperty('--border-focus', lighterColor);
-        const lighterRgb = hexToRgb(lighterColor);
-        if (lighterRgb) {
-            root.style.setProperty('--primary-rgb', `${lighterRgb.r}, ${lighterRgb.g}, ${lighterRgb.b}`);
-        }
-    }
-
-    console.log(`🎨 Applied primary color: ${colorHex} (rgb: ${rgbString})`);
+    root.style.setProperty('--c-primary', channels(fill));
+    root.style.setProperty('--c-primary-hover', channels(hover));
+    root.style.setProperty('--c-primary-text', channels(text));
 };
 
 /**
@@ -200,8 +228,8 @@ export const applyPrimaryColor = (primaryColor: string | { primary: string }): v
 export const getCurrentPrimaryColor = (): string => {
     if (typeof document === 'undefined') return DEFAULT_COLOR;
     const root = document.documentElement;
-    const primaryColor = getComputedStyle(root).getPropertyValue('--primary').trim();
-    return primaryColor || DEFAULT_COLOR;
+    const ch = getComputedStyle(root).getPropertyValue('--c-primary').trim().split(/\s+/).map(Number);
+    return ch.length === 3 && ch.every(n => !Number.isNaN(n)) ? rgbToHex(ch[0], ch[1], ch[2]) : DEFAULT_COLOR;
 };
 
 /**

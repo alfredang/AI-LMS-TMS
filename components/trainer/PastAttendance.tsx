@@ -203,7 +203,7 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
 
   const selectedClass = classes.find(c => c.run_id === selectedRunId);
 
-  const filterInputClass = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
+  const filterInputClass = "w-full px-3 py-2 text-sm border border-strong rounded-md dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
 
   // Parse SSG/local date strings: handles YYYYMMDD (SSG raw), YYYY-MM-DD,
   // and full ISO. Returns null if unparseable.
@@ -229,11 +229,11 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
 
       {/* Class Selection */}
       <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 space-y-4">
+        <div className="px-5 py-4 border-b border-default bg-surface-elevated space-y-4">
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="lg:col-span-1">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Search</label>
+              <label className="block text-xs font-medium text-on-surface-secondary mb-1">Search</label>
               <input
                 type="text"
                 value={searchQuery}
@@ -243,48 +243,48 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Start Date From</label>
+              <label className="block text-xs font-medium text-on-surface-secondary mb-1">Start Date From</label>
               <input type="date" value={startDateFrom} onChange={e => setStartDateFrom(e.target.value)} className={filterInputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Start Date To</label>
+              <label className="block text-xs font-medium text-on-surface-secondary mb-1">Start Date To</label>
               <input type="date" value={startDateTo} onChange={e => setStartDateTo(e.target.value)} className={filterInputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date From</label>
+              <label className="block text-xs font-medium text-on-surface-secondary mb-1">End Date From</label>
               <input type="date" value={endDateFrom} onChange={e => setEndDateFrom(e.target.value)} className={filterInputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date To</label>
+              <label className="block text-xs font-medium text-on-surface-secondary mb-1">End Date To</label>
               <input type="date" value={endDateTo} onChange={e => setEndDateTo(e.target.value)} className={filterInputClass} />
             </div>
           </div>
           {hasActiveFilters && (
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-between text-xs text-muted">
               <span>{filteredClasses.length} of {classes.length} classes match</span>
-              <button onClick={clearFilters} className="text-blue-600 hover:text-blue-700 font-medium">Clear filters</button>
+              <button onClick={clearFilters} className="text-primary hover:text-primary font-medium">Clear filters</button>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-semibold text-on-surface-secondary mb-2">
               Select a Past Class
             </label>
             <div className="relative w-full">
               {loadingClasses ? (
-                <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                <div className="flex items-center gap-2 text-sm text-muted py-2">
                   <Icon name={IconName.Spinner} className="w-5 h-5 animate-spin text-blue-500" />
                   Loading your past classes...
                 </div>
               ) : classes.length === 0 ? (
-                <p className="text-sm text-gray-500 py-2">No past classes found.</p>
+                <p className="text-sm text-muted py-2">No past classes found.</p>
               ) : filteredClasses.length === 0 ? (
-                <p className="text-sm text-gray-500 py-2">No classes match the current filters.</p>
+                <p className="text-sm text-muted py-2">No classes match the current filters.</p>
               ) : (
                 <select
                   value={selectedRunId}
                   onChange={e => setSelectedRunId(e.target.value)}
-                  className="w-full pl-3 pr-10 py-2.5 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white shadow-sm"
+                  className="w-full pl-3 pr-10 py-2.5 text-base border-strong focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white shadow-sm"
                 >
                   <option value="">— Choose a past class —</option>
                   {filteredClasses.map(c => (
@@ -300,8 +300,8 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
 
         {/* Class Info */}
         {selectedClass && (
-          <div className="px-5 py-3 bg-blue-50 dark:bg-blue-900/20 text-sm">
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-600 dark:text-gray-400">
+          <div className="px-5 py-3 bg-info-bg text-sm">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-on-surface-secondary">
               <span><strong>Course:</strong> {selectedClass.course_title}</span>
               <span><strong>Run:</strong> {selectedClass.run_code}</span>
               <span><strong>Status:</strong> {selectedClass.class_status || 'Completed'}</span>
@@ -327,21 +327,21 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
             const getAvgColor = (pct: number) => {
               if (pct >= 75) return 'text-green-500';
               if (pct >= 50) return 'text-yellow-500';
-              return 'text-red-500';
+              return 'text-danger';
             };
             return (
               <>
                 <div className="bg-surface rounded-lg border border-default shadow-sm p-5 text-center">
                   <div className="text-3xl font-bold text-white">{students.length}</div>
-                  <div className="text-xs text-gray-400 mt-1">No. of Learners</div>
+                  <div className="text-xs text-muted mt-1">No. of Learners</div>
                 </div>
                 <div className="bg-surface rounded-lg border border-default shadow-sm p-5 text-center">
                   <div className={`text-3xl font-bold ${getAvgColor(avgScore)}`}>{avgScore}%</div>
-                  <div className="text-xs text-gray-400 mt-1">Average Overall Attendance ({totalSessions} session{totalSessions === 1 ? '' : 's'})</div>
+                  <div className="text-xs text-muted mt-1">Average Overall Attendance ({totalSessions} session{totalSessions === 1 ? '' : 's'})</div>
                 </div>
                 <div className="bg-surface rounded-lg border border-default shadow-sm p-5 text-center">
-                  <div className="text-3xl font-bold text-white">{fullyAttended}<span className="text-base text-gray-400 font-normal"> / {students.length}</span></div>
-                  <div className="text-xs text-gray-400 mt-1">Fully Attended (100%)</div>
+                  <div className="text-3xl font-bold text-white">{fullyAttended}<span className="text-base text-muted font-normal"> / {students.length}</span></div>
+                  <div className="text-xs text-muted mt-1">Fully Attended (100%)</div>
                 </div>
               </>
             );
@@ -352,23 +352,23 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
       {/* Student Attendance List */}
       {selectedRunId && (
         <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex justify-between items-center gap-3 flex-wrap">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="px-5 py-4 border-b border-default bg-surface-elevated flex justify-between items-center gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold text-on-surface-secondary">
               Learner Attendance
             </h2>
             <div className="flex items-center gap-3 flex-wrap">
               {attendanceSummary && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-muted">
                   {attendanceSummary.totalSessions} Session{attendanceSummary.totalSessions !== 1 ? 's' : ''}
                 </span>
               )}
-              <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
+              <div className="text-xs text-muted bg-surface px-3 py-1 rounded-full border border-default">
                 {students.length} Learners
               </div>
               <button
                 onClick={handleRefreshFromSSG}
                 disabled={syncing || loadingStudents || loadingAttendance}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-surface text-primary hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed"
                 title="Pull the latest sessions and attendance from SSG"
               >
                 <Icon name={syncing ? IconName.Spinner : IconName.Sync} className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
@@ -377,52 +377,52 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
             </div>
           </div>
           {syncMessage && (
-            <div className={`px-5 py-2 text-xs ${syncMessage.kind === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
+            <div className={`px-5 py-2 text-xs ${syncMessage.kind === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
               {syncMessage.text}
             </div>
           )}
 
           <div className="p-0">
             {(loadingStudents || loadingAttendance) ? (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-12 text-muted">
                 <Icon name={IconName.Spinner} className="w-8 h-8 animate-spin text-blue-500 mb-3" />
                 <p>Loading attendance records...</p>
               </div>
             ) : students.length === 0 ? (
-              <div className="py-12 text-center text-gray-500">
-                <Icon name={IconName.Users} className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <div className="py-12 text-center text-muted">
+                <Icon name={IconName.Users} className="w-12 h-12 mx-auto text-muted mb-3" />
                 <p>No learners found for this class.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-default bg-gray-50 dark:bg-gray-800">
-                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
-                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Learner Name</th>
-                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Learner NRIC</th>
+                    <tr className="border-b border-default bg-surface-elevated">
+                      <th className="px-5 py-3 text-left font-medium text-muted">#</th>
+                      <th className="px-5 py-3 text-left font-medium text-muted">Learner Name</th>
+                      <th className="px-5 py-3 text-left font-medium text-muted">Learner NRIC</th>
                       {(attendanceSummary?.sessions || []).map((s, sIdx) => {
                         const fullDate = formatSessionDate(s.startDate);
                         const shortDate = formatSessionDate(s.startDate, { day: '2-digit', month: 'short' });
                         return (
                           <th
                             key={s.id}
-                            className="px-3 py-3 text-center font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                            className="px-3 py-3 text-center font-medium text-muted whitespace-nowrap"
                             title={[s.title, fullDate].filter(Boolean).join(' · ')}
                           >
                             {s.sessionNumber || `S${sIdx + 1}`}
                             {shortDate && (
-                              <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500 mt-0.5">
+                              <div className="text-[10px] font-normal text-muted mt-0.5">
                                 {shortDate}
                               </div>
                             )}
                           </th>
                         );
                       })}
-                      <th className="px-5 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Overall</th>
+                      <th className="px-5 py-3 text-center font-medium text-muted">Overall</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {students.map((student, idx) => {
                       const totalSessions = attendanceSummary?.totalSessions ?? 0;
                       const sessionsList = attendanceSummary?.sessions || [];
@@ -433,16 +433,16 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
                       const scorePercent = totalSessions > 0 ? Math.round((attendedCount / totalSessions) * 100) : 0;
 
                       const getScoreColor = (pct: number) => {
-                        if (pct >= 75) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-                        if (pct >= 50) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
-                        return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+                        if (pct >= 75) return 'bg-success-bg text-success';
+                        if (pct >= 50) return 'bg-warning-bg text-warning';
+                        return 'bg-danger-bg text-danger';
                       };
 
                       return (
-                        <tr key={student.enrolment_id || student.email} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                          <td className="px-5 py-3 text-gray-400 font-mono">{idx + 1}</td>
-                          <td className="px-5 py-3 font-medium text-gray-900 dark:text-white">{student.student_name}</td>
-                          <td className="px-5 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">{student.nric ? '****' + student.nric.slice(4) : '—'}</td>
+                        <tr key={student.enrolment_id || student.email} className="hover:bg-surface-hover transition-colors">
+                          <td className="px-5 py-3 text-muted font-mono">{idx + 1}</td>
+                          <td className="px-5 py-3 font-medium text-on-surface">{student.student_name}</td>
+                          <td className="px-5 py-3 text-muted font-mono text-xs">{student.nric ? '****' + student.nric.slice(4) : '—'}</td>
                           {sessionsList.map(s => {
                             const sessionMap = attendanceRow?.sessions || {};
                             const recorded = Object.prototype.hasOwnProperty.call(sessionMap, s.id);
@@ -451,12 +451,12 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
                               <td key={s.id} className="px-3 py-3 text-center">
                                 {recorded ? (
                                   present ? (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold" title="Present">✓</span>
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success-bg text-success text-xs font-bold" title="Present">✓</span>
                                   ) : (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold" title="Absent">✗</span>
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-danger-bg text-danger text-xs font-bold" title="Absent">✗</span>
                                   )
                                 ) : (
-                                  <span className="text-gray-300 dark:text-gray-600 text-xs" title="No record">—</span>
+                                  <span className="text-muted text-xs" title="No record">—</span>
                                 )}
                               </td>
                             );
@@ -465,7 +465,7 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreColor(scorePercent)}`}>
                               {scorePercent}%
                             </span>
-                            <span className="ml-1 text-[10px] text-gray-400">({attendedCount}/{totalSessions})</span>
+                            <span className="ml-1 text-[10px] text-muted">({attendedCount}/{totalSessions})</span>
                           </td>
                         </tr>
                       );

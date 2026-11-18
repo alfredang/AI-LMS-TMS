@@ -73,9 +73,9 @@ const formatDate = (dateStr: string | null): string => {
 type LiveStatus = 'Paid' | 'Pending' | 'Cancelled';
 
 const LIVE_STATUS_STYLE: Record<LiveStatus, string> = {
-  Paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  Pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  Cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  Paid: 'bg-success-bg text-success',
+  Pending: 'bg-warning-bg text-warning',
+  Cancelled: 'bg-danger-bg text-danger',
 };
 
 /** TPG grant status → Paid / Pending / Cancelled. TPG marks a paid grant "Completed" with a paid amount. */
@@ -127,8 +127,8 @@ const ATTENDANCE_STYLE: Record<AttendanceKind, string> = {
   full: LIVE_STATUS_STYLE.Paid,
   partial: LIVE_STATUS_STYLE.Pending,
   absent: LIVE_STATUS_STYLE.Cancelled,
-  upcoming: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  'not-taken': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  upcoming: 'bg-info-bg text-info',
+  'not-taken': 'bg-surface-elevated text-on-surface-secondary',
   unknown: '',
 };
 
@@ -330,32 +330,32 @@ const FinanceManagementView: React.FC = () => {
       {activeTab === 'grants' && grantStats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6 text-center">
-            <p className="text-4xl font-bold text-blue-600">{grantStats.totalGrants.toLocaleString()}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Total Grants</p>
+            <p className="text-4xl font-bold text-primary">{grantStats.totalGrants.toLocaleString()}</p>
+            <p className="text-on-surface-secondary mt-1">Total Grants</p>
           </Card>
           <Card className="p-6 text-center">
-            <p className="text-4xl font-bold text-green-600">{formatCurrency(grantStats.totalEstimated)}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Total Estimated</p>
+            <p className="text-4xl font-bold text-success">{formatCurrency(grantStats.totalEstimated)}</p>
+            <p className="text-on-surface-secondary mt-1">Total Estimated</p>
           </Card>
           <Card className="p-6 text-center">
-            <p className="text-4xl font-bold text-purple-600">{formatCurrency(grantStats.totalApproved)}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Total Approved</p>
+            <p className="text-4xl font-bold text-purple-700 dark:text-purple-300">{formatCurrency(grantStats.totalApproved)}</p>
+            <p className="text-on-surface-secondary mt-1">Total Approved</p>
           </Card>
         </div>
       )}
       {activeTab === 'claims' && claimStats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6 text-center">
-            <p className="text-4xl font-bold text-blue-600">{claimStats.totalClaims.toLocaleString()}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Total Claims</p>
+            <p className="text-4xl font-bold text-primary">{claimStats.totalClaims.toLocaleString()}</p>
+            <p className="text-on-surface-secondary mt-1">Total Claims</p>
           </Card>
           <Card className="p-6 text-center">
-            <p className="text-4xl font-bold text-green-600">{formatCurrency(claimStats.totalAmount)}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Total Amount</p>
+            <p className="text-4xl font-bold text-success">{formatCurrency(claimStats.totalAmount)}</p>
+            <p className="text-on-surface-secondary mt-1">Total Amount</p>
           </Card>
           <Card className="p-6 text-center">
-            <p className="text-4xl font-bold text-purple-600">{formatCurrency(claimStats.totalDisbursed)}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Total Disbursed</p>
+            <p className="text-4xl font-bold text-purple-700 dark:text-purple-300">{formatCurrency(claimStats.totalDisbursed)}</p>
+            <p className="text-on-surface-secondary mt-1">Total Disbursed</p>
           </Card>
         </div>
       )}
@@ -370,7 +370,7 @@ const FinanceManagementView: React.FC = () => {
               placeholder={activeTab === 'grants' ? 'Search by name, grant ID, enrollment ID, funding scheme...' : 'Search by name, claim ID, grant ID, enrollment ID...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface placeholder-gray-400"
+              className="w-full pl-10 pr-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface placeholder-muted"
             />
           </div>
           <select
@@ -396,7 +396,7 @@ const FinanceManagementView: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm">
+        <div className="p-3 bg-danger-bg text-danger rounded-lg text-sm">
           {error}
         </div>
       )}
@@ -440,7 +440,7 @@ const FinanceManagementView: React.FC = () => {
                           {g.trainee_nric ? (visibleNrics.has(g.grant_id) ? g.trainee_nric : maskNric(g.trainee_nric)) : '-'}
                         </span>
                         {g.trainee_nric && (
-                          <button onClick={() => toggleNricVisibility(g.grant_id)} className="text-gray-400 hover:text-blue-500 transition-colors" title={visibleNrics.has(g.grant_id) ? 'Hide NRIC' : 'Show NRIC'}>
+                          <button onClick={() => toggleNricVisibility(g.grant_id)} className="text-muted hover:text-blue-500 transition-colors" title={visibleNrics.has(g.grant_id) ? 'Hide NRIC' : 'Show NRIC'}>
                             <Icon name={visibleNrics.has(g.grant_id) ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -521,7 +521,7 @@ const FinanceManagementView: React.FC = () => {
                           {c.individual_nric ? (visibleNrics.has(c.claim_id) ? c.individual_nric : maskNric(c.individual_nric)) : '-'}
                         </span>
                         {c.individual_nric && (
-                          <button onClick={() => toggleNricVisibility(c.claim_id)} className="text-gray-400 hover:text-blue-500 transition-colors" title={visibleNrics.has(c.claim_id) ? 'Hide NRIC' : 'Show NRIC'}>
+                          <button onClick={() => toggleNricVisibility(c.claim_id)} className="text-muted hover:text-blue-500 transition-colors" title={visibleNrics.has(c.claim_id) ? 'Hide NRIC' : 'Show NRIC'}>
                             <Icon name={visibleNrics.has(c.claim_id) ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
                           </button>
                         )}

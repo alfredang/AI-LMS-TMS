@@ -131,7 +131,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
       ref={canvasRef}
       style={{ width: '100%', maxWidth: width, aspectRatio: `${width} / ${height}`, touchAction: 'none' }}
       className={`block rounded-lg border-2 border-dashed bg-white ${
-        disabled ? 'border-gray-200 cursor-not-allowed' : 'border-gray-300 dark:border-gray-500 cursor-crosshair'
+        disabled ? 'border-default cursor-not-allowed' : 'border-strong cursor-crosshair'
       } ${className}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

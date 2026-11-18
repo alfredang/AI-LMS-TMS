@@ -95,31 +95,31 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     // Determine active view - if a course is selected, highlight Courses
     const activeView = selectedCourse ? View.Courses : currentView;
 
-    const activeClass = 'bg-primary/10 text-primary font-semibold';
-    const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
+    const activeClass = 'nav-item-active font-semibold';
+    const inactiveClass = 'text-on-surface hover:bg-surface-hover';
 
     const linkClass = (view: View) =>
         `group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${activeView === view ? activeClass : inactiveClass}`;
 
     return (
-        <nav className="space-y-1 px-2 py-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
+        <nav className="space-y-1 px-2 py-4 bg-surface text-on-surface h-full">
             {/* Dashboard */}
             <a href="#" title={collapsed ? 'Training Dashboard' : undefined} onClick={(e) => { e.preventDefault(); handleClick(View.Dashboard); }} className={linkClass(View.Dashboard)}>
-                <Icon name={IconName.Dashboard} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.Dashboard ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                <Icon name={IconName.Dashboard} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.Dashboard ? 'text-primary' : 'text-muted'}`} />
                 {!collapsed && <span className="truncate">Training Dashboard</span>}
             </a>
 
             {/* Remaining nav items */}
             {navItemsTop.filter(item => item.view !== View.Dashboard).map((item) => (
                 <a key={item.view} href="#" title={collapsed ? item.label : undefined} onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
-                    <Icon name={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === item.view ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <Icon name={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === item.view ? 'text-primary' : 'text-muted'}`} />
                     {!collapsed && <span className="truncate">{item.label}</span>}
                 </a>
             ))}
 
             {navItemsBottom.map((item) => (
                 <a key={item.view} href="#" title={collapsed ? item.label : undefined} onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
-                    <Icon name={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === item.view ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <Icon name={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === item.view ? 'text-primary' : 'text-muted'}`} />
                     {!collapsed && <span className="truncate">{item.label}</span>}
                 </a>
             ))}
@@ -131,7 +131,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     title={collapsed ? 'Feedback Form' : undefined}
                     className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${feedbackFormViews.includes(activeView) ? activeClass : inactiveClass}`}
                 >
-                    <Icon name={IconName.Chat} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${feedbackFormViews.includes(activeView) ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <Icon name={IconName.Chat} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${feedbackFormViews.includes(activeView) ? 'text-primary' : 'text-muted'}`} />
                     {!collapsed && <span className="truncate flex-1 text-left">Feedback Form</span>}
                     {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${feedbackFormOpen ? 'rotate-180' : ''}`} />}
                 </button>
@@ -159,7 +159,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     title={collapsed ? 'Cron Jobs' : undefined}
                     className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${cronJobsViews.includes(activeView) ? activeClass : inactiveClass}`}
                 >
-                    <Icon name={IconName.Clock} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${cronJobsViews.includes(activeView) ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <Icon name={IconName.Clock} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${cronJobsViews.includes(activeView) ? 'text-primary' : 'text-muted'}`} />
                     {!collapsed && <span className="truncate flex-1 text-left">Cron Jobs</span>}
                     {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${cronJobsOpen ? 'rotate-180' : ''}`} />}
                 </button>
@@ -190,30 +190,30 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     title={collapsed ? 'Workflow Guides' : undefined}
                     className={linkClass(View.WorkflowGuides)}
                 >
-                    <Icon name={IconName.BookOpen} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.WorkflowGuides ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <Icon name={IconName.BookOpen} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.WorkflowGuides ? 'text-primary' : 'text-muted'}`} />
                     {!collapsed && <span className="truncate flex-1 text-left">Workflow Guides</span>}
                     {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />}
                 </button>
                 {!collapsed && workflowsOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         {/* Training */}
-                        <button onClick={() => setWfTrainingOpen(!wfTrainingOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
-                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Training</span>
-                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfTrainingOpen ? 'rotate-180' : ''}`} />
+                        <button onClick={() => setWfTrainingOpen(!wfTrainingOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-surface-hover rounded-md">
+                            <span className="text-xs font-semibold uppercase text-muted tracking-wider">Training</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-muted transition-transform ${wfTrainingOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {wfTrainingOpen && [
                             { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
                             { id: 'assessment', label: 'Assessment', icon: '📝' },
                         ].map(item => (
-                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors">
                                 <span className="text-sm">{item.icon}</span>
                                 <span>{item.label}</span>
                             </a>
                         ))}
                         {/* Admin */}
-                        <button onClick={() => setWfAdminOpen(!wfAdminOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
-                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Admin</span>
-                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfAdminOpen ? 'rotate-180' : ''}`} />
+                        <button onClick={() => setWfAdminOpen(!wfAdminOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-surface-hover rounded-md">
+                            <span className="text-xs font-semibold uppercase text-muted tracking-wider">Admin</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-muted transition-transform ${wfAdminOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {wfAdminOpen && [
                             { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
@@ -221,15 +221,15 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                             { id: 'certificate', label: 'Certificate', icon: '🎓' },
                             { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
                         ].map(item => (
-                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors">
                                 <span className="text-sm">{item.icon}</span>
                                 <span>{item.label}</span>
                             </a>
                         ))}
                         {/* Finance */}
-                        <button onClick={() => setWfFinanceOpen(!wfFinanceOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
-                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Finance</span>
-                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfFinanceOpen ? 'rotate-180' : ''}`} />
+                        <button onClick={() => setWfFinanceOpen(!wfFinanceOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-surface-hover rounded-md">
+                            <span className="text-xs font-semibold uppercase text-muted tracking-wider">Finance</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-muted transition-transform ${wfFinanceOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {wfFinanceOpen && [
                             { id: 'billing-history', label: 'Billing History', icon: '💰' },
@@ -238,7 +238,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                             { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
                             { id: 'receipt', label: 'Receipt', icon: '🧾' },
                         ].map(item => (
-                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors">
                                 <span className="text-sm">{item.icon}</span>
                                 <span>{item.label}</span>
                             </a>
@@ -254,7 +254,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     title={collapsed ? 'Logging' : undefined}
                     className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage) ? activeClass : inactiveClass}`}
                 >
-                    <Icon name={IconName.FileText} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage) ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <Icon name={IconName.FileText} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage) ? 'text-primary' : 'text-muted'}`} />
                     {!collapsed && <span className="truncate flex-1 text-left">Logging</span>}
                     {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${loggingOpen ? 'rotate-180' : ''}`} />}
                 </button>
@@ -271,7 +271,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                                         setAdminPage(item.page);
                                         handleClick(View.Scheduler);
                                     }}
-                                    className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                                    className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? 'nav-item-active' : 'text-on-surface hover:bg-surface-hover'}`}
                                 >
                                     <span>{item.label}</span>
                                 </a>
@@ -288,7 +288,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     title={collapsed ? 'Templates' : undefined}
                     className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
                 >
-                    <Icon name={IconName.Mail} className="w-[18px] h-[18px] flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    <Icon name={IconName.Mail} className="w-[18px] h-[18px] flex-shrink-0 text-muted" />
                     {!collapsed && <span className="truncate flex-1 text-left">Templates</span>}
                     {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />}
                 </button>
@@ -319,7 +319,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     title={collapsed ? 'Useful Links' : undefined}
                     className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
                 >
-                    <Icon name={IconName.ExternalLink} className="w-[18px] h-[18px] flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    <Icon name={IconName.ExternalLink} className="w-[18px] h-[18px] flex-shrink-0 text-muted" />
                     {!collapsed && <span className="truncate flex-1 text-left">Useful Links</span>}
                     {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${usefulLinksOpen ? 'rotate-180' : ''}`} />}
                 </button>
@@ -329,7 +329,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                             href="https://ssg-api-portal.vercel.app/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface"
                         >
                             <Icon name={IconName.Link} className="w-4 h-4" />
                             <span>SSG API Portal</span>
@@ -339,7 +339,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                             href="https://developer.ssg-wsg.gov.sg/webapp/home"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface"
                         >
                             <Icon name={IconName.Link} className="w-4 h-4" />
                             <span>SSG Developer</span>
@@ -351,13 +351,13 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
             {/* Provider Access Info */}
             {!collapsed && (
-                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="px-3 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                <div className="mt-6 pt-4 border-t border-default">
+                    <div className="px-3 py-3 rounded-lg bg-info-bg border border-blue-200 dark:border-blue-800">
                         <div className="flex items-center gap-2 mb-1">
-                            <Icon name={IconName.Admin} className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                            <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Provider Access</span>
+                            <Icon name={IconName.Admin} className="w-4 h-4 text-primary" />
+                            <span className="text-sm font-semibold text-primary">Provider Access</span>
                         </div>
-                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                        <p className="text-xs text-primary">
                             You have full training provider privileges. Handle user data with care.
                         </p>
                     </div>

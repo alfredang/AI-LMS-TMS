@@ -163,7 +163,7 @@ const ClaimCheckView: React.FC = () => {
 
           <div className="text-center">
             <h3 className="text-xl font-bold dark:text-white">Upload Claim File</h3>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Upload an Excel file to check existing claims and insert missing ones.</p>
+            <p className="text-muted mt-1">Upload an Excel file to check existing claims and insert missing ones.</p>
           </div>
 
           <div
@@ -172,8 +172,8 @@ const ClaimCheckView: React.FC = () => {
             onDrop={handleDrop}
             className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${
               isDragOver
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-300 dark:border-gray-600 hover:border-blue-500'
+                ? 'border-blue-500 bg-info-bg'
+                : 'border-strong hover:border-blue-500'
             }`}
           >
             <input
@@ -184,13 +184,13 @@ const ClaimCheckView: React.FC = () => {
               onChange={(e) => applySelectedFile(e.target.files?.[0] || null)}
             />
             <label htmlFor={fileInputId} className="cursor-pointer">
-              <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-              <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+              <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+              <p className="mt-2 font-semibold text-on-surface">
                 {file ? file.name : 'Drag & drop your file here, or click to browse'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">XLSX or XLS file format</p>
+              <p className="text-xs text-muted mt-1">XLSX or XLS file format</p>
               {file && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-muted mt-1">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               )}
@@ -198,24 +198,24 @@ const ClaimCheckView: React.FC = () => {
           </div>
 
         {fileValidationError && !error && (
-          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-lg text-sm">
+          <div className="p-3 bg-warning-bg text-warning rounded-lg text-sm">
             {fileValidationError}
           </div>
         )}
 
         {error && (
-          <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+          <div className="mt-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
             <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
               <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+              <h4 className="font-semibold text-on-surface">Something went wrong!</h4>
+              <p className="text-sm text-on-surface-secondary mt-1 whitespace-pre-line">{error}</p>
             </div>
             <button
               type="button"
               onClick={() => setError(null)}
-              className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              className="flex-shrink-0 text-muted hover:text-gray-600 dark:hover:text-gray-300"
             >
               <Icon name={IconName.Close} className="w-5 h-5" />
             </button>
@@ -223,7 +223,7 @@ const ClaimCheckView: React.FC = () => {
         )}
 
         {success && (
-          <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 rounded-lg text-sm">
+          <div className="p-3 bg-success-bg text-success rounded-lg text-sm">
             {success}
           </div>
         )}
@@ -249,15 +249,15 @@ const ClaimCheckView: React.FC = () => {
               </div>
               <div className="rounded-xl border border-default bg-surface p-3">
                 <div className="text-xs text-on-surface-secondary">Already exists</div>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{uploadResponse.summary.existing}</div>
+                <div className="text-2xl font-bold text-primary">{uploadResponse.summary.existing}</div>
               </div>
               <div className="rounded-xl border border-default bg-surface p-3">
                 <div className="text-xs text-on-surface-secondary">Newly inserted</div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{uploadResponse.summary.inserted}</div>
+                <div className="text-2xl font-bold text-success">{uploadResponse.summary.inserted}</div>
               </div>
               <div className="rounded-xl border border-default bg-surface p-3">
                 <div className="text-xs text-on-surface-secondary">Failed</div>
-                <div className="text-2xl font-bold text-red-600 dark:text-red-400">{uploadResponse.summary.failed}</div>
+                <div className="text-2xl font-bold text-danger">{uploadResponse.summary.failed}</div>
               </div>
             </div>
 
@@ -292,10 +292,10 @@ const ClaimCheckView: React.FC = () => {
                     const data = r.result === 'failed' ? null : r.data;
                     const badge =
                       r.result === 'inserted'
-                        ? 'bg-green-500/15 text-green-700 dark:text-green-200'
+                        ? 'bg-green-500/15 text-success'
                         : r.result === 'exists'
                           ? 'bg-blue-500/15 text-blue-700 dark:text-blue-200'
-                          : 'bg-red-500/15 text-red-700 dark:text-red-200';
+                          : 'bg-red-500/15 text-danger';
 
                     return (
                       <tr key={`${r.claim_id ?? 'failed'}-${startIdx + idx}`} className="border-t border-default">

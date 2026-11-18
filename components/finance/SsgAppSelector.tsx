@@ -48,7 +48,7 @@ export default function SsgAppSelector() {
 
   return (
     <div className="flex items-center gap-3 mb-4">
-      <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">SSG App</label>
+      <label className="text-xs font-semibold uppercase text-muted tracking-wider">SSG App</label>
       <div className="flex gap-1">
         {SSG_APP_OPTIONS.map(opt => (
           <button
@@ -56,8 +56,8 @@ export default function SsgAppSelector() {
             onClick={() => setSsgApp(opt.value)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               ssgApp === opt.value
-                ? 'bg-green-100 text-green-800 border-2 border-green-500 dark:bg-green-900/30 dark:text-green-400 dark:border-green-500'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-2 border-transparent'
+                ? 'bg-success-bg text-success border-2 border-green-500 dark:border-green-500'
+                : 'bg-surface-elevated text-on-surface-secondary border-2 border-transparent'
             }`}
           >
             {opt.label}

@@ -194,14 +194,14 @@ const CertificateEmailTemplateView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
+      <div className="border-b border-default pb-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
               <Icon name={IconName.Award} className="w-7 h-7" />
               Certificate Email Template
             </h3>
-            <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-2 max-w-4xl text-sm text-muted">
               Customise the email sent to learners when they receive their Certificate of Achievement.
             </p>
           </div>
@@ -217,7 +217,7 @@ const CertificateEmailTemplateView: React.FC = () => {
       </div>
 
       {saveMessage && (
-        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
           {saveMessage.text}
         </div>
       )}
@@ -225,12 +225,12 @@ const CertificateEmailTemplateView: React.FC = () => {
       {/* Available Variables */}
       <Card>
         <div className="p-4">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Available Variables</h4>
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Available Variables</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {variables.map((v) => (
               <div key={v.name} className="flex items-start gap-2 text-xs">
-                <code className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded font-mono shrink-0">{v.name}</code>
-                <span className="text-gray-500 dark:text-gray-400">{v.desc}</span>
+                <code className="px-1.5 py-0.5 bg-info-bg text-primary rounded font-mono shrink-0">{v.name}</code>
+                <span className="text-muted">{v.desc}</span>
               </div>
             ))}
           </div>
@@ -247,42 +247,42 @@ const CertificateEmailTemplateView: React.FC = () => {
           ) : (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Template</label>
+                <label className="block text-sm font-medium text-on-surface-secondary">Email Template</label>
                 <span className="text-xs text-gray-400">{hasChanges ? 'Unsaved changes' : 'Up to date'}</span>
               </div>
 
               {/* Subject */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Subject</label>
                 <input
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
                   placeholder="Email subject line..."
                 />
               </div>
 
               {/* Body */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Body</label>
                 <textarea
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   rows={14}
-                  className="block w-full px-4 py-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
+                  className="block w-full px-4 py-3 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
                   placeholder="Email body content..."
                 />
               </div>
 
               {/* CC Recipients */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Default CC Recipients</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Default CC Recipients</label>
                 <input
                   type="text"
                   value={cc}
                   onChange={(e) => setCc(e.target.value)}
-                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
                   placeholder="email1@example.com, email2@example.com"
                 />
                 <p className="mt-1 text-xs text-gray-400">Comma-separated email addresses to CC on all certificate emails.</p>
@@ -295,8 +295,8 @@ const CertificateEmailTemplateView: React.FC = () => {
       {/* Send Test Email */}
       <Card>
         <div className="p-6">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Send Test Email</h4>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Send Test Email</h4>
+          <p className="text-xs text-muted mb-3">
             Send a test email using the current template with sample data to verify formatting.
           </p>
           <div className="flex gap-3 items-start">
@@ -306,7 +306,7 @@ const CertificateEmailTemplateView: React.FC = () => {
                 value={testEmail}
                 onChange={(e) => setTestEmail(e.target.value)}
                 placeholder="Enter test email address..."
-                className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <Button
@@ -318,7 +318,7 @@ const CertificateEmailTemplateView: React.FC = () => {
             </Button>
           </div>
           {testMessage && (
-            <div className={`mt-3 p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+            <div className={`mt-3 p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
               {testMessage.text}
             </div>
           )}
@@ -328,24 +328,24 @@ const CertificateEmailTemplateView: React.FC = () => {
       {/* Preview */}
       <Card>
         <div className="p-6">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview</h4>
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Preview</h4>
+          <div className="border border-default rounded-lg bg-surface overflow-hidden">
             {/* Email header */}
-            <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700">
+            <div className="px-6 py-3 bg-surface-elevated border-b border-default">
               <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-gray-500 dark:text-gray-400">Subject:</span>
-                <span className="text-gray-900 dark:text-white font-medium">{previewSubject}</span>
+                <span className="font-medium text-muted">Subject:</span>
+                <span className="text-on-surface font-medium">{previewSubject}</span>
               </div>
               {cc && (
                 <div className="flex items-center gap-2 text-sm mt-1">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">CC:</span>
-                  <span className="text-gray-600 dark:text-gray-300 text-xs">{cc}</span>
+                  <span className="font-medium text-muted">CC:</span>
+                  <span className="text-on-surface-secondary text-xs">{cc}</span>
                 </div>
               )}
             </div>
             {/* Email body */}
             <div
-              className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto [&_p]:mb-3 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline"
+              className="px-6 py-5 text-sm text-on-surface-secondary max-h-96 overflow-y-auto [&_p]:mb-3 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline"
               dangerouslySetInnerHTML={{ __html: previewBody }}
             />
           </div>

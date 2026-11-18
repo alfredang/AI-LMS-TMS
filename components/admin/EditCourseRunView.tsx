@@ -50,8 +50,8 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
 export const EditCourseRunView: React.FC = () => {
     const { setAdminPage, selectedCourseRunId, setSelectedCourseRunId } = useLms();
 
-    const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500';
-    const readonlyClasses = 'block w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 cursor-not-allowed';
+    const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white';
+    const readonlyClasses = 'block w-full px-3 py-2 bg-surface-elevated border border-default rounded-md text-on-surface-secondary cursor-not-allowed';
 
     // ── Course Run ID input ──────────────────────────────────────────────────
     const [courseRunId, setCourseRunId] = useState(selectedCourseRunId || '');
@@ -352,36 +352,36 @@ export const EditCourseRunView: React.FC = () => {
                 <Card className="p-6">
                     <div className="flex items-center gap-3 mb-6">
                         {submissionResult.success ? (
-                            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                                <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="w-10 h-10 bg-success-bg rounded-full flex items-center justify-center">
+                                <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
                         ) : (
-                            <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="w-10 h-10 bg-danger-bg rounded-full flex items-center justify-center">
+                                <svg className="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </div>
                         )}
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Edit Course Run Result</h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <h2 className="text-2xl font-bold text-on-surface">Edit Course Run Result</h2>
+                            <p className="text-sm text-muted">
                                 {submissionResult.success ? 'Course run updated successfully' : 'Failed to update course run'}
                             </p>
                         </div>
                     </div>
 
-                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6 space-y-2 text-sm">
-                        <div><span className="font-medium text-gray-600 dark:text-gray-400">Course Run ID: </span><span className="font-mono text-gray-900 dark:text-white">{courseRunId}</span></div>
-                        <div><span className="font-medium text-gray-600 dark:text-gray-400">Course Reference: </span><span className="text-gray-900 dark:text-white">{courseReferenceNumber}</span></div>
-                        <div><span className="font-medium text-gray-600 dark:text-gray-400">Status: </span>
-                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${submissionResult.success ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
+                    <div className="bg-surface-elevated rounded-lg p-4 mb-6 space-y-2 text-sm">
+                        <div><span className="font-medium text-on-surface-secondary">Course Run ID: </span><span className="font-mono text-on-surface">{courseRunId}</span></div>
+                        <div><span className="font-medium text-on-surface-secondary">Course Reference: </span><span className="text-on-surface">{courseReferenceNumber}</span></div>
+                        <div><span className="font-medium text-on-surface-secondary">Status: </span>
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${submissionResult.success ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
                                 {submissionResult.success ? 'Success' : 'Error'}
                             </span>
                         </div>
                         {!submissionResult.success && submissionResult.message && (
-                            <div className="mt-2 text-red-700 dark:text-red-400">{submissionResult.message}</div>
+                            <div className="mt-2 text-danger">{submissionResult.message}</div>
                         )}
                     </div>
 
@@ -410,10 +410,10 @@ export const EditCourseRunView: React.FC = () => {
 
             {/* Step 1 — Course Run ID Lookup */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Lookup</h3>
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Lookup</h3>
                 <div className="flex gap-3 items-end">
                     <div className="flex-1">
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
                             * Course Run ID
                         </label>
                         <input
@@ -435,9 +435,9 @@ export const EditCourseRunView: React.FC = () => {
                         ) : 'Fetch Data'}
                     </Button>
                 </div>
-                {fetchError && <p className="text-red-500 text-sm mt-3">{fetchError}</p>}
+                {fetchError && <p className="text-danger text-sm mt-3">{fetchError}</p>}
                 {isDataLoaded && (
-                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-300">
+                    <div className="mt-3 p-3 bg-success-bg border border-green-200 dark:border-green-700 rounded-lg text-sm text-success">
                         ✓ Data loaded for <strong>{courseTitle || courseReferenceNumber}</strong> — edit the fields below and click Save.
                     </div>
                 )}
@@ -451,11 +451,11 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Course Information">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Reference Number</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Reference Number</label>
                                 <input type="text" value={courseReferenceNumber} readOnly className={readonlyClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                                 <input type="text" value={courseTitle} readOnly className={readonlyClasses} />
                             </div>
                         </div>
@@ -465,11 +465,11 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Opening Registration Date</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Opening Registration Date</label>
                                 <input type="date" value={openingRegistrationDate} onChange={e => setOpeningRegistrationDate(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Closing Registration Date</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Closing Registration Date</label>
                                 <input type="date" value={closingRegistrationDate} onChange={e => setClosingRegistrationDate(e.target.value)} className={inputClasses} />
                             </div>
                         </div>
@@ -479,7 +479,7 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Course Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Course Start Date</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Course Start Date</label>
                                 <input type="date" value={courseStartDate} onChange={e => {
                                     setCourseStartDate(e.target.value);
                                     if (e.target.value) {
@@ -491,7 +491,7 @@ export const EditCourseRunView: React.FC = () => {
                                 }} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Course End Date</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Course End Date</label>
                                 <input type="date" value={courseEndDate} onChange={e => setCourseEndDate(e.target.value)} className={inputClasses} />
                             </div>
                         </div>
@@ -501,35 +501,35 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Venue">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Block</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Block</label>
                                 <input type="text" value={block} onChange={e => setBlock(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Street</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Street</label>
                                 <input type="text" value={street} onChange={e => setStreet(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Building</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Building</label>
                                 <input type="text" value={building} onChange={e => setBuilding(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Floor</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Floor</label>
                                 <input type="text" value={floor} onChange={e => setFloor(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Unit</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Unit</label>
                                 <input type="text" value={unit} onChange={e => setUnit(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Postal Code</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Postal Code</label>
                                 <input type="text" value={postalCode} onChange={e => setPostalCode(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Room</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Room</label>
                                 <input type="text" value={room} onChange={e => setRoom(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Wheelchair Access</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Wheelchair Access</label>
                                 <select value={wheelchairAccess} onChange={e => setWheelchairAccess(e.target.value as OptionalSelector)} className={inputClasses}>
                                     <option value={OptionalSelector.YES}>Yes</option>
                                     <option value={OptionalSelector.NO}>No</option>
@@ -542,17 +542,17 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Course Admin Details">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Mode of Training</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Mode of Training</label>
                                 <select value={modeOfTraining} onChange={e => setModeOfTraining(e.target.value)} className={inputClasses}>
                                     {modeOfTrainingOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Course Admin Email</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Course Admin Email</label>
                                 <input type="email" value={courseAdminEmail} onChange={e => setCourseAdminEmail(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Course Vacancy</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">* Course Vacancy</label>
                                 <select value={courseVacancy} onChange={e => setCourseVacancy(e.target.value)} className={inputClasses}>
                                     {vacancyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
@@ -566,28 +566,28 @@ export const EditCourseRunView: React.FC = () => {
 
                         {/* SSG-assigned trainers (from viewCourseRun response) */}
                         {ssgTrainers.length === 0 ? (
-                            <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            <div className="p-4 bg-surface-elevated border border-default rounded-lg text-sm text-muted mb-4">
                                 No TPG trainer has been assigned to this course run yet. Use the form below to assign one.
                             </div>
                         ) : (
                             <div className="mb-6">
-                                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Assigned Trainer (TPG)</h4>
+                                <h4 className="text-base font-semibold text-on-surface mb-3">Assigned Trainer (TPG)</h4>
                                 <div className="space-y-4">
                                     {ssgTrainers.map((t, idx) => (
-                                        <div key={t.id ?? idx} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
-                                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mb-3">Trainer {idx + 1}</p>
+                                        <div key={t.id ?? idx} className="p-4 border border-default rounded-lg">
+                                            <p className="text-sm font-bold text-primary mb-3">Trainer {idx + 1}</p>
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 <div>
-                                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">ID Number</p>
-                                                    <p className="text-sm font-mono text-gray-900 dark:text-white">{t.idNumber ?? '—'}</p>
+                                                    <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">ID Number</p>
+                                                    <p className="text-sm font-mono text-on-surface">{t.idNumber ?? '—'}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Name</p>
-                                                    <p className="text-sm text-gray-900 dark:text-white">{t.name ?? '—'}</p>
+                                                    <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Name</p>
+                                                    <p className="text-sm text-on-surface">{t.name ?? '—'}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Email</p>
-                                                    <p className="text-sm text-gray-900 dark:text-white">{t.email ?? '—'}</p>
+                                                    <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Email</p>
+                                                    <p className="text-sm text-on-surface">{t.email ?? '—'}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -598,30 +598,30 @@ export const EditCourseRunView: React.FC = () => {
 
                         {/* Assign Trainer — single unified section */}
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            <p className="text-xs text-muted mb-3">
                                 Select trainers from your database. Their NRIC will be sent to SSG and they will be synced in your local system automatically.
                             </p>
                             {isFetchingTrainers ? (
-                                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                <div className="flex items-center gap-2 text-sm text-muted">
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                                     Loading trainers...
                                 </div>
                             ) : (
                                 <div className="space-y-3">
                                     {trainerAssignments.map((assignment, idx) => (
-                                        <div key={idx} className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg space-y-2">
+                                        <div key={idx} className="p-3 border border-default rounded-lg space-y-2">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Trainer {idx + 1}</span>
+                                                <span className="text-xs font-semibold text-muted uppercase">Trainer {idx + 1}</span>
                                                 {trainerAssignments.length > 1 && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setTrainerAssignments(trainerAssignments.filter((_, i) => i !== idx))}
-                                                        className="text-red-500 hover:text-red-700 text-xs"
+                                                        className="text-danger hover:text-red-700 text-xs"
                                                     >Remove</button>
                                                 )}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Trainer</label>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Select Trainer</label>
                                                 <select
                                                     value={assignment.userId}
                                                     onChange={e => {
@@ -641,7 +641,7 @@ export const EditCourseRunView: React.FC = () => {
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC/FIN</label>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">NRIC/FIN</label>
                                                 <input
                                                     type="text"
                                                     value={assignment.nric}
@@ -659,11 +659,11 @@ export const EditCourseRunView: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={() => setTrainerAssignments([...trainerAssignments, { userId: '', nric: '' }])}
-                                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                        className="text-sm font-medium text-primary hover:underline"
                                     >
                                         + Add Another Trainer
                                     </button>
-                                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                                    <p className="text-xs text-muted">
                                         Leave blank to keep the existing trainer assignment unchanged when saving.
                                     </p>
                                 </div>

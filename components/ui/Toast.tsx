@@ -18,8 +18,8 @@ const Toast: React.FC<ToastProps> = ({ message, type = 'success', onClose }) => 
     <div
       className={`fixed top-6 right-6 z-50 px-4 py-3 rounded shadow-lg text-sm font-semibold transition-all duration-300
         ${type === 'success'
-          ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-          : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}
+          ? 'bg-success-bg text-success'
+          : 'bg-danger-bg text-danger'}`}
       role="alert"
     >
       {message}

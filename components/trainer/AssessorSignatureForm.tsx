@@ -62,7 +62,7 @@ interface Props {
 }
 
 const inputClass =
-  'w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary';
+  'w-full border border-strong rounded px-3 py-2 text-sm bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary';
 
 const todayIso = () => {
   const d = new Date();
@@ -158,7 +158,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500 py-6">
+      <div className="flex items-center gap-2 text-sm text-muted py-6">
         <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" /> Loading signature details…
       </div>
     );
@@ -168,18 +168,18 @@ export const AssessorSignatureForm: React.FC<Props> = ({
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
       <div className={`grid gap-3 ${showDate ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {variant.nameLabel} <span className="text-red-500">*</span>
+          <label className="block text-xs font-medium text-on-surface-secondary mb-1">
+            {variant.nameLabel} <span className="text-danger">*</span>
           </label>
           <input type="text" value={name} onChange={e => setName(e.target.value)} className={inputClass} placeholder="As shown on the assessment" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{variant.nricLabel}</label>
+          <label className="block text-xs font-medium text-on-surface-secondary mb-1">{variant.nricLabel}</label>
           <input type="text" value={nric} onChange={e => setNric(e.target.value.toUpperCase())} className={inputClass} placeholder="e.g. S1234567A" />
         </div>
         {showDate && (
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">Date</label>
             <input type="date" value={signDate} onChange={e => setSignDate(e.target.value)} className={inputClass} />
           </div>
         )}
@@ -187,8 +187,8 @@ export const AssessorSignatureForm: React.FC<Props> = ({
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-            Signature {!savedSignature && <span className="text-red-500">*</span>}
+          <label className="block text-xs font-medium text-on-surface-secondary">
+            Signature {!savedSignature && <span className="text-danger">*</span>}
           </label>
           <div className="flex items-center gap-2">
             {redrawing && (
@@ -196,7 +196,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
                 type="button"
                 onClick={() => { padRef.current?.clear(); }}
                 disabled={padEmpty}
-                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                className="text-xs px-2 py-1 rounded border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40"
               >
                 Clear
               </button>
@@ -205,7 +205,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => { setRedrawing(r => !r); setPadEmpty(true); }}
-                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="text-xs px-2 py-1 rounded border border-strong text-on-surface-secondary hover:bg-surface-hover"
               >
                 {redrawing ? 'Use saved signature' : 'Redraw'}
               </button>
@@ -216,10 +216,10 @@ export const AssessorSignatureForm: React.FC<Props> = ({
         {redrawing ? (
           <>
             <SignaturePad ref={padRef} onChange={setPadEmpty} />
-            <p className="text-[11px] text-gray-400 mt-1">Sign inside the box with your mouse, trackpad, finger or pen.</p>
+            <p className="text-[11px] text-muted mt-1">Sign inside the box with your mouse, trackpad, finger or pen.</p>
           </>
         ) : (
-          <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-white p-3 flex items-center justify-center">
+          <div className="rounded-lg border border-default bg-white p-3 flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={savedSignature!} alt="Saved signature" className="max-h-24 object-contain" />
           </div>
@@ -227,7 +227,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
       </div>
 
       {error && (
-        <p className="text-xs text-red-500 flex items-center gap-1">
+        <p className="text-xs text-danger flex items-center gap-1">
           <Icon name={IconName.Close} className="w-3.5 h-3.5" /> {error}
         </p>
       )}
@@ -238,7 +238,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="px-3 py-2 text-sm border border-strong rounded text-on-surface-secondary hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
@@ -254,7 +254,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
         </button>
       </div>
       {exists && !compact && variant.hint && (
-        <p className="text-[11px] text-gray-400">{variant.hint}</p>
+        <p className="text-[11px] text-muted">{variant.hint}</p>
       )}
     </div>
   );
@@ -270,16 +270,16 @@ export const AssessorSignatureDialog: React.FC<{
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-surface rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="absolute top-3 right-3 p-1.5 rounded-full text-muted hover:text-on-surface hover:bg-surface-hover transition-colors"
           aria-label="Close"
         >
           <Icon name={IconName.Close} className="w-5 h-5" />
         </button>
-        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Assessor Sign-off</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <h3 className="text-base font-bold text-on-surface mb-1">Assessor Sign-off</h3>
+        <p className="text-xs text-muted mb-4">
           Your name, NRIC, the date and your signature are stamped into the <span className="font-semibold">Assessor</span> block of each learner&apos;s submitted assessment (PDF or Word). The signature you save here is also kept on your Trainer Profile.
         </p>
         <AssessorSignatureForm defaultSignDate={defaultSignDate} onSaved={onSaved} onCancel={onClose} saveLabel="Save & Use" compact />
@@ -297,16 +297,16 @@ export const LearnerSignatureDialog: React.FC<{
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-surface rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="absolute top-3 right-3 p-1.5 rounded-full text-muted hover:text-on-surface hover:bg-surface-hover transition-colors"
           aria-label="Close"
         >
           <Icon name={IconName.Close} className="w-5 h-5" />
         </button>
-        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Learner Signature</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <h3 className="text-base font-bold text-on-surface mb-1">Learner Signature</h3>
+        <p className="text-xs text-muted mb-4">
           Your name, NRIC (only the last 3 digits and letter are printed), the date and your signature are stamped into the <span className="font-semibold">Candidate</span> block of the Assessment Summary Record. Saved once and reused for every class you sign.
         </p>
         <AssessorSignatureForm variant={LEARNER_VARIANT} showDate={false} onSaved={onSaved} onCancel={onClose} saveLabel="Save & Use" compact />

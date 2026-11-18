@@ -117,7 +117,7 @@ export function Segmented<T extends string>({
             className={`${pad} rounded-lg border font-semibold transition-colors whitespace-nowrap ${
               active
                 ? 'bg-primary-600 border-primary-600 text-white shadow-sm'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+                : 'border-strong text-on-surface-secondary hover:bg-surface-hover'
             }`}
           >
             {o.label}
@@ -144,7 +144,7 @@ export function SelectBox<T extends string>({
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+      className="rounded-lg border border-strong bg-surface px-3 py-1.5 text-sm font-semibold text-on-surface-secondary focus:outline-none focus:ring-2 focus:ring-primary-500"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -280,21 +280,21 @@ export function TrendChart({
           </svg>
         )}
         {allZero && width > 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-400">{emptyText}</div>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted">{emptyText}</div>
         )}
         {hover !== null && width > 0 && (
           <div
-            className="pointer-events-none absolute z-10 min-w-[150px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-lg dark:border-gray-600 dark:bg-gray-900"
+            className="pointer-events-none absolute z-10 min-w-[150px] rounded-lg border border-default bg-surface px-3 py-2 text-xs shadow-lg"
             style={{ top: 4, left: cx(hover) + 182 > width ? Math.max(0, cx(hover) - 182) : cx(hover) + 12 }}
           >
-            <div className="mb-1 font-semibold text-gray-800 dark:text-gray-100">{(tooltipTitles || labels)[hover]}</div>
+            <div className="mb-1 font-semibold text-on-surface">{(tooltipTitles || labels)[hover]}</div>
             {series.map((s) => (
               <div key={s.key} className={`flex items-center justify-between gap-4 ${hidden.has(s.key) ? 'opacity-40' : ''}`}>
-                <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                <span className="flex items-center gap-1.5 text-on-surface-secondary">
                   <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} />
                   {s.label}
                 </span>
-                <span className="font-semibold tabular-nums text-gray-900 dark:text-white">{format((data[s.key] || [])[hover] || 0)}</span>
+                <span className="font-semibold tabular-nums text-on-surface">{format((data[s.key] || [])[hover] || 0)}</span>
               </div>
             ))}
           </div>
@@ -317,7 +317,7 @@ export function TrendChart({
                   return next;
                 })
               }
-              className={`flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white ${off ? 'line-through opacity-50' : ''}`}
+              className={`flex items-center gap-1.5 text-sm text-on-surface-secondary hover:text-on-surface ${off ? 'line-through opacity-50' : ''}`}
             >
               <span className="inline-block h-3 w-3 rounded-sm" style={{ background: s.color }} />
               {s.label}
@@ -365,7 +365,7 @@ export function HBarList({
   if (showAxis) for (let v = 0; v <= max + step / 2; v += step) ticks.push(v);
 
   if (items.length === 0 || rawMax === 0) {
-    return <div className="flex h-32 items-center justify-center text-sm text-gray-400">{emptyText}</div>;
+    return <div className="flex h-32 items-center justify-center text-sm text-muted">{emptyText}</div>;
   }
 
   const grid = { gridTemplateColumns: `minmax(0, ${labelWidth}) minmax(0, 1fr)` };
@@ -389,13 +389,13 @@ export function HBarList({
                 : {})}
               title={`${it.label}: ${format(it.value)}${it.hint ? `\n${it.hint}` : ''}${onSelect ? `\nClick to ${active ? 'clear the filter' : 'filter the dashboard'}` : ''}`}
               className={`group grid w-full items-center gap-3 rounded-md px-1 py-0.5 text-left ${
-                onSelect ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/60' : ''
-              } ${active ? 'bg-gray-100 dark:bg-gray-700/60' : ''}`}
+                onSelect ? 'cursor-pointer hover:bg-surface-hover' : ''
+              } ${active ? 'bg-surface-elevated' : ''}`}
               style={grid}
             >
               <span
                 className={`truncate text-right text-sm ${
-                  active ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'
+                  active ? 'font-semibold text-on-surface' : 'text-on-surface-secondary'
                 } ${dim ? 'opacity-60' : ''}`}
               >
                 {it.label}
@@ -416,7 +416,7 @@ export function HBarList({
                   />
                   <span
                     className={`absolute whitespace-nowrap pl-1.5 text-xs font-semibold tabular-nums ${
-                      dim ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'
+                      dim ? 'text-muted' : 'text-on-surface-secondary'
                     }`}
                     style={{ left: `${pct}%` }}
                   >
@@ -432,7 +432,7 @@ export function HBarList({
         <div className="mt-1 grid gap-3 px-1" style={grid}>
           <span />
           <span className={`flex ${valuePad}`}>
-          <span className="relative h-4 flex-1 text-[11px] text-gray-500 dark:text-gray-400">
+          <span className="relative h-4 flex-1 text-[11px] text-muted">
             {ticks.map((t, i) => (
               <span
                 key={t}
@@ -476,7 +476,7 @@ export function DonutChart({
   const [hover, setHover] = useState<string | null>(null);
   const total = items.reduce((a, i) => a + Math.max(0, i.value), 0);
   if (items.length === 0 || total === 0) {
-    return <div className="flex h-32 items-center justify-center text-sm text-gray-400">{emptyText}</div>;
+    return <div className="flex h-32 items-center justify-center text-sm text-muted">{emptyText}</div>;
   }
 
   const palette = Object.values(CHART_COLORS);
@@ -542,10 +542,10 @@ export function DonutChart({
           )}
         </svg>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">
+          <span className="text-2xl font-bold tabular-nums text-on-surface">
             {focus ? pctText(focus.value) : format(total)}
           </span>
-          <span className="max-w-[60%] truncate text-xs text-gray-500 dark:text-gray-400">{focus ? focus.label : centerLabel}</span>
+          <span className="max-w-[60%] truncate text-xs text-muted">{focus ? focus.label : centerLabel}</span>
         </div>
       </div>
       <ul className="w-full max-w-xs space-y-1">
@@ -568,15 +568,15 @@ export function DonutChart({
                 onMouseEnter={() => setHover(it.key)}
                 onMouseLeave={() => setHover(null)}
                 className={`flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm ${
-                  onSelect ? 'hover:bg-gray-100 dark:hover:bg-gray-700/60' : ''
-                } ${active ? 'bg-gray-100 dark:bg-gray-700/60' : ''} ${dim ? 'opacity-50' : ''}`}
+                  onSelect ? 'hover:bg-surface-hover' : ''
+                } ${active ? 'bg-surface-elevated' : ''} ${dim ? 'opacity-50' : ''}`}
               >
                 <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: colorOf(it.key, i) }} />
-                <span className={`flex-1 truncate ${active ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>
+                <span className={`flex-1 truncate ${active ? 'font-semibold text-on-surface' : 'text-on-surface-secondary'}`}>
                   {it.label}
                 </span>
-                <span className="font-semibold tabular-nums text-gray-900 dark:text-white">{format(it.value)}</span>
-                <span className="w-10 text-right tabular-nums text-gray-500 dark:text-gray-400">{pctText(it.value)}</span>
+                <span className="font-semibold tabular-nums text-on-surface">{format(it.value)}</span>
+                <span className="w-10 text-right tabular-nums text-muted">{pctText(it.value)}</span>
               </Row>
             </li>
           );

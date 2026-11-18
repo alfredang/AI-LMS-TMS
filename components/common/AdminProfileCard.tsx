@@ -7,12 +7,12 @@ import ThemePreferencePicker from './ThemePreferencePicker';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 
 // CSS classes for inputs
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
-        <p className="font-semibold text-gray-900 break-words dark:text-gray-200">{value}</p>
+        <p className="text-sm text-on-surface-secondary">{label}</p>
+        <p className="font-semibold text-on-surface break-words">{value}</p>
     </div>
 );
 
@@ -86,11 +86,11 @@ const LoginDetailsCard: React.FC<{
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
                     <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Login ID</p>
-                        <p className="font-semibold text-gray-900 break-words dark:text-gray-200">{loginId}</p>
+                        <p className="text-sm text-on-surface-secondary">Login ID</p>
+                        <p className="font-semibold text-on-surface break-words">{loginId}</p>
                     </div>
                     <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Password</p>
+                        <p className="text-sm text-on-surface-secondary">Password</p>
                         <div className="flex items-end gap-2">
                             <div className="flex items-center gap-2 flex-grow">
                                 {isResetting ? (
@@ -102,11 +102,11 @@ const LoginDetailsCard: React.FC<{
                                         placeholder="Enter new password"
                                     />
                                 ) : (
-                                    <p className="font-semibold text-gray-900 font-mono tracking-wider dark:text-gray-200">
+                                    <p className="font-semibold text-on-surface font-mono tracking-wider">
                                         {isPasswordVisible ? password : '••••••••••••••••'}
                                     </p>
                                 )}
-                                <button onClick={() => setIsPasswordVisible(!isPasswordVisible)} className="text-gray-600 hover:text-blue-600 p-1 rounded-full">
+                                <button onClick={() => setIsPasswordVisible(!isPasswordVisible)} className="text-on-surface-secondary hover:text-blue-600 p-1 rounded-full">
                                     <Icon name={isPasswordVisible ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
                                 </button>
                             </div>
@@ -130,7 +130,7 @@ const LoginDetailsCard: React.FC<{
                             ) : (
                                 <Button
                                     variant="outline"
-                                    className="border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:text-white dark:hover:bg-gray-700 flex-shrink-0"
+                                    className="border-strong hover:bg-surface-hover dark:text-white flex-shrink-0"
                                     onClick={() => setIsResetting(true)}
                                 >
                                     Reset Password
@@ -434,7 +434,7 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                     </div>
                     <div className="text-center sm:text-left flex-grow">
                         <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
-                        <p className="text-gray-600 dark:text-gray-400">{role ? `${role.charAt(0).toUpperCase() + role.slice(1)} Profile` : 'Admin Profile'}</p>
+                        <p className="text-on-surface-secondary">{role ? `${role.charAt(0).toUpperCase() + role.slice(1)} Profile` : 'Admin Profile'}</p>
                     </div>
                     {isEditing ? (
                         <div className="flex items-center gap-2">

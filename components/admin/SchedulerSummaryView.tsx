@@ -75,14 +75,14 @@ function formatFrequency(parsed: ParsedSchedule | null, cronExpr: string): strin
 const StatusPill: React.FC<{ status: string | null; enabled: boolean }> = ({ status, enabled }) => {
     if (!enabled) {
         return (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-elevated text-on-surface-secondary">
                 Disabled
             </span>
         );
     }
     if (!status) {
         return (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-elevated text-muted">
                 Never run
             </span>
         );
@@ -92,10 +92,10 @@ const StatusPill: React.FC<{ status: string | null; enabled: boolean }> = ({ sta
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
             isSuccess
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                ? 'bg-success-bg text-success'
                 : isError
-                    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    ? 'bg-danger-bg text-danger'
+                    : 'bg-warning-bg text-warning'
         }`}>
             {isSuccess ? '✓ Success' : isError ? '✗ Error' : status}
         </span>
@@ -206,14 +206,14 @@ export const SchedulerSummaryView: React.FC = () => {
             <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="min-w-0">
                     <h2 className="text-3xl font-bold dark:text-white">Schedule Summary</h2>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="mt-2 text-sm text-muted">
                         Compact view of all scheduler tasks sorted by run time. Click any row to jump to that task in the Task Scheduler. All times in Singapore Time (SGT).
                     </p>
                 </div>
                 <button
                     onClick={() => fetchTasks({ isRefresh: true })}
                     disabled={refreshing || loading}
-                    className="flex-shrink-0 inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex-shrink-0 inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     title="Refresh schedule list"
                 >
                     <svg
@@ -232,13 +232,13 @@ export const SchedulerSummaryView: React.FC = () => {
 
             {/* Summary chips */}
             <div className="flex flex-wrap items-center gap-3 mt-4 mb-6">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-info-bg text-primary">
                     Total: {tasks.length}
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-success-bg text-success">
                     Enabled: {enabledCount}
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-surface-elevated text-on-surface-secondary">
                     Disabled: {disabledCount}
                 </span>
             </div>
@@ -246,21 +246,21 @@ export const SchedulerSummaryView: React.FC = () => {
             {/* Controls */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="relative flex-1">
-                    <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
                     <input
                         type="text"
                         placeholder="Search schedules..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                        className="w-full pl-10 pr-4 py-2.5 border border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                     />
                 </div>
-                <label className="inline-flex items-center gap-2 px-3 py-2.5 border border-gray-300 rounded-lg cursor-pointer dark:border-gray-600 dark:text-gray-300">
+                <label className="inline-flex items-center gap-2 px-3 py-2.5 border border-strong rounded-lg cursor-pointer dark:text-gray-300">
                     <input
                         type="checkbox"
                         checked={onlyEnabled}
                         onChange={(e) => setOnlyEnabled(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        className="w-4 h-4 text-primary rounded border-strong focus:ring-blue-500"
                     />
                     <span className="text-sm">Only enabled</span>
                 </label>
@@ -271,7 +271,7 @@ export const SchedulerSummaryView: React.FC = () => {
                 <div className="flex justify-center py-16">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading schedule summary...</p>
+                        <p className="mt-4 text-on-surface-secondary">Loading schedule summary...</p>
                     </div>
                 </div>
             )}
@@ -280,12 +280,12 @@ export const SchedulerSummaryView: React.FC = () => {
             {error && !loading && (
                 <Card className="p-6 border-red-200 dark:border-red-700">
                     <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-                            <span className="text-red-600 dark:text-red-400 text-lg">✗</span>
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-danger-bg flex items-center justify-center">
+                            <span className="text-danger text-lg">✗</span>
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Failed to Load Summary</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{error}</p>
+                            <h3 className="text-lg font-bold text-danger">Failed to Load Summary</h3>
+                            <p className="text-sm text-on-surface-secondary mt-1">{error}</p>
                         </div>
                     </div>
                 </Card>
@@ -295,19 +295,19 @@ export const SchedulerSummaryView: React.FC = () => {
             {!loading && !error && (
                 <Card className="p-0 overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
+                        <table className="min-w-full divide-y divide-default">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider w-24">Time</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider w-36">Frequency</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Schedule Title</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider w-32">Status</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider w-24">Time</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider w-36">Frequency</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">Schedule Title</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider w-32">Status</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {sortedRows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted">
                                             No scheduler tasks match the current filter.
                                         </td>
                                     </tr>
@@ -319,16 +319,16 @@ export const SchedulerSummaryView: React.FC = () => {
                                             className={`cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ${!row.task.enabled ? 'opacity-60' : ''}`}
                                             title="Open in Task Scheduler"
                                         >
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-mono font-medium text-gray-900 dark:text-white">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-mono font-medium text-on-surface">
                                                 {row.timeStr}
                                             </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-on-surface-secondary">
                                                 {row.frequencyStr}
                                             </td>
                                             <td className="px-4 py-3 text-sm">
-                                                <div className="font-medium text-gray-900 dark:text-white">{row.task.name}</div>
+                                                <div className="font-medium text-on-surface">{row.task.name}</div>
                                                 {row.task.description && (
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
+                                                    <div className="text-xs text-muted mt-0.5 line-clamp-1">
                                                         {row.task.description}
                                                     </div>
                                                 )}

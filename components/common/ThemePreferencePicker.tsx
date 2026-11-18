@@ -41,7 +41,7 @@ const HINT: Record<ThemePreference, string> = {
 
 /** Appearance row for every profile page: Light / Dark / System. Saved per browser. */
 const ThemePreferencePicker: React.FC = () => {
-    const [pref, setPref] = useState<ThemePreference>('dark');
+    const [pref, setPref] = useState<ThemePreference>('light');
 
     // Read after mount so the server and first client render agree, then
     // follow the header button when it changes the preference.
@@ -58,12 +58,12 @@ const ThemePreferencePicker: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg border border-default bg-gray-50/60 dark:bg-gray-800/40">
             <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">Theme</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{HINT[pref]}</p>
+                <p className="font-semibold text-on-surface">Theme</p>
+                <p className="text-sm text-muted">{HINT[pref]}</p>
             </div>
-            <div role="radiogroup" aria-label="Theme" className="inline-flex p-1 rounded-lg bg-gray-100 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">
+            <div role="radiogroup" aria-label="Theme" className="inline-flex p-1 rounded-lg bg-surface-elevated border border-default">
                 {OPTIONS.map((o) => {
                     const active = pref === o.value;
                     return (
@@ -74,8 +74,8 @@ const ThemePreferencePicker: React.FC = () => {
                             aria-checked={active}
                             onClick={() => choose(o.value)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${active
-                                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
-                                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                                ? 'bg-surface text-primary shadow-sm'
+                                : 'text-on-surface-secondary hover:text-on-surface'
                                 }`}
                         >
                             {o.icon}

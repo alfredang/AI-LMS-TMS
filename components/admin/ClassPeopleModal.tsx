@@ -18,8 +18,8 @@ interface Props {
 
 const TAG_CHIP_CLS: Record<TrainerTag, string> = {
   tpg: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  accepted: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  lms: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  accepted: 'bg-success-bg text-success',
+  lms: 'bg-info-bg text-primary',
 };
 const Chip: React.FC<{ tag: TrainerTag }> = ({ tag }) => (
   <span title={TAG_LABELS[tag]} className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-medium ${TAG_CHIP_CLS[tag]}`}>{TAG_SHORT[tag]}</span>
@@ -67,50 +67,50 @@ const ClassPeopleModal: React.FC<Props> = ({ run, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[90vh] overflow-auto">
-        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div className="bg-surface rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[90vh] overflow-auto">
+        <div className="p-5 border-b border-default flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Trainer &amp; Learners</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{run.courseTitle} · {run.courseCode} · run {run.courseRunId}</p>
+            <h3 className="text-lg font-semibold text-on-surface">Trainer &amp; Learners</h3>
+            <p className="text-xs text-muted">{run.courseTitle} · {run.courseCode} · run {run.courseRunId}</p>
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
+          <button type="button" onClick={onClose} className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
         </div>
 
         <div className="p-5 space-y-5">
           {loading ? (
-            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
+            <div className="text-sm text-muted flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
           ) : error ? (
-            <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
+            <div className="text-sm text-danger">{error}</div>
           ) : (
             <>
               {/* Trainers — tagged list (TMS-LMS / Accepted Email / Assigned in TPG) */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Trainer{taggedTrainers.length === 1 ? '' : 's'} ({taggedTrainers.length})</h4>
+                <h4 className="text-sm font-semibold text-on-surface mb-2">Trainer{taggedTrainers.length === 1 ? '' : 's'} ({taggedTrainers.length})</h4>
                 {taggedTrainers.length > 0 ? (
-                  <ul className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                  <ul className="divide-y divide-default border border-default rounded-md">
                     {taggedTrainers.map((t, i) => (
                       <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-gray-800 dark:text-gray-200">{t.name}</span>
+                        <span className="min-w-0 truncate text-on-surface">{t.name}</span>
                         <span className="flex items-center gap-1.5 shrink-0">
                           {t.tags.map((tag) => <Chip key={tag} tag={tag} />)}
-                          <span className="text-gray-500 dark:text-gray-400 text-xs max-w-[45%] truncate">{t.email || '—'}</span>
+                          <span className="text-muted text-xs max-w-[45%] truncate">{t.email || '—'}</span>
                         </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div className="text-sm text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-3 py-2">No trainer assigned (LMS / TPG / accepted invite).</div>
+                  <div className="text-sm text-muted border border-dashed border-default rounded-md px-3 py-2">No trainer assigned (LMS / TPG / accepted invite).</div>
                 )}
               </div>
 
               {/* Learners */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Learners ({learners.length})</h4>
+                <h4 className="text-sm font-semibold text-on-surface mb-2">Learners ({learners.length})</h4>
                 {learners.length > 0 ? (
-                  <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                  <div className="overflow-x-auto border border-default rounded-md">
                     <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50 dark:bg-gray-700/50">
-                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
+                      <thead className="bg-surface-elevated">
+                        <tr className="text-left text-xs text-muted">
                           <th className="px-3 py-2">Name</th>
                           <th className="px-3 py-2">Email</th>
                           <th className="px-3 py-2">Company</th>
@@ -118,29 +118,29 @@ const ClassPeopleModal: React.FC<Props> = ({ run, onClose }) => {
                           <th className="px-3 py-2">Assessment</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      <tbody className="divide-y divide-default">
                         {learners.map((l, i) => (
                           <tr key={(l.learnerEmail || '') + i}>
-                            <td className="px-3 py-2 text-gray-800 dark:text-gray-200 whitespace-nowrap">{l.learnerName || '—'}</td>
-                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{l.learnerEmail || '—'}</td>
-                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.company || '—'}</td>
-                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.sponsorship || '—'}</td>
-                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{l.assessment || '—'}</td>
+                            <td className="px-3 py-2 text-on-surface whitespace-nowrap">{l.learnerName || '—'}</td>
+                            <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{l.learnerEmail || '—'}</td>
+                            <td className="px-3 py-2 text-on-surface-secondary">{l.company || '—'}</td>
+                            <td className="px-3 py-2 text-on-surface-secondary">{l.sponsorship || '—'}</td>
+                            <td className="px-3 py-2 text-on-surface-secondary">{l.assessment || '—'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-3 py-2">No learners enrolled.</div>
+                  <div className="text-sm text-muted border border-dashed border-default rounded-md px-3 py-2">No learners enrolled.</div>
                 )}
-                <p className="text-xs text-gray-400 mt-2">Shows the LMS (local) trainer assignment and enrolment — not SSG/TPGateway enrolment.</p>
+                <p className="text-xs text-muted mt-2">Shows the LMS (local) trainer assignment and enrolment — not SSG/TPGateway enrolment.</p>
               </div>
             </>
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+        <div className="p-4 border-t border-default flex justify-end">
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
       </div>

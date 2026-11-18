@@ -29,6 +29,7 @@ npm run dev          # Next.js 16, Turbopack — ALWAYS start localhost on port 
 npm run build        # Production — explicitly --webpack
 npm run lint
 npm run type-check   # see caveat
+npm run check:design-tokens   # no new raw colour classes (also in lint/build)
 npm run db:migrate
 ```
 
@@ -48,6 +49,15 @@ npm run db:migrate
 - **Every API route is wrapped in `withAuth()`/`withServiceAuth()`** (`lib/auth/withAuth.ts`) except an explicit public allowlist (login screen, OAuth callbacks, asset serving, webhook-token routes). `scripts/check-api-auth.js` (runs in `npm run lint`) fails if a new route ships without auth — add public routes to its allowlist deliberately.
 - **Machine callers** (in-process scheduler, OpenClaw agents, other tenant systems) authenticate with `x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT` (or `SCHEDULER_SECRET`) on any route; `NEXT_PUBLIC_SCHEDULER_SECRET` is never accepted (client-bundle-exposed).
 - **Client side**: `lib/clientAuthFetch.ts` (installed in `_app.tsx`) injects the Bearer header on every same-origin `/api/` fetch and clears auth + reloads on 401 — new fetch call sites need no auth code.
+
+### Design system (one shared style set — no page-level colours)
+
+- **Tokens** in `styles/globals.css` (`@layer base`): RGB-channel CSS variables, one light set (default; ai-mms back-office palette) and one dark set with the same names, all text ≥4.5:1. `tailwind.config.js` maps them as `rgb(var(--c-x) / <alpha-value>)`, so every variant works.
+- **Use**: `bg-background`, `bg-surface` / `bg-surface-elevated` / `hover:bg-surface-hover`, `text-on-surface` / `text-on-surface-secondary` / `text-muted`, `border-default` (cards) / `border-strong` (inputs), `text-primary` / `bg-primary` / `text-on-primary`, status `text-success|warning|danger|info` + `bg-*-bg`.
+- **Shared classes** (`@layer components`): `.card` `.card-header` `.page-title` `.btn` + `.btn-primary|outline|secondary|ghost|danger` `.input` `.table` `.tabs`/`.tab`/`.tab-active` `.chip-*` `.pill-role-*` `.nav-item`/`.nav-item-active` `.view-as-pill` `.icon-btn-round`. Primitives in `components/ui/` (Button, Card, Tabs, Badge, Alert) are built on them.
+- **Brand colour** (tenant `training_provider` colour scheme): `utils/colorUtils.ts` `applyPrimaryColor` keeps the hue and adjusts the shade per theme for contrast; re-applied on every theme switch. Never hardcode a tenant colour.
+- **Guardrail**: `scripts/check-design-tokens.js` (in `npm run lint` and `npm run build`) fails if a file gains raw `gray/slate/white/black/[#hex]` colour classes (baseline `scripts/design-tokens-baseline.json`, which may only go down; `--update` after migrating a file). Deliberate exceptions (always-white document previews, the dark login panel) carry `// design-tokens-allow`.
+- **Visual check**: `scripts/ui-theme-sweep.mjs` screenshots every role's key screens in light and dark against the local DB copy and counts axe-core colour-contrast violations (usage in its header).
 
 ### Roles
 

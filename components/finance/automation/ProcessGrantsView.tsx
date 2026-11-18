@@ -18,13 +18,13 @@ const getStatusColor = (status: string) => {
     case 'Success':
     case 'Successful':
     case 'Full Payment':
-      return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800';
+      return 'bg-success-bg text-success border-green-200 dark:border-green-800';
     case 'Processing':
-      return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800';
+      return 'bg-info-bg text-info border-blue-200 dark:border-blue-800';
     case 'Pending':
     case 'In Progress':
     case 'Pending Assessment':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800';
+      return 'bg-warning-bg text-warning border-yellow-200 dark:border-yellow-800';
     case 'Overdue':
     case 'Rejected':
     case 'Unpaid':
@@ -32,9 +32,9 @@ const getStatusColor = (status: string) => {
     case 'Not Yet Competent':
     case 'Fail':
     case 'Failed':
-      return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800';
+      return 'bg-danger-bg text-danger border-red-200 dark:border-red-800';
     default:
-      return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700';
+      return 'bg-surface-elevated text-on-surface border-default';
   }
 };
 
@@ -228,10 +228,10 @@ export default function ProcessGrantsView() {
 
           <Card className="p-6 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Grant Search Parameters</h3>
+              <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Grant Search Parameters</h3>
 
               <div className="mb-4">
-                <label htmlFor="course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor="course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                   Course Run ID
                 </label>
                 <input
@@ -240,7 +240,7 @@ export default function ProcessGrantsView() {
                   value={courseRunId}
                   onChange={(e) => setCourseRunId(e.target.value)}
                   placeholder="e.g. 1322143"
-                  className="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500"
+                  className="block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white"
                   disabled={isSearching || processing}
                 />
               </div>
@@ -266,7 +266,7 @@ export default function ProcessGrantsView() {
               </div>
 
               {searchError && (
-                <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                <p className="text-danger text-sm mt-3">{searchError}</p>
               )}
             </div>
           </Card>
@@ -277,10 +277,10 @@ export default function ProcessGrantsView() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="text-xl font-bold dark:text-white">Grant Search Results</h3>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">Course Run ID: {courseRunId}</p>
+                    <p className="text-muted mt-1">Course Run ID: {courseRunId}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                    <div className="text-sm text-muted">
                       Selected: <strong className="text-on-surface">{selectedEnrolmentIds.length}</strong>
                       {selectedEnrolmentIds.length > 50 && <span className="ml-2 text-amber-200">(max 50 per run)</span>}
                     </div>
@@ -319,21 +319,21 @@ export default function ProcessGrantsView() {
 
                   return (
                     <div className="space-y-3">
-                      <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 text-sm">
+                      <div className="flex items-center bg-info-bg px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 text-sm">
                         <span className="font-bold text-blue-900 dark:text-blue-300 mr-3">
                           {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} &nbsp;·&nbsp; {totalGrantRecords} Grant{totalGrantRecords !== 1 ? 's' : ''}
                         </span>
-                        <span className="text-blue-700 dark:text-blue-400">
+                        <span className="text-primary">
                           Course Run: <span className="font-mono">{courseRunId}</span>
                         </span>
                       </div>
 
                       {/* Desktop table */}
-                      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
-                          <thead className="bg-gray-50 dark:bg-gray-700">
+                      <div className="hidden md:block overflow-x-auto rounded-lg border border-default">
+                        <table className="min-w-full divide-y divide-default text-xs">
+                          <thead className="bg-surface-elevated">
                             <tr>
-                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-on-surface-secondary border-r border-default uppercase tracking-wider">
                                 <input
                                   ref={selectAllRef}
                                   type="checkbox"
@@ -344,33 +344,33 @@ export default function ProcessGrantsView() {
                                   title="Select all on this page"
                                 />
                               </th>
-                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
-                              <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-blue-700 dark:text-blue-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">Baseline (BL)</th>
-                              <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
-                              <th className="px-3 py-2 text-center text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20">Total</th>
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-on-surface-secondary border-r border-default uppercase tracking-wider">Enrolment</th>
+                              <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-primary border-r border-default uppercase tracking-wider bg-info-bg">Baseline (BL)</th>
+                              <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-default uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-success uppercase tracking-wider bg-success-bg">Total</th>
                             </tr>
                             <tr>
-                              <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Select</th>
-                              <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Enrolment ID</th>
-                              <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant Status</th>
-                              <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant ID (BL)</th>
-                              <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-900/20">Amount (BL)</th>
+                              <th className="px-3 py-2 text-left font-medium text-muted whitespace-nowrap border-r border-default">Select</th>
+                              <th className="px-3 py-2 text-left font-medium text-muted whitespace-nowrap border-r border-default">Enrolment ID</th>
+                              <th className="px-3 py-2 text-left font-medium text-primary whitespace-nowrap bg-info-bg">Grant Status</th>
+                              <th className="px-3 py-2 text-left font-medium text-primary whitespace-nowrap bg-info-bg">Grant ID (BL)</th>
+                              <th className="px-3 py-2 text-left font-medium text-primary whitespace-nowrap border-r border-default bg-info-bg">Amount (BL)</th>
                               <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Grant Status</th>
                               <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Grant ID</th>
                               <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Scheme Code</th>
-                              <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20">Amount</th>
-                              <th className="px-3 py-2 text-left font-medium text-green-700 dark:text-green-400 whitespace-nowrap bg-green-50 dark:bg-green-900/20">TG Amount</th>
+                              <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap border-r border-default bg-purple-50 dark:bg-purple-900/20">Amount</th>
+                              <th className="px-3 py-2 text-left font-medium text-success whitespace-nowrap bg-success-bg">TG Amount</th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          <tbody className="bg-surface divide-y divide-default">
                             {paged.map(([enrolmentId, grants]) => {
                               const bl = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
                               const mces = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
                               const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
                               const selectable = enrolmentId && enrolmentId !== 'Unknown';
                               return (
-                                <tr key={enrolmentId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                  <td className="px-3 py-3 text-center border-r border-gray-200 dark:border-gray-700">
+                                <tr key={enrolmentId} className="hover:bg-surface-hover">
+                                  <td className="px-3 py-3 text-center border-r border-default">
                                     {selectable ? (
                                       <input
                                         type="checkbox"
@@ -380,24 +380,24 @@ export default function ProcessGrantsView() {
                                         disabled={processing}
                                       />
                                     ) : (
-                                      <span className="text-gray-400">—</span>
+                                      <span className="text-muted">—</span>
                                     )}
                                   </td>
-                                  <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">{enrolmentId}</td>
+                                  <td className="px-3 py-3 font-mono text-on-surface whitespace-nowrap border-r border-default">{enrolmentId}</td>
                                   <td className="px-3 py-3 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">
-                                    {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-gray-400">—</span>}
+                                    {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-muted">—</span>}
                                   </td>
-                                  <td className="px-3 py-3 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">{bl?.referenceNumber || '—'}</td>
-                                  <td className="px-3 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10">{bl ? `$${(bl.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
+                                  <td className="px-3 py-3 font-mono text-on-surface-secondary whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">{bl?.referenceNumber || '—'}</td>
+                                  <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap border-r border-default bg-blue-50/30 dark:bg-blue-900/10">{bl ? `$${(bl.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
                                   <td className="px-3 py-3 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">
-                                    {mces ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span> : <span className="text-gray-400">—</span>}
+                                    {mces ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span> : <span className="text-muted">—</span>}
                                   </td>
-                                  <td className="px-3 py-3 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">{mces?.referenceNumber || '—'}</td>
+                                  <td className="px-3 py-3 font-mono text-on-surface-secondary whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">{mces?.referenceNumber || '—'}</td>
                                   <td className="px-3 py-3 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">
                                     {mces ? <span className="font-mono text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">{mces.fundingScheme?.code}</span> : '—'}
                                   </td>
-                                  <td className="px-3 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 bg-purple-50/30 dark:bg-purple-900/10">{mces ? `$${(mces.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
-                                  <td className="px-3 py-3 font-bold text-green-700 dark:text-green-400 whitespace-nowrap bg-green-50/30 dark:bg-green-900/10">${totalTG.toFixed(2)}</td>
+                                  <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap border-r border-default bg-purple-50/30 dark:bg-purple-900/10">{mces ? `$${(mces.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
+                                  <td className="px-3 py-3 font-bold text-success whitespace-nowrap bg-green-50/30 dark:bg-green-900/10">${totalTG.toFixed(2)}</td>
                                 </tr>
                               );
                             })}
@@ -408,19 +408,19 @@ export default function ProcessGrantsView() {
                       {/* Pagination */}
                       {totalPages > 1 && (
                         <div className="flex items-center justify-between pt-2">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-muted">
                             Showing {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, rows.length)} of {rows.length} enrolments
                           </p>
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setCurrentPage(0)}
                               disabled={currentPage === 0}
-                              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                              className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                             >«</button>
                             <button
                               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                               disabled={currentPage === 0}
-                              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                              className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                             >‹</button>
                             {Array.from({ length: totalPages }, (_, i) => i).filter(i =>
                               i === 0 || i === totalPages - 1 || Math.abs(i - currentPage) <= 1
@@ -430,24 +430,24 @@ export default function ProcessGrantsView() {
                               return acc;
                             }, []).map((item, idx) =>
                               item === '…' ? (
-                                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400">…</span>
+                                <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted">…</span>
                               ) : (
                                 <button
                                   key={item}
                                   onClick={() => setCurrentPage(item as number)}
-                                  className={`px-2.5 py-1 text-xs rounded border ${currentPage === item ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+                                  className={`px-2.5 py-1 text-xs rounded border ${currentPage === item ? 'bg-blue-600 text-white border-blue-600' : 'border-strong hover:bg-surface-hover dark:text-gray-300'}`}
                                 >{(item as number) + 1}</button>
                               )
                             )}
                             <button
                               onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
                               disabled={currentPage === totalPages - 1}
-                              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                              className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                             >›</button>
                             <button
                               onClick={() => setCurrentPage(totalPages - 1)}
                               disabled={currentPage === totalPages - 1}
-                              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                              className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                             >»</button>
                           </div>
                         </div>
@@ -455,10 +455,10 @@ export default function ProcessGrantsView() {
                     </div>
                   );
                 })() : (
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                  <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                     <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                    <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Found</h4>
-                    <p className="text-yellow-700 dark:text-yellow-400">
+                    <h4 className="text-lg font-bold text-warning mb-2">No Records Found</h4>
+                    <p className="text-warning">
                       No grant records were returned for this Course Run ID.
                     </p>
                   </div>
@@ -483,8 +483,8 @@ export default function ProcessGrantsView() {
 
           {!grantsData && !isSearching && (
             <Card className="p-12">
-              <div className="text-center text-gray-500 dark:text-gray-400">
-                <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <div className="text-center text-muted">
+                <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                 <p className="text-lg font-medium">Enter details to search</p>
                 <p className="text-sm mt-2">Provide Course Run ID to fetch grant details</p>
               </div>
@@ -548,17 +548,17 @@ export default function ProcessGrantsView() {
 
         {showConfirm && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto">
+            <div className="bg-surface rounded-lg shadow-xl max-w-md w-full mx-auto">
               <div className="p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-100 dark:bg-amber-900/30">
-                    <Icon name={IconName.InfoCircle} className="w-6 h-6 text-amber-700 dark:text-amber-300" />
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-warning-bg">
+                    <Icon name={IconName.InfoCircle} className="w-6 h-6 text-warning" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Process grants</h3>
+                  <h3 className="text-lg font-semibold text-on-surface">Process grants</h3>
                 </div>
-                <p className="text-gray-700 dark:text-gray-300 mb-6">
+                <p className="text-on-surface-secondary mb-6">
                   Refresh grant data from SSG for <strong>{selectedEnrolmentIds.length}</strong> selected enrolment(s)?
-                  This calls SSG and updates <code className="text-xs bg-gray-100 dark:bg-gray-900 px-1 rounded">ssg_grants</code>.
+                  This calls SSG and updates <code className="text-xs bg-surface-elevated px-1 rounded">ssg_grants</code>.
                 </p>
                 <div className="flex gap-3 justify-end">
                   <Button variant="ghost" onClick={() => setShowConfirm(false)} disabled={processing}>

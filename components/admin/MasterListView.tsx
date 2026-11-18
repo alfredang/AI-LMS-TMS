@@ -30,11 +30,11 @@ const TAB_COLORS: Record<ClassTab, {
   headerBg: string; headerText: string;
 }> = {
   virtual:    { activeBg: 'bg-teal-500',    activeText: 'text-white',      badgeBg: 'bg-teal-100 dark:bg-teal-900/40',      badgeText: 'text-teal-700 dark:text-teal-300',        borderAccent: 'border-l-teal-500',    headerBadgeBg: 'bg-teal-200/60',      headerBadgeText: 'text-teal-800',    headerBg: 'bg-teal-700',       headerText: 'text-teal-50' },
-  evening:    { activeBg: 'bg-slate-500',    activeText: 'text-white',      badgeBg: 'bg-slate-100 dark:bg-slate-800',        badgeText: 'text-slate-600 dark:text-slate-300',      borderAccent: 'border-l-slate-400',   headerBadgeBg: 'bg-slate-300/60',     headerBadgeText: 'text-slate-800',   headerBg: 'bg-slate-600',      headerText: 'text-slate-50' },
-  external:   { activeBg: 'bg-orange-500',   activeText: 'text-white',      badgeBg: 'bg-orange-100 dark:bg-orange-900/40',  badgeText: 'text-orange-700 dark:text-orange-300',    borderAccent: 'border-l-orange-500',  headerBadgeBg: 'bg-orange-200/60',    headerBadgeText: 'text-orange-900',  headerBg: 'bg-orange-600',     headerText: 'text-orange-50' },
-  woodsSquare:{ activeBg: 'bg-blue-500',     activeText: 'text-white',      badgeBg: 'bg-blue-100 dark:bg-blue-900/40',      badgeText: 'text-blue-700 dark:text-blue-300',        borderAccent: 'border-l-blue-500',    headerBadgeBg: 'bg-blue-200/60',      headerBadgeText: 'text-blue-900',    headerBg: 'bg-blue-700',       headerText: 'text-blue-50' },
-  bukitTimah: { activeBg: 'bg-green-600',    activeText: 'text-white',      badgeBg: 'bg-green-100 dark:bg-green-900/40',    badgeText: 'text-green-700 dark:text-green-300',      borderAccent: 'border-l-green-600',   headerBadgeBg: 'bg-green-200/60',     headerBadgeText: 'text-green-900',   headerBg: 'bg-green-700',      headerText: 'text-green-50' },
-  reschedule: { activeBg: 'bg-yellow-400',   activeText: 'text-yellow-900', badgeBg: 'bg-yellow-100 dark:bg-yellow-900/40',  badgeText: 'text-yellow-700 dark:text-yellow-300',    borderAccent: 'border-l-yellow-400',  headerBadgeBg: 'bg-yellow-200/60',    headerBadgeText: 'text-yellow-900',  headerBg: 'bg-yellow-500',     headerText: 'text-yellow-950' },
+  evening:    { activeBg: 'bg-slate-500',    activeText: 'text-white',      badgeBg: 'bg-slate-100 dark:bg-slate-800',        badgeText: 'text-on-surface-secondary',      borderAccent: 'border-l-slate-400',   headerBadgeBg: 'bg-slate-300/60',     headerBadgeText: 'text-slate-800',   headerBg: 'bg-slate-600',      headerText: 'text-slate-50' },
+  external:   { activeBg: 'bg-orange-500',   activeText: 'text-white',      badgeBg: 'bg-warning-bg',  badgeText: 'text-warning',    borderAccent: 'border-l-orange-500',  headerBadgeBg: 'bg-orange-200/60',    headerBadgeText: 'text-orange-900',  headerBg: 'bg-orange-600',     headerText: 'text-orange-50' },
+  woodsSquare:{ activeBg: 'bg-blue-500',     activeText: 'text-white',      badgeBg: 'bg-info-bg',      badgeText: 'text-primary',        borderAccent: 'border-l-blue-500',    headerBadgeBg: 'bg-blue-200/60',      headerBadgeText: 'text-blue-900',    headerBg: 'bg-blue-700',       headerText: 'text-blue-50' },
+  bukitTimah: { activeBg: 'bg-green-600',    activeText: 'text-white',      badgeBg: 'bg-success-bg',    badgeText: 'text-success',      borderAccent: 'border-l-green-600',   headerBadgeBg: 'bg-green-200/60',     headerBadgeText: 'text-green-900',   headerBg: 'bg-green-700',      headerText: 'text-green-50' },
+  reschedule: { activeBg: 'bg-yellow-400',   activeText: 'text-yellow-900', badgeBg: 'bg-warning-bg',  badgeText: 'text-warning',    borderAccent: 'border-l-yellow-400',  headerBadgeBg: 'bg-yellow-200/60',    headerBadgeText: 'text-yellow-900',  headerBg: 'bg-yellow-500',     headerText: 'text-yellow-950' },
   cancelled:  { activeBg: 'bg-neutral-800',  activeText: 'text-white',      badgeBg: 'bg-neutral-200 dark:bg-neutral-700',   badgeText: 'text-neutral-700 dark:text-neutral-200',  borderAccent: 'border-l-neutral-800', headerBadgeBg: 'bg-neutral-400/40',   headerBadgeText: 'text-neutral-100', headerBg: 'bg-neutral-800',    headerText: 'text-neutral-100' },
 };
 
@@ -311,7 +311,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ message, details, onConfi
         </button>
         <button
           onClick={onConfirm}
-          className="px-4 py-2 text-sm rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors"
+          className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
         >
           Delete
         </button>
@@ -742,19 +742,19 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; on
     <div
       ref={popupRef}
       style={{ top: pos.top, left: pos.left }}
-      className="fixed z-[9999] rounded-xl shadow-2xl p-4 w-72 select-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600"
+      className="fixed z-[9999] rounded-xl shadow-2xl p-4 w-72 select-none bg-surface border border-default"
     >
       {/* Month nav */}
       <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">‹</button>
-        <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{CAL_MONTHS[viewMonth]} {viewYear}</span>
-        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">›</button>
+        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-on-surface-secondary text-lg font-bold leading-none">‹</button>
+        <span className="text-sm font-bold text-on-surface">{CAL_MONTHS[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-on-surface-secondary text-lg font-bold leading-none">›</button>
       </div>
 
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 mb-1">
         {CAL_DAYS.map(d => (
-          <div key={d} className="text-center text-[10px] font-semibold text-gray-400 dark:text-gray-500 py-1">{d}</div>
+          <div key={d} className="text-center text-[10px] font-semibold text-muted py-1">{d}</div>
         ))}
       </div>
 
@@ -778,7 +778,7 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; on
                   ? 'bg-primary text-white font-bold rounded-full'
                   : inRng
                   ? 'bg-primary/15 text-primary rounded-none'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full',
+                  : 'hover:bg-surface-hover text-on-surface-secondary rounded-full',
               ].join(' ')}
             >
               {day}
@@ -789,7 +789,7 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; on
 
       {/* Hint */}
       {!singleDate && (
-        <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-3 italic">
+        <p className="text-[10px] text-muted text-center mt-3 italic">
           {phase === 'start' ? 'Select start date' : 'Select end date — or same date for single day'}
         </p>
       )}
@@ -798,7 +798,7 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; on
       {rawStart && (
         <button
           onClick={() => { onChange(''); setOpen(false); }}
-          className="mt-2 w-full text-[11px] text-gray-400 hover:text-red-400 transition-colors text-center"
+          className="mt-2 w-full text-[11px] text-muted hover:text-red-400 transition-colors text-center"
         >
           Clear
         </button>
@@ -1500,7 +1500,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                   isDup
                     ? 'bg-red-50/70 dark:bg-red-900/15'
                     : t.cancelled
-                    ? 'bg-gray-100 dark:bg-gray-800/60 opacity-50'
+                    ? 'bg-surface-elevated opacity-50'
                     : isSearchHit
                     ? 'bg-yellow-100/80 dark:bg-yellow-900/30'
                     : 'hover:bg-surface-hover/20'
@@ -1509,7 +1509,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                 {/* No. */}
                 <td className="px-2 py-1 text-xs text-center border-r border-default select-none">
                   {isDup ? (
-                    <span title="Duplicate — same name, email or contact no. already exists in this class" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-bold cursor-default">!</span>
+                    <span title="Duplicate — same name, email or contact no. already exists in this class" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600 text-white text-[9px] font-bold cursor-default">!</span>
                   ) : (
                     <span className="text-on-surface-secondary">{idx + 1}</span>
                   )}

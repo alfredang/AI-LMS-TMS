@@ -42,52 +42,52 @@ export function DeleteConfirmModal<T>({ rows, columns, entityLabel, description,
       onClick={() => { if (!isDeleting) onClose(); }}
     >
       <div
-        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-red-200/60 dark:ring-red-900/40"
+        className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-red-200/60 dark:ring-red-900/40"
         onClick={e => e.stopPropagation()}
       >
         <div className="relative px-6 py-5 border-b dark:border-gray-800 bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/30 dark:via-gray-900 dark:to-gray-900">
           <span className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-red-500 via-red-400 to-red-500" />
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/40 ring-1 ring-red-200 dark:ring-red-800/60 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Icon name={IconName.Warning} className="w-6 h-6 text-red-600 dark:text-red-400" />
+            <div className="w-12 h-12 rounded-xl bg-danger-bg ring-1 ring-red-200 dark:ring-red-800/60 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Icon name={IconName.Warning} className="w-6 h-6 text-danger" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+                <h3 className="text-lg font-bold text-on-surface tracking-tight">
                   Delete {count} {entityLabel} row{count === 1 ? '' : 's'}?
                 </h3>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 ring-1 ring-red-300/60 dark:ring-red-800/60">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-danger-bg text-danger ring-1 ring-red-300/60 dark:ring-red-800/60">
                   Destructive
                 </span>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">{description}</p>
+              <p className="text-sm text-on-surface-secondary mt-1.5 leading-relaxed">{description}</p>
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50/60 dark:bg-gray-950/40">
           <div className="flex items-center justify-between mb-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Rows to delete</p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Rows to delete</p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-200 dark:bg-gray-800 text-on-surface-secondary">
               {count} selected
             </span>
           </div>
-          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-x-auto shadow-sm">
+          <div className="rounded-lg border border-default bg-surface overflow-x-auto shadow-sm">
             <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-800">
+              <thead className="bg-surface-elevated border-b border-default">
                 <tr>
                   {columns.map((col, i) => (
-                    <th key={i} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    <th key={i} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">
                       {col.header}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
+              <tbody className="divide-y divide-default">
                 {rows.map((row, i) => (
                   <tr key={i} className="hover:bg-red-50/40 dark:hover:bg-red-900/10 transition-colors">
                     {columns.map((col, j) => (
-                      <td key={j} className={`px-4 py-2.5 text-gray-700 dark:text-gray-300 ${col.className || ''}`}>
+                      <td key={j} className={`px-4 py-2.5 text-on-surface-secondary ${col.className || ''}`}>
                         {col.render(row)}
                       </td>
                     ))}
@@ -98,16 +98,16 @@ export function DeleteConfirmModal<T>({ rows, columns, entityLabel, description,
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t dark:border-gray-800 flex items-center justify-between gap-3 bg-white dark:bg-gray-900">
-          <p className="text-[11px] text-gray-500 dark:text-gray-500 hidden sm:flex items-center gap-1.5">
-            Press <kbd className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-mono text-[10px] text-gray-600 dark:text-gray-400">Esc</kbd> to cancel
+        <div className="px-6 py-4 border-t dark:border-gray-800 flex items-center justify-between gap-3 bg-surface">
+          <p className="text-[11px] text-muted hidden sm:flex items-center gap-1.5">
+            Press <kbd className="px-1.5 py-0.5 rounded border border-strong bg-surface-elevated font-mono text-[10px] text-on-surface-secondary">Esc</kbd> to cancel
           </p>
           <div className="flex gap-2 ml-auto">
             <button
               type="button"
               onClick={onClose}
               disabled={isDeleting}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-strong text-on-surface-secondary bg-surface hover:bg-surface-hover disabled:opacity-50 transition-colors"
             >
               Cancel
             </button>

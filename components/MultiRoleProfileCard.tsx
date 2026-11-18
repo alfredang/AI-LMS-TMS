@@ -15,7 +15,7 @@ import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, st
 import ThemePreferencePicker from './common/ThemePreferencePicker';
 import { maskNric, formatDate, formatDateForInput } from '../utils';
 
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 const FALLBACK_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K';
 
@@ -39,8 +39,8 @@ const MultiSelectCheckboxes: React.FC<{
                 {options.map(option => (
                     <div key={option} className="flex items-center">
                         <input type="checkbox" id={`option-${option}`} value={option} checked={selected.includes(option)}
-                            onChange={onChange} className={`h-4 w-4 ${colorClasses[color].text} ${colorClasses[color].ring} border-gray-300 rounded`} />
-                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-gray-900 dark:text-gray-200">{option}</label>
+                            onChange={onChange} className={`h-4 w-4 ${colorClasses[color].text} ${colorClasses[color].ring} border-strong rounded`} />
+                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-on-surface">{option}</label>
                     </div>
                 ))}
             </div>
@@ -94,7 +94,7 @@ const WorkExperienceSection: React.FC<{
                                     <label className="flex items-center gap-1 text-sm whitespace-nowrap">
                                         <input type="checkbox" checked={isPresent}
                                             onChange={() => { const u = [...experience]; u[index] = { ...u[index], endDate: isPresent ? '' : 'Present' }; onUpdate(u); }}
-                                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" /> Present
+                                            className="h-4 w-4 text-primary focus:ring-primary border-strong rounded" /> Present
                                     </label>
                                 </div>
                                 <textarea placeholder="Description" value={item.description}
@@ -102,7 +102,7 @@ const WorkExperienceSection: React.FC<{
                                     className={`${inputClasses} col-span-2 h-20`} />
                             </div>
                             <button onClick={() => onUpdate(experience.filter((_, i) => i !== index))}
-                                className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                className="absolute top-2 right-2 p-1.5 text-muted hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Icon name={IconName.Delete} className="w-4 h-4" />
                             </button>
                         </div>
@@ -119,7 +119,7 @@ const WorkExperienceSection: React.FC<{
             {experience.map((item, index) => {
                 const displayEndDate = item.endDate === null || item.endDate === '' ? 'Present' : item.endDate;
                 return (
-                    <div key={item.id || index} className="p-4 border border-gray-200 rounded-md dark:border-gray-700">
+                    <div key={item.id || index} className="p-4 border border-default rounded-md">
                         <h4 className="font-bold">{item.jobTitle}</h4>
                         <p className="text-subtle">{item.company} | {item.startDate} - {displayEndDate}</p>
                         <p className="text-sm mt-1">{item.description}</p>
@@ -162,7 +162,7 @@ const SkillTagsInput: React.FC<{
 
     return (
         <div>
-            <div className="flex flex-wrap gap-2 p-3 min-h-[44px] border border-gray-300 rounded-md bg-white dark:bg-gray-700 dark:border-gray-600">
+            <div className="flex flex-wrap gap-2 p-3 min-h-[44px] border border-strong rounded-md bg-surface">
                 {tags.map((tag, i) => (
                     <span key={i} className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
                         {tag}
@@ -180,7 +180,7 @@ const SkillTagsInput: React.FC<{
                     />
                 )}
             </div>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{tags.length}/{MAX_SKILL_TAGS} tags. Press Enter or comma to add.</p>
+            <p className="mt-1 text-xs text-muted">{tags.length}/{MAX_SKILL_TAGS} tags. Press Enter or comma to add.</p>
         </div>
     );
 };
@@ -195,8 +195,8 @@ const DocumentSection: React.FC<{
         return (
             <div className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">CV & Documents Folder</label>
-                    <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">CV & Documents Folder</label>
+                    <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border dark:border-gray-600">
                         <Icon name={IconName.Folder} className="w-5 h-5 text-blue-500" />
                         <input type="url" placeholder="Paste Google Drive folder URL" value={cvFolderUrl || ''}
                             onChange={(e) => onUpdateCvFolderUrl?.(e.target.value)}
@@ -208,7 +208,7 @@ const DocumentSection: React.FC<{
                             </a>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Add the link to your Google Drive folder containing your CV and certifications.</p>
+                    <p className="text-xs text-muted mt-1">Add the link to your Google Drive folder containing your CV and certifications.</p>
                 </div>
             </div>
         );
@@ -217,12 +217,12 @@ const DocumentSection: React.FC<{
     return (
         <div className="space-y-4">
             {cvFolderUrl && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
+                <div className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                     <div className="flex items-center gap-3">
                         <Icon name={IconName.Folder} className="w-6 h-6 text-blue-500 flex-shrink-0" />
                         <div>
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-200">CV & Documents Folder</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Google Drive</p>
+                            <p className="text-sm font-medium text-on-surface">CV & Documents Folder</p>
+                            <p className="text-xs text-muted">Google Drive</p>
                         </div>
                     </div>
                     <a href={cvFolderUrl} target="_blank" rel="noopener noreferrer"
@@ -232,8 +232,8 @@ const DocumentSection: React.FC<{
                 </div>
             )}
             {cvUrl && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
-                    <div className="flex items-center gap-3"><Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" /><p className="text-sm font-medium text-gray-900 dark:text-gray-200">Curriculum Vitae</p></div>
+                <div className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
+                    <div className="flex items-center gap-3"><Icon name={IconName.FilePdf} className="w-6 h-6 text-danger flex-shrink-0" /><p className="text-sm font-medium text-on-surface">Curriculum Vitae</p></div>
                     <a href={getApiUrl(`/api/download${stripBaseUrl(cvUrl) || cvUrl || ''}`)} download={cvOriginalFilename || 'CV.pdf'}
                         className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
                         <Icon name={IconName.Download} className="w-3 h-3" /> Download
@@ -241,8 +241,8 @@ const DocumentSection: React.FC<{
                 </div>
             )}
             {certifications && certifications.length > 0 && certifications.map(cert => (
-                <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
-                    <div className="flex items-center gap-3"><Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" /><p className="text-sm font-medium text-gray-900 dark:text-gray-200">{cert.name}</p></div>
+                <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
+                    <div className="flex items-center gap-3"><Icon name={IconName.FilePdf} className="w-6 h-6 text-danger flex-shrink-0" /><p className="text-sm font-medium text-on-surface">{cert.name}</p></div>
                     <a href={getApiUrl(`/api/download${stripBaseUrl(cert.fileUrl) || cert.fileUrl || ''}`)} download={cert.originalFilename || cert.name}
                         className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
                         <Icon name={IconName.Download} className="w-3 h-3" /> Download
@@ -306,7 +306,7 @@ const LoginDetailsCard: React.FC<{ loginId: string; password: string; userId?: s
                                     <Button onClick={handleResetPassword} disabled={isUpdating}>{isUpdating ? <Spinner size="sm" /> : 'Save'}</Button>
                                 </div>
                             ) : (
-                                <Button variant="ghost" className="border border-gray-300 flex-shrink-0" onClick={() => setIsResetting(true)}>Reset Password</Button>
+                                <Button variant="ghost" className="border border-strong flex-shrink-0" onClick={() => setIsResetting(true)}>Reset Password</Button>
                             )}
                         </div>
                     </div>
@@ -811,14 +811,14 @@ export const MultiRoleProfileCard: React.FC = () => {
 
                         {/* Skill Tags (examples) */}
                         <section>
-                            <h3 className="text-lg font-bold mb-3">Skill Tags <span className="text-xs text-gray-400 ml-2">e.g. python, finance, excel, project management</span></h3>
+                            <h3 className="text-lg font-bold mb-3">Skill Tags <span className="text-xs text-muted ml-2">e.g. python, finance, excel, project management</span></h3>
                             <SkillTagsInput tags={trainerForm.skillsTags || []} isEditing={isEditing}
                                 onUpdate={(tags) => setTrainerForm(prev => prev ? { ...prev, skillsTags: tags } : prev)} />
                         </section>
 
                         {/* Certification Tags (examples) */}
                         <section>
-                            <h3 className="text-lg font-bold mb-3">Certification Tags <span className="text-xs text-gray-400 ml-2">e.g. CKA, CKAD, PL-300, CISSP</span></h3>
+                            <h3 className="text-lg font-bold mb-3">Certification Tags <span className="text-xs text-muted ml-2">e.g. CKA, CKAD, PL-300, CISSP</span></h3>
                             <SkillTagsInput tags={trainerForm.certificationTags || []} isEditing={isEditing}
                                 onUpdate={(tags) => setTrainerForm(prev => prev ? { ...prev, certificationTags: tags } : prev)} />
                         </section>
@@ -826,7 +826,7 @@ export const MultiRoleProfileCard: React.FC = () => {
                         {/* CV & Certifications (full width) */}
                         <section>
                             <h3 className="text-lg font-bold mb-3">CV & Supporting Document Folder</h3>
-                            <p className="text-xs text-gray-400 mb-2">Please add the link to your Google Drive folder containing your CV, ACLP certification, and other supporting documents.</p>
+                            <p className="text-xs text-muted mb-2">Please add the link to your Google Drive folder containing your CV, ACLP certification, and other supporting documents.</p>
                             <DocumentSection title="" cvUrl={trainerForm.cvUrl} cvOriginalFilename={trainerForm.cvOriginalFilename}
                                 cvFolderUrl={trainerForm.cvFolderUrl}
                                 certifications={trainerForm.certifications || []} isEditing={isEditing}
@@ -899,7 +899,7 @@ export const MultiRoleProfileCard: React.FC = () => {
 
                         <section>
                             <h3 className="text-lg font-bold mb-3">CV & Supporting Document Folder</h3>
-                            <p className="text-xs text-gray-400 mb-2">Please add the link to your Google Drive folder containing your CV, ACLP certification, and other supporting documents.</p>
+                            <p className="text-xs text-muted mb-2">Please add the link to your Google Drive folder containing your CV, ACLP certification, and other supporting documents.</p>
                             <DocumentSection title="" cvUrl={developerForm.cvUrl} cvOriginalFilename={developerForm.cvOriginalFilename}
                                 cvFolderUrl={developerForm.cvFolderUrl}
                                 certifications={developerForm.certifications || []} isEditing={isEditing}

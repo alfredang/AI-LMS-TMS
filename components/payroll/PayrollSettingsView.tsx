@@ -152,7 +152,7 @@ const PayrollSettingsView: React.FC = () => {
   const calc = useMemo(() => estimatedPayout(calcPax, calcFee, tiers), [calcPax, calcFee, tiers]);
 
   const inputBase =
-    'w-full border border-default rounded-md px-2.5 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition';
+    'w-full border border-default rounded-md px-2.5 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -170,13 +170,13 @@ const PayrollSettingsView: React.FC = () => {
       </div>
 
       {/* Enable Payroll Role */}
-      <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-default p-5 flex items-start justify-between gap-4">
+      <section className="bg-surface rounded-xl shadow-sm border border-default p-5 flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div
             className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
               enabled
-                ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                ? 'bg-success-bg text-success'
+                : 'bg-surface-elevated text-muted'
             }`}
           >
             <Icon name={IconName.Users} className="w-5 h-5" />
@@ -194,11 +194,11 @@ const PayrollSettingsView: React.FC = () => {
               </p>
             )}
             {confirmDisable && (
-              <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
+              <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-warning-bg px-3 py-2.5">
                 <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
                   Switch the Payroll role off?
                 </p>
-                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-1">
+                <p className="text-[11px] text-warning mt-1">
                   Every Payroll user loses access at their next sign-in, and only an
                   administrator can turn it back on. Payout data is kept.
                 </p>
@@ -206,7 +206,7 @@ const PayrollSettingsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleEnabled(false)}
-                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-600 text-white hover:bg-amber-700"
+                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-700 text-white hover:bg-amber-800"
                   >
                     Switch it off
                   </button>
@@ -226,8 +226,8 @@ const PayrollSettingsView: React.FC = () => {
           <span
             className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
               enabled
-                ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'
+                ? 'bg-success-bg text-success'
+                : 'bg-surface-elevated text-on-surface-secondary'
             }`}
           >
             <span
@@ -259,7 +259,7 @@ const PayrollSettingsView: React.FC = () => {
       </section>
 
       {/* Payout Tiers */}
-      <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-default overflow-hidden">
+      <section className="bg-surface rounded-xl shadow-sm border border-default overflow-hidden">
         <header className="flex flex-wrap items-start justify-between gap-4 px-5 py-4 border-b border-default">
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2">
@@ -292,7 +292,7 @@ const PayrollSettingsView: React.FC = () => {
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="h-16 bg-gray-100 dark:bg-slate-700 rounded-lg animate-pulse"
+                className="h-16 bg-surface-elevated rounded-lg animate-pulse"
               />
             ))}
           </div>
@@ -365,7 +365,7 @@ const PayrollSettingsView: React.FC = () => {
                             })
                           }
                           className={`${inputBase} ${
-                            isOpen ? 'bg-gray-100 dark:bg-slate-800 text-on-surface-secondary' : ''
+                            isOpen ? 'bg-surface-elevated text-on-surface-secondary' : ''
                           }`}
                         />
                       </label>
@@ -424,20 +424,20 @@ const PayrollSettingsView: React.FC = () => {
           <footer className="px-5 py-4 border-t border-default bg-gray-50/60 dark:bg-slate-900/40 flex flex-wrap items-center justify-between gap-3">
             <button
               onClick={addTier}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-default rounded-md bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-default rounded-md bg-surface hover:bg-surface-hover transition-colors"
             >
               <Icon name={IconName.Plus} className="w-4 h-4" />
               Add tier
             </button>
             <div className="flex items-center gap-3">
               {error && (
-                <span className="inline-flex items-center gap-1 text-sm text-red-700 dark:text-red-300">
+                <span className="inline-flex items-center gap-1 text-sm text-danger">
                   <Icon name={IconName.Warning} className="w-4 h-4" />
                   {error}
                 </span>
               )}
               {success && (
-                <span className="inline-flex items-center gap-1 text-sm text-green-700 dark:text-green-300">
+                <span className="inline-flex items-center gap-1 text-sm text-success">
                   <Icon name={IconName.CheckCircle} className="w-4 h-4" />
                   {success}
                 </span>
@@ -466,7 +466,7 @@ const PayrollSettingsView: React.FC = () => {
         <div className="px-5 py-3 border-t border-default bg-amber-50/40 dark:bg-amber-900/10 flex items-start gap-2 text-xs text-on-surface-secondary">
           <Icon
             name={IconName.Warning}
-            className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+            className="w-4 h-4 text-warning flex-shrink-0 mt-0.5"
           />
           <span>
             Saving these tiers will <strong>auto-update all pending payouts</strong> — both
@@ -478,7 +478,7 @@ const PayrollSettingsView: React.FC = () => {
       </section>
 
       {/* Payout Calculator */}
-      <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-default overflow-hidden">
+      <section className="bg-surface rounded-xl shadow-sm border border-default overflow-hidden">
         <header className="px-5 py-4 border-b border-default">
           <h3 className="font-semibold flex items-center gap-2">
             <Icon name={IconName.Calculator} className="w-5 h-5 text-primary" />
@@ -537,7 +537,7 @@ const PayrollSettingsView: React.FC = () => {
         </div>
         {calc.tier && calcPax > 0 && calcFee > 0 && (
           <div className="px-5 pb-5 -mt-1">
-            <div className="text-xs text-on-surface-secondary bg-gray-50 dark:bg-slate-900/40 border border-default rounded-md px-3 py-2 font-mono">
+            <div className="text-xs text-on-surface-secondary bg-surface-elevated border border-default rounded-md px-3 py-2 font-mono">
               {fmtCurrency(calcFee)} × {calcPax} learner{calcPax === 1 ? '' : 's'} ×{' '}
               {calc.tier.percent}% ={' '}
               <span className="font-semibold text-primary">{fmtCurrency(calc.amount)}</span>

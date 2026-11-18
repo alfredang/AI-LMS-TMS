@@ -47,8 +47,8 @@ interface ApiResponse {
 
 const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, value }) => (
   <Card className="p-6 text-center">
-    <p className="text-4xl font-bold text-blue-600">{value}</p>
-    <p className="text-gray-600 dark:text-gray-300 mt-1">{title}</p>
+    <p className="text-4xl font-bold text-primary">{value}</p>
+    <p className="text-on-surface-secondary mt-1">{title}</p>
   </Card>
 );
 
@@ -341,9 +341,9 @@ const OngoingClasses: React.FC = () => {
       case 'In Progress':
         return 'bg-yellow-100 text-yellow-800';
       case 'Cancelled':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
+        return 'bg-danger-bg text-danger';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
     }
   };
 
@@ -376,7 +376,7 @@ const OngoingClasses: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-4 mb-4">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -385,7 +385,7 @@ const OngoingClasses: React.FC = () => {
                 placeholder="Search title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                className="w-full pl-10 pr-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               />
             </div>
             <div className="flex gap-2">
@@ -408,47 +408,47 @@ const OngoingClasses: React.FC = () => {
 
           {/* Advanced Filters */}
           {showAdvancedFilters && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-4 dark:bg-gray-700/30">
+            <div className="bg-surface-elevated p-4 rounded-lg space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                   <input
                     type="text"
                     placeholder="Enter course title..."
                     value={courseTitle}
                     onChange={(e) => setCourseTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Code</label>
                   <input
                     type="text"
                     placeholder="Enter course code..."
                     value={courseCode}
                     onChange={(e) => setCourseCode(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Run ID</label>
                   <input
                     type="text"
                     placeholder="Enter run ID..."
                     value={courseRunId}
                     onChange={(e) => setCourseRunId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer</label>
                   <select
                     value={selectedTrainer}
                     onChange={(e) => setSelectedTrainer(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">All Trainers</option>
                     {trainers.map((trainer) => (
@@ -460,11 +460,11 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Class Status</label>
                   <select
                     value={selectedClassStatus}
                     onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="ActiveOnly">Active (Pending + Confirmed)</option>
                     <option value="all">All (incl. Cancelled)</option>
@@ -475,11 +475,11 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Class Type</label>
                   <select
                     value={selectedClassType}
                     onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="all">All</option>
                     <option value="Physical">Physical</option>
@@ -490,11 +490,11 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Type</label>
                   <select
                     value={selectedCourseType}
                     onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="all">All</option>
                     <option value="WSQ">WSQ</option>
@@ -504,11 +504,11 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learners</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Learners</label>
                   <select
                     value={selectedLearnerFilter}
                     onChange={(e) => setSelectedLearnerFilter(e.target.value as 'all' | 'withLearners' | 'noLearners')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="all">All</option>
                     <option value="withLearners">With Learners</option>
@@ -517,11 +517,11 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Assignment</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer Assignment</label>
                   <select
                     value={selectedTrainerAssignmentFilter}
                     onChange={(e) => setSelectedTrainerAssignmentFilter(e.target.value as 'all' | 'withTrainers' | 'noTrainers')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="all">All</option>
                     <option value="withTrainers">With Trainers</option>
@@ -530,24 +530,24 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Start Date (From)</label>
                   <input
                     type="text"
                     placeholder="DD/MM/YYYY"
                     value={startDateFrom}
                     onChange={handleStartDateChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date (Until)</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">End Date (Until)</label>
                   <input
                     type="text"
                     placeholder="DD/MM/YYYY"
                     value={endDateUntil}
                     onChange={handleEndDateChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                   />
                 </div>
               </div>
@@ -559,13 +559,13 @@ const OngoingClasses: React.FC = () => {
         {loading ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-500 text-lg">Loading ongoing classes...</p>
+            <p className="text-muted text-lg">Loading ongoing classes...</p>
           </div>
         ) : ongoingClasses.length === 0 ? (
           <div className="text-center py-8">
-            <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No ongoing classes found</h3>
-            <p className="text-gray-500 mb-6 dark:text-gray-400">
+            <Icon name={IconName.BookOpen} className="w-12 h-12 text-muted mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-on-surface mb-2">No ongoing classes found</h3>
+            <p className="text-muted mb-6">
               {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || startDateFrom || endDateUntil
                 ? "No classes match your current search criteria."
                 : "There are no ongoing classes in the system yet."}
@@ -574,7 +574,7 @@ const OngoingClasses: React.FC = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '1850px' }}>
+              <table className="divide-y divide-default" style={{ tableLayout: 'fixed', width: '1850px' }}>
                 <colgroup>
                   <col style={{ width: '90px' }} />
                   <col style={{ width: '420px' }} />
@@ -588,33 +588,33 @@ const OngoingClasses: React.FC = () => {
                   <col style={{ width: '200px' }} />
                   <col style={{ width: '70px' }} />
                 </colgroup>
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                <thead className="bg-surface-elevated">
                   <tr className="border-b dark:border-gray-700">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">End Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Learners</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider"></th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="bg-surface divide-y divide-default">
                   {ongoingClasses.map((classItem: any, index) => (
                     <React.Fragment key={classItem.courseRunId || index}>
-                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
-                        <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                    <tr className="border-b dark:border-gray-700 hover:bg-surface-hover">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">
+                        <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-info-bg border-blue-300 text-primary dark:border-blue-700' : 'bg-surface-elevated border-strong text-on-surface-secondary hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'}`}>
                           <svg className={`w-3.5 h-3.5 transition-transform ${expandedSessionsId.has(classItem.id) ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
                         </button>
                         {classItem.courseRunId}
                       </td>
-                      <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                      <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-primary hover:underline">{classItem.courseTitle}</button></td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
                         <select
                           value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
@@ -642,17 +642,17 @@ const OngoingClasses: React.FC = () => {
                         </select>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
-                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classItem.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-info-bg text-info' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classItem.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-surface-elevated text-on-surface-secondary'}`}>{classItem.classType || 'Physical'}</span>
                       </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{formatDate(classItem.startDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{formatDate(classItem.endDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-on-surface-secondary">{classItem.numOfTrainee}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">
                         {classItem.assignedTrainerTpg ? (
                           classItem.assignedTrainerTpg
                         ) : classItem.tpgSyncStatus === 'no_nric' ? (
                           <span
-                            className="text-amber-500 text-xs cursor-pointer inline-flex items-center gap-1"
+                            className="text-warning text-xs cursor-pointer inline-flex items-center gap-1"
                             title="To find the trainer's NRIC: 1) Check Google Drive 2) Search TPG Trainer Management 3) Ask someone with access (e.g. Ms. Tan and Dr. Ang) 4) Contact the trainer directly, or collect it on class day if physical"
                             onClick={() => alert('To find the trainer\'s NRIC:\n\n1. Check Google Drive for their records\n2. Search TPG Trainer Management — their NRIC may be listed there\n3. Ask someone with access to their NRIC (e.g. Ms. Tan and Dr. Ang)\n4. Contact the trainer directly, or collect it on class day if physical')}
                           >
@@ -673,11 +673,11 @@ const OngoingClasses: React.FC = () => {
                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Reg Date Passed
                           </span>
                         ) : classItem.tpgSyncStatus === 'course_cancelled' ? (
-                          <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run cancelled on SSG.">
+                          <span className="text-muted text-xs inline-flex items-center gap-1" title="Course run cancelled on SSG.">
                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Cancelled (SSG)
                           </span>
                         ) : classItem.tpgSyncStatus === 'course_expired' ? (
-                          <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run expired/completed on SSG.">
+                          <span className="text-muted text-xs inline-flex items-center gap-1" title="Course run expired/completed on SSG.">
                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Expired (SSG)
                           </span>
                         ) : classItem.tpgSyncStatus === 'not_editable' ? (
@@ -706,10 +706,10 @@ const OngoingClasses: React.FC = () => {
                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Sync Error
                           </span>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-muted">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerLocal || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{classItem.assignedTrainerLocal || <span className="text-muted">—</span>}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <Button
                           variant="primary"
@@ -722,10 +722,10 @@ const OngoingClasses: React.FC = () => {
                       </td>
                     </tr>
                     {expandedSessionsId.has(classItem.id) && (
-                    <tr className="bg-gray-50 dark:bg-gray-900/40 border-b dark:border-gray-700">
+                    <tr className="bg-surface-elevated border-b dark:border-gray-700">
                       <td colSpan={11} className="px-6 py-3">
                         {loadingSessions.has(classItem.id) ? (
-                          <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+                          <div className="text-sm text-muted">Loading sessions…</div>
                         ) : (
                           <ClassSessionsCard sessions={sessionsCache[classItem.id]?.sessions || []} calendarChecked={sessionsCache[classItem.id]?.calendarChecked} ssgError={sessionsCache[classItem.id]?.ssgError} />
                         )}
@@ -741,7 +741,7 @@ const OngoingClasses: React.FC = () => {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-between items-center mt-6">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
                 <div className="flex items-center gap-1">
@@ -760,9 +760,9 @@ const OngoingClasses: React.FC = () => {
                     if (end < totalPages - 1) pages.push(totalPages - 1);
                     return pages.map((p, idx) =>
                       p < 0 ? (
-                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                        <span key={`ellipsis-${idx}`} className="px-1 text-muted">...</span>
                       ) : (
-                        <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{p + 1}</button>
+                        <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-on-surface-secondary hover:bg-surface-hover'}`}>{p + 1}</button>
                       )
                     );
                   })()}

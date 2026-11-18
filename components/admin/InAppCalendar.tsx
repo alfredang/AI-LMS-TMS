@@ -85,8 +85,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 const TAG_CHIP_CLS: Record<TrainerTag, string> = {
   tpg: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  accepted: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  lms: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  accepted: 'bg-success-bg text-success',
+  lms: 'bg-info-bg text-primary',
 };
 const TrainerTagChip: React.FC<{ tag: TrainerTag }> = ({ tag }) => (
   <span title={TAG_LABELS[tag]} className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-medium ${TAG_CHIP_CLS[tag]}`}>{TAG_SHORT[tag]}</span>
@@ -635,8 +635,8 @@ const InAppCalendar: React.FC = () => {
   // "Show all" = clear every facet (no constraints) → every class on every day.
   const showAll = () => { setEnabledStatuses(new Set()); setTrainerTags(new Set()); setLearnerStates(new Set()); setScheduleStates(new Set()); setTrainerFilter(''); setSearch(''); setOnlyUnmatched(false); };
   const resetDefault = () => { setEnabledStatuses(new Set(['Confirmed'])); setTrainerTags(new Set<TrainerTag | 'none'>(['tpg'])); setLearnerStates(new Set<'has' | 'none'>(['has'])); setScheduleStates(new Set<'scheduled' | 'nosession'>(['scheduled'])); setOnlyUnmatched(false); };
-  const inputCls = 'border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm dark:bg-gray-700 dark:text-white';
-  const chipCls = (active: boolean) => `px-2 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 opacity-70'}`;
+  const inputCls = 'border border-strong rounded-md px-2 py-1 text-sm dark:bg-gray-700 dark:text-white';
+  const chipCls = (active: boolean) => `px-2 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'border-strong text-on-surface-secondary opacity-70'}`;
 
   // Group modal sessions by day.
   const sessionGroups = useMemo(() => {
@@ -703,27 +703,27 @@ const InAppCalendar: React.FC = () => {
       {/* Filters — every facet NARROWS; an empty facet = no limit. "Show all" clears everything. */}
       <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Status:</span>
+          <span className="text-xs text-muted">Status:</span>
           {STATUS_TABS.map((s) => (
             <button key={s} type="button" onClick={() => toggleStatus(s)}
-              className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${enabledStatuses.has(s) ? 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 shadow-sm' : 'border-transparent opacity-50'}`}
+              className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${enabledStatuses.has(s) ? 'bg-surface border-strong shadow-sm' : 'border-transparent opacity-50'}`}
               style={enabledStatuses.has(s) ? { color: colorFor(s) } : undefined}>{s}</button>
           ))}
         </div>
         <div className="flex items-center gap-1" title="Show runs whose trainer carries a selected tag. 'None' = runs with no trainer.">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Trainer:</span>
+          <span className="text-xs text-muted">Trainer:</span>
           {(['tpg', 'accepted', 'lms'] as TrainerTag[]).map((tag) => (
             <button key={tag} type="button" onClick={() => toggleTag(tag)} title={TAG_LABELS[tag]} className={chipCls(trainerTags.has(tag))}>{TAG_SHORT[tag]}</button>
           ))}
           <button type="button" onClick={() => toggleTag('none')} title="Runs with no trainer" className={chipCls(trainerTags.has('none'))}>None</button>
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Learners:</span>
+          <span className="text-xs text-muted">Learners:</span>
           <button type="button" onClick={() => toggleLearner('has')} className={chipCls(learnerStates.has('has'))}>Has</button>
           <button type="button" onClick={() => toggleLearner('none')} className={chipCls(learnerStates.has('none'))}>None</button>
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Sessions:</span>
+          <span className="text-xs text-muted">Sessions:</span>
           <button type="button" onClick={() => toggleSchedule('scheduled')} className={chipCls(scheduleStates.has('scheduled'))}>Scheduled</button>
           <button type="button" onClick={() => toggleSchedule('nosession')} title="Runs with no scheduled sessions" className={chipCls(scheduleStates.has('nosession'))}>No sessions</button>
         </div>
@@ -733,15 +733,15 @@ const InAppCalendar: React.FC = () => {
             className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${onlyUnmatched
               ? 'bg-red-600 text-white border-red-600'
               : unmatchedCount > 0
-                ? 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
-                : 'border-green-300 dark:border-green-700 text-green-700 dark:text-green-400'}`}>
+                ? 'border-red-300 dark:border-red-700 text-danger hover:bg-red-50 dark:hover:bg-red-900/20'
+                : 'border-green-300 dark:border-green-700 text-success'}`}>
             {unmatchedCount > 0 ? `⚠ ${unmatchedCount} not on GCal` : '✓ All on GCal'}
           </button>
         )}
         {gcalMatches !== null && (
           <button type="button" onClick={openBulkPanel} disabled={bulkSyncing}
             title="Pick a date range and create the missing Google Calendar events (+ sync attendees) for every flagged class in it. No emails are sent."
-            className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
+            className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
             {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />}
             {bulkProgress ? `Syncing ${bulkProgress.done}/${bulkProgress.total}…` : 'Sync all to Google Calendar'}
           </button>
@@ -753,24 +753,24 @@ const InAppCalendar: React.FC = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={() => !bulkSyncing && setBulkPanelOpen(false)}>
             <div onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm border dark:border-gray-700">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Sync all to Google Calendar</h3>
+              className="bg-surface rounded-lg shadow-xl w-full max-w-sm border dark:border-gray-700">
+              <div className="p-4 border-b border-default flex items-start justify-between gap-3">
+                <h3 className="text-sm font-semibold text-on-surface">Sync all to Google Calendar</h3>
                 <button type="button" onClick={() => !bulkSyncing && setBulkPanelOpen(false)} disabled={bulkSyncing}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none disabled:opacity-30">×</button>
+                  className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none disabled:opacity-30">×</button>
               </div>
               <div className="p-4 space-y-3">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Creates the missing Google Calendar event (and syncs attendees) for every WSQ/IBF/CASL class in this date range that isn't matched yet. No emails are sent.</p>
+                <p className="text-xs text-muted">Creates the missing Google Calendar event (and syncs attendees) for every WSQ/IBF/CASL class in this date range that isn't matched yet. No emails are sent.</p>
                 <div className="flex items-center gap-2">
                   <input type="date" value={bulkFrom} onChange={(e) => setBulkFrom(e.target.value)} disabled={bulkSyncing}
                     className={`${inputCls} flex-1 min-w-0`} />
-                  <span className="text-xs text-gray-400 shrink-0">to</span>
+                  <span className="text-xs text-muted shrink-0">to</span>
                   <input type="date" value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} disabled={bulkSyncing}
                     className={`${inputCls} flex-1 min-w-0`} />
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <button type="button" onClick={() => setBulkPanelOpen(false)} disabled={bulkSyncing}
-                    className="px-3 py-1.5 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
+                    className="px-3 py-1.5 rounded-md text-xs font-medium border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50">
                     Cancel
                   </button>
                   <button type="button" onClick={prepareBulkSync} disabled={bulkSyncing}
@@ -784,8 +784,8 @@ const InAppCalendar: React.FC = () => {
           </div>
         )}
         <div className="flex items-center gap-1">
-          <button type="button" onClick={showAll} title="Clear all filters — show every class on every day" className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">Show all</button>
-          <button type="button" onClick={resetDefault} title="Back to the default 'definitely happening' view" className="px-2 py-1 rounded-md text-xs text-gray-500 dark:text-gray-400 hover:underline">Default</button>
+          <button type="button" onClick={showAll} title="Clear all filters — show every class on every day" className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20">Show all</button>
+          <button type="button" onClick={resetDefault} title="Back to the default 'definitely happening' view" className="px-2 py-1 rounded-md text-xs text-muted hover:underline">Default</button>
         </div>
         <select value={trainerFilter} onChange={(e) => setTrainerFilter(e.target.value)} className={inputCls}>
           <option value="">All trainers</option>
@@ -793,25 +793,25 @@ const InAppCalendar: React.FC = () => {
         </select>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search title / run id…" className={`${inputCls} flex-1 min-w-[160px]`} />
         <label
-          className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap"
+          className="flex items-center gap-1.5 text-xs text-on-surface-secondary cursor-pointer select-none whitespace-nowrap"
           title="Default for each reschedule/cancel. When on, changes also update the matching Google Calendar event. You can change this for each action.">
-          <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" /> Sync Google Calendar
+          <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" /> Sync Google Calendar
         </label>
         <label
-          className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap"
+          className="flex items-center gap-1.5 text-xs text-on-surface-secondary cursor-pointer select-none whitespace-nowrap"
           title="Default for each reschedule/cancel. When on, the confirmation opens the email ready to send to the learners and trainer. You can change this for each action.">
-          <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" /> Notify attendees
+          <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" /> Notify attendees
         </label>
-        {(loading || busy) && <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" /> {busy ? 'working…' : 'loading…'}</span>}
+        {(loading || busy) && <span className="text-xs text-primary flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" /> {busy ? 'working…' : 'loading…'}</span>}
       </div>
 
-      <div className={`relative bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 fc-tms ${dragging ? 'is-dragging' : ''}`}
+      <div className={`relative bg-surface rounded-lg border border-default p-3 fc-tms ${dragging ? 'is-dragging' : ''}`}
         onClick={(e) => { if ((e.target as HTMLElement).closest('.fc-toolbar-title')) setPickerOpen((o) => !o); }}>
         {/* Month/year quick-jump (click the title) */}
         {pickerOpen && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => setPickerOpen(false)} />
-            <div className="absolute z-30 left-1/2 -translate-x-1/2 top-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 flex items-center gap-2">
+            <div className="absolute z-30 left-1/2 -translate-x-1/2 top-14 bg-surface border border-default rounded-lg shadow-xl p-3 flex items-center gap-2">
               <select value={viewYM.m} onChange={(e) => jumpTo(viewYM.y, Number(e.target.value))} className={inputCls}>
                 {MONTHS.map((mn, i) => <option key={mn} value={i}>{mn}</option>)}
               </select>
@@ -819,7 +819,7 @@ const InAppCalendar: React.FC = () => {
                 {pickerYears.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
               <button type="button" onClick={() => { calRef.current?.getApi().today(); setPickerOpen(false); }}
-                className="px-2 py-1 text-xs rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Today</button>
+                className="px-2 py-1 text-xs rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover">Today</button>
             </div>
           </>
         )}
@@ -849,18 +849,18 @@ const InAppCalendar: React.FC = () => {
           eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
         />
       </div>
-      <p className="text-xs text-gray-400 flex items-center gap-1">
+      <p className="text-xs text-muted flex items-center gap-1">
         How to use this calendar
         <HelpTip>Drag a day to reschedule it, or click a class to see details and move single sessions (use a session&apos;s <strong>date picker</strong> to reach another month). By default this shows classes that are <strong>going ahead</strong> (confirmed, with a trainer, learners and scheduled dates). Each filter narrows the view; <strong>Show all</strong> shows everything. A <strong>red dashed border + ⚠</strong> marks a WSQ class day with <strong>no matching Google Calendar event</strong> (drift from the source of truth) — open the class and use <strong>Create missing calendar events</strong>, or fix the date via reschedule.</HelpTip>
       </p>
-      <p className="text-xs text-gray-400 leading-relaxed">
-        <span className="font-medium text-gray-500 dark:text-gray-300">Sync Google Calendar</span>: also move/remove the matching Google Calendar event when you apply a change (off = SSG/LMS only).{' '}
-        <span className="font-medium text-gray-500 dark:text-gray-300">Notify attendees</span>: offered inside each reschedule/cancel confirmation — tick it there to review &amp; edit the email and pick which attendees receive it. Both only ever act on your explicit confirmation — never automatically.
+      <p className="text-xs text-muted leading-relaxed">
+        <span className="font-medium text-muted">Sync Google Calendar</span>: also move/remove the matching Google Calendar event when you apply a change (off = SSG/LMS only).{' '}
+        <span className="font-medium text-muted">Notify attendees</span>: offered inside each reschedule/cancel confirmation — tick it there to review &amp; edit the email and pick which attendees receive it. Both only ever act on your explicit confirmation — never automatically.
       </p>
 
       {/* Drag hint */}
       {dragging && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-full bg-amber-500 text-white text-sm font-medium shadow-lg pointer-events-none">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-full bg-amber-700 text-white text-sm font-medium shadow-lg pointer-events-none">
           Drop on any visible day to reschedule · for another month, use a session's date picker · release outside the calendar to cancel
         </div>
       )}
@@ -868,11 +868,11 @@ const InAppCalendar: React.FC = () => {
       {/* Event details + sessions modal (hidden while dragging so the grid is reachable) */}
       {eventModal && (
         <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 ${dragging ? 'hidden' : ''}`}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[88vh] overflow-auto">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between gap-3">
+          <div className="bg-surface rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[88vh] overflow-auto">
+            <div className="p-4 border-b border-default flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">{eventModal.run.courseTitle}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <h3 className="text-lg font-semibold text-on-surface truncate">{eventModal.run.courseTitle}</h3>
+                <p className="text-xs text-muted">
                   {eventModal.run.courseCode} · run {eventModal.run.courseRunId}
                   {eventModal.run.startDate ? ` · ${eventModal.run.startDate}${eventModal.run.endDate ? `–${eventModal.run.endDate}` : ''}` : ''}
                   {' · '}<span style={{ color: colorFor(eventModal.run.classStatus) }}>{eventModal.run.classStatus}</span>
@@ -881,64 +881,64 @@ const InAppCalendar: React.FC = () => {
               <div className="flex items-center gap-2 shrink-0">
                 <button type="button" onClick={() => setMoveTarget({ id: eventModal.run.courseRunUuid, courseRunId: eventModal.run.courseRunId, courseTitle: eventModal.run.courseTitle, courseCode: eventModal.run.courseCode })}
                   className="px-2 py-1 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700">Move class to another course run</button>
-                <button type="button" onClick={() => setEventModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
+                <button type="button" onClick={() => setEventModal(null)} className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
               </div>
             </div>
 
             <div className="p-4 space-y-4">
               {eventModal.loading ? (
-                <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
+                <div className="text-sm text-muted flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
               ) : (
                 <>
                   {/* Trainers — tagged list (TMS-LMS / Accepted Email / Assigned in TPG) */}
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Trainer{eventModal.taggedTrainers.length === 1 ? '' : 's'} ({eventModal.taggedTrainers.length})</h4>
+                    <h4 className="text-sm font-semibold text-on-surface mb-1">Trainer{eventModal.taggedTrainers.length === 1 ? '' : 's'} ({eventModal.taggedTrainers.length})</h4>
                     {eventModal.taggedTrainers.length > 0 ? (
-                      <ul className="text-sm divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                      <ul className="text-sm divide-y divide-default border border-default rounded-md">
                         {eventModal.taggedTrainers.map((t, i) => (
                           <li key={i} className="px-3 py-1.5 flex items-center justify-between gap-2">
-                            <span className="min-w-0 truncate text-gray-800 dark:text-gray-200">{t.name}</span>
+                            <span className="min-w-0 truncate text-on-surface">{t.name}</span>
                             <span className="flex items-center gap-1.5 shrink-0">
                               {t.tags.map((tag) => <TrainerTagChip key={tag} tag={tag} />)}
-                              <span className="text-gray-500 dark:text-gray-400 text-xs max-w-[40%] truncate">{t.email || '—'}</span>
+                              <span className="text-muted text-xs max-w-[40%] truncate">{t.email || '—'}</span>
                             </span>
                           </li>
                         ))}
                       </ul>
-                    ) : <div className="text-sm text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5">No trainer assigned.</div>}
+                    ) : <div className="text-sm text-muted border border-dashed border-default rounded-md px-3 py-1.5">No trainer assigned.</div>}
                   </div>
 
                   {/* Learners */}
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Learners ({eventModal.learners.length})</h4>
+                    <h4 className="text-sm font-semibold text-on-surface mb-1">Learners ({eventModal.learners.length})</h4>
                     {eventModal.learners.length > 0 ? (
-                      <div className="max-h-32 overflow-auto border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-100 dark:divide-gray-800">
+                      <div className="max-h-32 overflow-auto border border-default rounded-md divide-y divide-default">
                         {eventModal.learners.map((l, i) => (
-                          <div key={i} className="px-3 py-1.5 text-sm flex items-center justify-between"><span className="text-gray-800 dark:text-gray-200">{l.learnerName}</span><span className="text-gray-500 dark:text-gray-400">{l.learnerEmail}</span></div>
+                          <div key={i} className="px-3 py-1.5 text-sm flex items-center justify-between"><span className="text-on-surface">{l.learnerName}</span><span className="text-muted">{l.learnerEmail}</span></div>
                         ))}
                       </div>
-                    ) : <div className="text-sm text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5">No learners enrolled.</div>}
+                    ) : <div className="text-sm text-muted border border-dashed border-default rounded-md px-3 py-1.5">No learners enrolled.</div>}
                   </div>
 
                   {/* Sessions grouped by day — draggable onto the calendar */}
                   <div ref={sessionListRef} onPointerDown={onSessionPointerDown}>
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Sessions ({eventModal.sessions.length})</h4>
+                      <h4 className="text-sm font-semibold text-on-surface">Sessions ({eventModal.sessions.length})</h4>
                       <button type="button" onClick={() => void createMissingEvents()} disabled={creatingEvents}
-                        className="text-xs px-2 py-1 rounded-md border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 whitespace-nowrap"
+                        className="text-xs px-2 py-1 rounded-md border border-blue-300 dark:border-blue-700 text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 whitespace-nowrap"
                         title="Add Google Calendar events for any sessions that don't have one (and update attendees)">{creatingEvents ? 'Creating…' : '🗓️ Create missing calendar events'}</button>
                     </div>
-                    <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                    <p className="text-xs text-muted mb-2 flex items-center gap-1">
                       How to move sessions
                       <HelpTip>Drag a session (or the whole-day row) onto a day to reschedule — or use the <strong>date picker</strong> on a day or session to move it to any month · ✕ cancels.</HelpTip>
                     </p>
                     {sessionGroups.length === 0 ? (
-                      <div className="text-sm text-gray-400">No sessions found.</div>
+                      <div className="text-sm text-muted">No sessions found.</div>
                     ) : (
                       <div className="space-y-2">
                         {sessionGroups.map((g) => (
-                          <div key={g.date} className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-200 flex items-center justify-between gap-2">
+                          <div key={g.date} className="rounded-md border border-default overflow-hidden">
+                            <div className="px-3 py-1.5 bg-surface-elevated text-xs font-medium text-on-surface-secondary flex items-center justify-between gap-2">
                               <span className="flex items-center gap-2 min-w-0">
                                 {/* Drag the whole-day row onto a calendar day to move every session on this day. */}
                                 <span className="fc-ext-day cursor-grab active:cursor-grabbing rounded px-1 -mx-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 whitespace-nowrap"
@@ -951,19 +951,19 @@ const InAppCalendar: React.FC = () => {
                                   const matched = g.items.some((it) => it.calendarMatched);
                                   return link ? (
                                     <a href={link} target="_blank" rel="noopener noreferrer" onPointerDown={(e) => e.stopPropagation()}
-                                      className="text-[11px] font-normal text-green-600 dark:text-green-400 hover:underline whitespace-nowrap" title="Opens under the class calendar's Google account">On calendar ↗</a>
+                                      className="text-[11px] font-normal text-success hover:underline whitespace-nowrap" title="Opens under the class calendar's Google account">On calendar ↗</a>
                                   ) : matched ? (
-                                    <span className="text-[11px] font-normal text-green-600 dark:text-green-400 whitespace-nowrap">On calendar</span>
+                                    <span className="text-[11px] font-normal text-success whitespace-nowrap">On calendar</span>
                                   ) : (
-                                    <span className="text-[11px] font-normal text-amber-600 dark:text-amber-400 whitespace-nowrap">Not on calendar</span>
+                                    <span className="text-[11px] font-normal text-warning whitespace-nowrap">Not on calendar</span>
                                   );
                                 })()}
                               </span>
                               <span className="flex items-center gap-2 shrink-0">
                                 <input type="date" defaultValue={g.date} onPointerDown={(e) => e.stopPropagation()}
                                   onChange={(e) => { const v = e.target.value; if (v) void rescheduleDayToDate(g.date, g.items, v); }}
-                                  className="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white w-36" title="Reschedule the whole day to any date (works across months)" />
-                                <button type="button" onClick={() => cancelWholeDay(g.date, g.items)} className="text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded px-1.5 py-0.5 w-32 text-left whitespace-nowrap" title="Cancel all sessions on this day">✕ Cancel day</button>
+                                  className="text-xs border border-strong rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white w-36" title="Reschedule the whole day to any date (works across months)" />
+                                <button type="button" onClick={() => cancelWholeDay(g.date, g.items)} className="text-xs text-danger hover:bg-red-50 dark:hover:bg-red-900/20 rounded px-1.5 py-0.5 w-32 text-left whitespace-nowrap" title="Cancel all sessions on this day">✕ Cancel day</button>
                               </span>
                             </div>
                             <ul>
@@ -971,18 +971,18 @@ const InAppCalendar: React.FC = () => {
                                 const sid = String(s.ssgSessionId || s.id || i);
                                 const label = `${eventModal.run.courseTitle} · Session ${s.sessionNumber ?? i + 1}`;
                                 return (
-                                  <li key={sid} className="flex items-center justify-between px-3 py-2 text-sm border-t border-gray-100 dark:border-gray-800">
+                                  <li key={sid} className="flex items-center justify-between px-3 py-2 text-sm border-t border-default">
                                     {/* Only this label is the draggable item, so the drag mirror shows just the session info. */}
-                                    <span className="fc-ext-session flex-1 min-w-0 rounded px-1 -mx-1 cursor-grab active:cursor-grabbing hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-800 dark:text-gray-200"
+                                    <span className="fc-ext-session flex-1 min-w-0 rounded px-1 -mx-1 cursor-grab active:cursor-grabbing hover:bg-blue-50 dark:hover:bg-blue-900/20 text-on-surface"
                                       data-session-id={sid} data-title={label} title="Drag onto a day to reschedule">
                                       Session {s.sessionNumber ?? i + 1}
-                                      <span className="text-gray-500 dark:text-gray-400"> · {s.startTime || '—'}{s.endTime ? `–${s.endTime}` : ''}{s.modeOfTraining ? ` · ${getModeLabel(s.modeOfTraining).replace(/^\d+\s*-\s*/, '')}` : ''}</span>
+                                      <span className="text-muted"> · {s.startTime || '—'}{s.endTime ? `–${s.endTime}` : ''}{s.modeOfTraining ? ` · ${getModeLabel(s.modeOfTraining).replace(/^\d+\s*-\s*/, '')}` : ''}</span>
                                     </span>
                                     <span className="flex items-center gap-2 ml-2 shrink-0">
                                       <input type="date" defaultValue={convertSsgDateToHtml(s.startDate || '')} onPointerDown={(e) => e.stopPropagation()}
                                         onChange={(e) => { const v = e.target.value; if (v) void rescheduleSessionToDate(s, v); }}
-                                        className="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white w-36" title="Reschedule to any date (works across months)" />
-                                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => cancelOneSession(s)} className="text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded px-1.5 py-0.5 w-32 text-left whitespace-nowrap" title="Cancel this session">✕ Cancel session</button>
+                                        className="text-xs border border-strong rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white w-36" title="Reschedule to any date (works across months)" />
+                                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => cancelOneSession(s)} className="text-xs text-danger hover:bg-red-50 dark:hover:bg-red-900/20 rounded px-1.5 py-0.5 w-32 text-left whitespace-nowrap" title="Cancel this session">✕ Cancel session</button>
                                     </span>
                                   </li>
                                 );
@@ -992,14 +992,14 @@ const InAppCalendar: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                    <p className="text-xs text-muted mt-2 flex items-center gap-1">
                       About this panel
                       <HelpTip side="left">Shows the LMS (local) trainer/enrolment. Rescheduling pushes the session to SSG; cancelling deletes the session from SSG. (Enrolments stay on the run — see the move flow to change those.)</HelpTip>
                     </p>
                   </div>
 
                   {/* Google Calendar attendees — view + confirmation-gated adjust */}
-                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <div className="pt-2 border-t border-default">
                     <CalendarAttendeesPanel
                       courseRunId={eventModal.run.courseRunId}
                       calendarSync={syncCalendar}
@@ -1033,12 +1033,12 @@ const InAppCalendar: React.FC = () => {
       {/* Popup (confirm / success / error) */}
       {popup.open && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[55] p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg border dark:border-gray-700 p-6 max-h-[90vh] overflow-auto">
-            <h3 className={`text-lg font-semibold mb-2 ${popup.type === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{popup.title}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 whitespace-pre-line">{popup.message}</p>
+          <div className="bg-surface rounded-lg shadow-xl w-full max-w-lg border dark:border-gray-700 p-6 max-h-[90vh] overflow-auto">
+            <h3 className={`text-lg font-semibold mb-2 ${popup.type === 'error' ? 'text-danger' : 'text-on-surface'}`}>{popup.title}</h3>
+            <p className="text-sm text-on-surface-secondary mb-4 whitespace-pre-line">{popup.message}</p>
             <div className="flex justify-end gap-2">
               {popup.type === 'confirm' && popup.cancelText && (
-                <button type="button" onClick={() => { const fn = popup.onCancel; closePopup(); setPendingGhost(null); fn?.(); }} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">{popup.cancelText}</button>
+                <button type="button" onClick={() => { const fn = popup.onCancel; closePopup(); setPendingGhost(null); fn?.(); }} className="px-4 py-2 text-on-surface-secondary hover:bg-surface-hover rounded-md">{popup.cancelText}</button>
               )}
               <button type="button"
                 onClick={() => { const fn = popup.onConfirm; closePopup(); if (popup.type === 'confirm' && fn) fn(); }}

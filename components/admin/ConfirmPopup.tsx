@@ -33,45 +33,45 @@ interface ToneClasses {
 const TONE_CLASSES: Record<ConfirmTone, ToneClasses> = {
   danger: {
     ring: 'ring-red-200 dark:ring-red-800/60',
-    headerBg: 'bg-red-50 dark:bg-red-900/20',
+    headerBg: 'bg-danger-bg',
     headerBorder: 'border-red-200 dark:border-red-800/60',
-    iconBg: 'bg-red-100 dark:bg-red-900/40',
-    iconColor: 'text-red-600 dark:text-red-400',
+    iconBg: 'bg-danger-bg',
+    iconColor: 'text-danger',
     titleColor: 'text-red-900 dark:text-red-100',
-    subtitleColor: 'text-red-700 dark:text-red-300',
+    subtitleColor: 'text-danger',
     confirmBg: 'bg-red-600',
     confirmHoverBg: 'hover:bg-red-700',
   },
   primary: {
     ring: 'ring-blue-200 dark:ring-blue-800/60',
-    headerBg: 'bg-blue-50 dark:bg-blue-900/20',
+    headerBg: 'bg-info-bg',
     headerBorder: 'border-blue-200 dark:border-blue-800/60',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/40',
-    iconColor: 'text-blue-600 dark:text-blue-400',
+    iconBg: 'bg-info-bg',
+    iconColor: 'text-primary',
     titleColor: 'text-blue-900 dark:text-blue-100',
-    subtitleColor: 'text-blue-700 dark:text-blue-300',
+    subtitleColor: 'text-primary',
     confirmBg: 'bg-blue-600',
     confirmHoverBg: 'hover:bg-blue-700',
   },
   warning: {
     ring: 'ring-orange-200 dark:ring-orange-800/60',
-    headerBg: 'bg-orange-50 dark:bg-orange-900/20',
+    headerBg: 'bg-warning-bg',
     headerBorder: 'border-orange-200 dark:border-orange-800/60',
-    iconBg: 'bg-orange-100 dark:bg-orange-900/40',
-    iconColor: 'text-orange-600 dark:text-orange-400',
+    iconBg: 'bg-warning-bg',
+    iconColor: 'text-warning',
     titleColor: 'text-orange-900 dark:text-orange-100',
-    subtitleColor: 'text-orange-700 dark:text-orange-300',
+    subtitleColor: 'text-warning',
     confirmBg: 'bg-orange-600',
     confirmHoverBg: 'hover:bg-orange-700',
   },
   success: {
     ring: 'ring-emerald-200 dark:ring-emerald-800/60',
-    headerBg: 'bg-emerald-50 dark:bg-emerald-900/20',
+    headerBg: 'bg-success-bg',
     headerBorder: 'border-emerald-200 dark:border-emerald-800/60',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    iconBg: 'bg-success-bg',
+    iconColor: 'text-success',
     titleColor: 'text-emerald-900 dark:text-emerald-100',
-    subtitleColor: 'text-emerald-700 dark:text-emerald-300',
+    subtitleColor: 'text-success',
     confirmBg: 'bg-emerald-600',
     confirmHoverBg: 'hover:bg-emerald-700',
   },
@@ -127,7 +127,7 @@ export const ConfirmPopup: React.FC<ConfirmPopupProps> = ({
       onClick={() => { if (!busy) onCancel(); }}
     >
       <div
-        className={`bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ${t.ring} w-full max-w-md overflow-hidden`}
+        className={`bg-surface rounded-xl shadow-2xl ring-1 ${t.ring} w-full max-w-md overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`${t.headerBg} px-5 py-4 flex items-center gap-3 border-b ${t.headerBorder}`}>
@@ -142,17 +142,17 @@ export const ConfirmPopup: React.FC<ConfirmPopupProps> = ({
           </div>
         </div>
         {children && (
-          <div className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300 space-y-2">
+          <div className="px-5 py-4 text-sm text-on-surface-secondary space-y-2">
             {children}
           </div>
         )}
-        <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 bg-surface-elevated border-t dark:border-gray-700 flex items-center justify-end gap-2">
           {!hideCancel && (
             <button
               type="button"
               disabled={busy}
               onClick={onCancel}
-              className="text-xs font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-50"
+              className="text-xs font-medium px-3 py-1.5 rounded-md border border-strong hover:bg-white dark:hover:bg-gray-700 disabled:opacity-50"
             >
               Cancel
             </button>

@@ -65,7 +65,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
         <CardTitle>View Course Sessions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-on-surface-secondary mb-4">
           You can use this API to retrieve course sessions based on the course reference number, course run ID and optionally month/year filters.
         </p>
 
@@ -77,11 +77,11 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
             type="text"
             value={courseReferenceNumber}
             onChange={(e) => setCourseReferenceNumber(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="TGS-2020000697"
             maxLength={300}
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Reference number for the course of interest. Encode the course reference number as it may contain special characters.
           </p>
         </div>
@@ -94,10 +94,10 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
             type="text"
             value={courseRunId}
             onChange={(e) => setCourseRunId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="835457"
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             You will get this value after you add a course run.
           </p>
         </div>
@@ -108,7 +108,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
             id="includeExpiredSessions"
             checked={includeExpired}
             onChange={(e) => setIncludeExpired(e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-strong text-primary focus:ring-blue-500"
           />
           <label htmlFor="includeExpiredSessions" className="text-sm font-medium">
             Include expired courses
@@ -122,7 +122,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
               id="specifyMonthYear"
               checked={specifyMonthYear}
               onChange={(e) => setSpecifyMonthYear(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-strong text-primary focus:ring-blue-500"
             />
             <label htmlFor="specifyMonthYear" className="text-sm font-medium">
               Specify Month and Year to retrieve
@@ -136,7 +136,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value) as Month)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {Object.entries(MonthNames).map(([value, name]) => (
                     <option key={value} value={value}>
@@ -144,7 +144,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted mt-1">
                   The month of the sessions to retrieve
                 </p>
               </div>
@@ -157,9 +157,9 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                   min={1900}
                   max={9999}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted mt-1">
                   The year of the sessions to retrieve
                 </p>
               </div>
@@ -169,7 +169,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
 
         <div className="border-t pt-4">
           <h3 className="text-lg font-medium mb-3">Send Request</h3>
-          <p className="text-sm text-gray-600 mb-3">
+          <p className="text-sm text-on-surface-secondary mb-3">
             Click the Send button below to send the request to the API!
           </p>
           

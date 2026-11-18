@@ -17,9 +17,9 @@ const ProcessingOverlay: React.FC<{ show: boolean; label?: string }> = ({ show, 
   if (!show) return null;
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40" role="status" aria-live="polite">
-      <div className="flex items-center gap-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-5 py-4 shadow-xl">
-        <span className="text-2xl leading-none font-mono tabular-nums text-blue-600 dark:text-blue-400 w-6 text-center">{FRAMES[i]}</span>
-        <span className="text-sm text-gray-800 dark:text-gray-100">{label}</span>
+      <div className="flex items-center gap-3 rounded-lg bg-surface border border-default px-5 py-4 shadow-xl">
+        <span className="text-2xl leading-none font-mono tabular-nums text-primary w-6 text-center">{FRAMES[i]}</span>
+        <span className="text-sm text-on-surface">{label}</span>
       </div>
     </div>
   );

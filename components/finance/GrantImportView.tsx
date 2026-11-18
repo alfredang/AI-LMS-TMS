@@ -44,21 +44,21 @@ type PreviewPayload = {
 
 const badge = (s: string) => {
   const x = s.toLowerCase();
-  if (x === 'ready') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
-  if (x === 'already_applied') return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300';
-  if (x === 'unmatched' || x === 'ambiguous') return 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300';
-  if (x === 'invalid') return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
-  return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
+  if (x === 'ready') return 'bg-success-bg text-success';
+  if (x === 'already_applied') return 'bg-warning-bg text-warning';
+  if (x === 'unmatched' || x === 'ambiguous') return 'bg-danger-bg text-danger';
+  if (x === 'invalid') return 'bg-surface-elevated text-on-surface-secondary';
+  return 'bg-surface-elevated text-on-surface-secondary';
 };
 
 const applyBadge = (s: string | null | undefined) => {
   const x = String(s || '').toLowerCase();
-  if (!x) return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
-  if (x === 'applied') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
-  if (x === 'pending') return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300';
-  if (x === 'skipped') return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300';
-  if (x === 'failed') return 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300';
-  return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
+  if (!x) return 'bg-surface-elevated text-on-surface-secondary';
+  if (x === 'applied') return 'bg-success-bg text-success';
+  if (x === 'pending') return 'bg-info-bg text-primary';
+  if (x === 'skipped') return 'bg-warning-bg text-warning';
+  if (x === 'failed') return 'bg-danger-bg text-danger';
+  return 'bg-surface-elevated text-on-surface-secondary';
 };
 
 const fmtMoney = (v: number | null | undefined) =>
@@ -74,7 +74,7 @@ const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, labe
           background: `conic-gradient(currentColor ${p}%, rgba(255,255,255,0.25) 0)`,
         }}
       >
-        <div className="absolute inset-[2px] rounded-full bg-primary-foreground/0 dark:bg-slate-900 bg-white" />
+        <div className="absolute inset-[2px] rounded-full bg-primary-foreground/0 bg-surface" />
       </div>
       <span className="text-xs font-semibold tabular-nums">{p}%</span>
       {label ? <span className="text-xs text-on-surface-secondary">{label}</span> : null}
@@ -874,7 +874,7 @@ const GrantImportView: React.FC = () => {
         </div>
 
         {fetchError && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm whitespace-pre-line">
+          <div className="p-3 bg-danger-bg text-danger rounded-lg text-sm whitespace-pre-line">
             {fetchError}
           </div>
         )}
@@ -913,17 +913,17 @@ const GrantImportView: React.FC = () => {
                 the picture forwards a click at the same spot on the real page, which is all
                 this flow needs: a tap or two, then scan the QR. */}
             {fetchNeedsOperator && fetchScreen && (
-              <div className="mt-4 rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+              <div className="mt-4 rounded-lg border border-blue-300 dark:border-blue-800 bg-info-bg p-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                   <div>
                     <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">Sign in with Singpass to continue</p>
-                    <p className="text-xs text-blue-800 dark:text-blue-300 mt-1 max-w-2xl">
+                    <p className="text-xs text-info mt-1 max-w-2xl">
                       This is the live browser running for this fetch. Scan the QR with the Singpass app on your
                       phone — you are signing in as yourself. Click the picture if you need to press something on
                       the page.
                     </p>
                   </div>
-                  <span className="text-[11px] text-blue-700 dark:text-blue-300 tabular-nums">
+                  <span className="text-[11px] text-primary tabular-nums">
                     updated {new Date(fetchScreen.at).toLocaleTimeString([], { hour12: false })}
                   </span>
                 </div>
@@ -1024,7 +1024,7 @@ const GrantImportView: React.FC = () => {
 
           <div className="text-center">
             <h3 className="text-xl font-bold dark:text-white">Upload Disbursement File</h3>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-muted mt-1">
               Upload a TPGateway disbursement export to preview matches before applying any QB updates.
             </p>
           </div>
@@ -1034,7 +1034,7 @@ const GrantImportView: React.FC = () => {
             onDragLeave={(e) => handleDragEvents(e, false)}
             onDrop={handleDrop}
             className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${
-              isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500'
+              isDragOver ? 'border-blue-500 bg-info-bg' : 'border-strong hover:border-blue-500'
             }`}
           >
             <input
@@ -1045,34 +1045,34 @@ const GrantImportView: React.FC = () => {
               onChange={(e) => applySelectedFile(e.target.files?.[0] || null)}
             />
             <label htmlFor={fileInputId} className="cursor-pointer">
-              <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-              <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+              <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+              <p className="mt-2 font-semibold text-on-surface">
                 {file ? file.name : 'Drag & drop your file here, or click to browse'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">XLSX file format</p>
-              {file && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>}
+              <p className="text-xs text-muted mt-1">XLSX file format</p>
+              {file && <p className="text-xs text-muted mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>}
             </label>
           </div>
 
           {fileValidationError && !error && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-lg text-sm">
+            <div className="p-3 bg-warning-bg text-warning rounded-lg text-sm">
               {fileValidationError}
             </div>
           )}
 
           {error && (
-            <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+            <div className="mt-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
                 <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+                <h4 className="font-semibold text-on-surface">Something went wrong!</h4>
+                <p className="text-sm text-on-surface-secondary mt-1 whitespace-pre-line">{error}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setError(null)}
-                className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                className="flex-shrink-0 text-muted hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <Icon name={IconName.Close} className="w-5 h-5" />
               </button>
@@ -1080,7 +1080,7 @@ const GrantImportView: React.FC = () => {
           )}
 
           {info && !error && (
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 rounded-lg text-sm">
+            <div className="p-3 bg-success-bg text-success rounded-lg text-sm">
               {info}
             </div>
           )}
@@ -1097,7 +1097,7 @@ const GrantImportView: React.FC = () => {
             </Button>
           </div>
 
-          {!actorUserId && <p className="text-xs text-red-600 dark:text-red-300">Login required.</p>}
+          {!actorUserId && <p className="text-xs text-danger">Login required.</p>}
         </form>
       </Card>
 
@@ -1123,15 +1123,15 @@ const GrantImportView: React.FC = () => {
               <div className="text-[11px] text-on-surface-secondary">Total</div>
             </Card>
             <Card className="p-3 text-center border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-900/10">
-              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{counts.ready}</div>
+              <div className="text-lg font-bold text-success">{counts.ready}</div>
               <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">Ready</div>
             </Card>
             <Card className="p-3 text-center border border-amber-500/30 bg-amber-50/40 dark:bg-amber-900/10">
-              <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{counts.already}</div>
+              <div className="text-lg font-bold text-warning">{counts.already}</div>
               <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80">Already Applied</div>
             </Card>
             <Card className="p-3 text-center border border-red-500/30 bg-red-50/40 dark:bg-red-900/10">
-              <div className="text-lg font-bold text-red-700 dark:text-red-300">{counts.problem}</div>
+              <div className="text-lg font-bold text-danger">{counts.problem}</div>
               <div className="text-[11px] text-red-700/80 dark:text-red-300/80">Need Attention</div>
             </Card>
           </div>
@@ -1194,7 +1194,7 @@ const GrantImportView: React.FC = () => {
 
               <Card className="p-5">
                 <div className="flex items-center gap-2">
-                  <Icon name={IconName.CheckCircle} className="w-5 h-5 text-emerald-500" />
+                  <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                   <div className="text-sm font-semibold text-on-surface">Apply finished</div>
                 </div>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1213,8 +1213,8 @@ const GrantImportView: React.FC = () => {
 
                 {Array.isArray(applyResult?.results) && applyResult.results.some((r: any) => r?.status === 'failed') && (
                   <div className="mt-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50/70 dark:bg-red-900/20 p-3">
-                    <div className="text-sm font-semibold text-red-800 dark:text-red-200">Failed rows</div>
-                    <ul className="mt-2 space-y-1 text-xs text-red-800 dark:text-red-200">
+                    <div className="text-sm font-semibold text-danger">Failed rows</div>
+                    <ul className="mt-2 space-y-1 text-xs text-danger">
                       {applyResult.results
                         .filter((r: any) => r?.status === 'failed')
                         .slice(0, 10)
@@ -1225,7 +1225,7 @@ const GrantImportView: React.FC = () => {
                         ))}
                     </ul>
                     {applyResult.results.filter((r: any) => r?.status === 'failed').length > 10 && (
-                      <div className="mt-2 text-[11px] text-red-700 dark:text-red-300">
+                      <div className="mt-2 text-[11px] text-danger">
                         Showing first 10 failures. See table for per-row errors.
                       </div>
                     )}
@@ -1242,15 +1242,15 @@ const GrantImportView: React.FC = () => {
               {(
                 [
                   { key: 'all',            label: 'All',            count: preview.rows.length,                                                                     activeClass: 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-900' },
-                  { key: 'ready',          label: 'Ready',          count: counts.ready,                                                                            activeClass: 'bg-emerald-600 text-white' },
-                  { key: 'already_applied',label: 'Already Applied',count: counts.already,                                                                          activeClass: 'bg-amber-500 text-white' },
-                  { key: 'unmatched',      label: 'Unmatched',      count: counts.unmatched,                                                                        activeClass: 'bg-red-500 text-white' },
-                  { key: 'ambiguous',      label: 'Ambiguous',      count: counts.ambiguous,                                                                        activeClass: 'bg-red-500 text-white' },
+                  { key: 'ready',          label: 'Ready',          count: counts.ready,                                                                            activeClass: 'bg-emerald-700 text-white' },
+                  { key: 'already_applied',label: 'Already Applied',count: counts.already,                                                                          activeClass: 'bg-amber-700 text-white' },
+                  { key: 'unmatched',      label: 'Unmatched',      count: counts.unmatched,                                                                        activeClass: 'bg-red-600 text-white' },
+                  { key: 'ambiguous',      label: 'Ambiguous',      count: counts.ambiguous,                                                                        activeClass: 'bg-red-600 text-white' },
                   { key: 'invalid',        label: 'Invalid',        count: counts.invalid,                                                                          activeClass: 'bg-gray-500 text-white' },
                   ...(applyResult ? [
-                    { key: 'applied', label: 'Applied', count: preview.rows.filter(isFreshlyApplied).length, activeClass: 'bg-emerald-600 text-white' },
-                    { key: 'skipped', label: 'Skipped', count: preview.rows.filter((r) => String(r.apply_status || '') === 'skipped').length, activeClass: 'bg-amber-500 text-white' },
-                    { key: 'failed',  label: 'Failed',  count: preview.rows.filter((r) => String(r.apply_status || '') === 'failed').length,  activeClass: 'bg-red-500 text-white' },
+                    { key: 'applied', label: 'Applied', count: preview.rows.filter(isFreshlyApplied).length, activeClass: 'bg-emerald-700 text-white' },
+                    { key: 'skipped', label: 'Skipped', count: preview.rows.filter((r) => String(r.apply_status || '') === 'skipped').length, activeClass: 'bg-amber-700 text-white' },
+                    { key: 'failed',  label: 'Failed',  count: preview.rows.filter((r) => String(r.apply_status || '') === 'failed').length,  activeClass: 'bg-red-600 text-white' },
                   ] : []),
                 ] as Array<{ key: string; label: string; count: number; activeClass: string }>
               ).map((opt) => (
@@ -1436,8 +1436,8 @@ const GrantImportView: React.FC = () => {
                           <span
                             className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
                               fmsStatus === 'updated'
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300'
+                                ? 'bg-success-bg text-success'
+                                : 'bg-surface-elevated text-on-surface-secondary'
                             }`}
                           >
                             {fmsStatus}
@@ -1447,8 +1447,8 @@ const GrantImportView: React.FC = () => {
                           <span
                             className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
                               qbStatus === 'applied'
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300'
+                                ? 'bg-success-bg text-success'
+                                : 'bg-surface-elevated text-on-surface-secondary'
                             }`}
                           >
                             {qbStatus}

@@ -11,7 +11,7 @@ import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
 import PayrollSettingsView from './payroll/PayrollSettingsView';
 
 // Constants for styling consistency
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 // API Key configurations with their available models
 const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; label: string }[]; defaultModel: string }> = {
@@ -208,7 +208,7 @@ const ToggleSwitch: React.FC<{
         return (
             <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                 <span className="text-sm font-bold text-on-surface">{label}</span>
-                <span className={`text-sm font-medium ${checked ? 'text-green-500' : 'text-gray-400'}`}>
+                <span className={`text-sm font-medium ${checked ? 'text-green-500' : 'text-muted'}`}>
                     {checked ? 'Enabled' : 'Disabled'}
                 </span>
             </div>
@@ -444,7 +444,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 return (
                     <div
                         key={keyName}
-                        className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
+                        className="p-4 rounded-lg border border-strong bg-surface"
                     >
                         <div className="flex items-center justify-between mb-3">
                             <span className="font-semibold text-on-surface">
@@ -474,7 +474,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     )
                                 )}
                                 {keyValue && (
-                                    <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                                    <span className="text-sm text-success flex items-center gap-1.5">
                                         <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                                         Configured
                                     </span>
@@ -503,12 +503,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 }));
                                             }}
                                             placeholder={inputLabel ? `Enter ${inputLabel.toLowerCase()}...` : 'Enter API key...'}
-                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted hover:text-gray-600 dark:hover:text-gray-300 p-1"
                                         >
                                             <Icon
                                                 name={isVisible ? IconName.EyeOff : IconName.Eye}
@@ -517,19 +517,19 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-strong rounded-md">
                                         <span className="flex-grow text-on-surface font-mono text-sm truncate">
                                             {keyValue ? (
                                                 isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
                                             ) : (
-                                                <span className="text-gray-500 italic">Not set</span>
+                                                <span className="text-muted italic">Not set</span>
                                             )}
                                         </span>
                                         {keyValue && (
                                             <button
                                                 type="button"
                                                 onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
+                                                className="text-muted hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
                                             >
                                                 <Icon
                                                     name={isVisible ? IconName.EyeOff : IconName.Eye}
@@ -556,7 +556,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                     }
                                                 }));
                                             }}
-                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                                             disabled={!keyValue}
                                         >
                                             <option value="">None</option>
@@ -567,12 +567,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             ))}
                                         </select>
                                     ) : (
-                                        <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                        <div className="px-3 py-2 bg-surface border border-strong rounded-md">
                                             <span className="text-on-surface text-sm">
                                                 {keyValue ? (
                                                     selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
                                                 ) : (
-                                                    <span className="text-gray-500 italic">-</span>
+                                                    <span className="text-muted italic">-</span>
                                                 )}
                                             </span>
                                         </div>
@@ -1066,7 +1066,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <h3 className={`text-lg font-bold ${isDefault ? 'text-green-400' : 'text-on-surface'}`}>{title}</h3>
                     <Icon
                         name={IconName.ChevronDown}
-                        className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                        className={`w-5 h-5 flex-shrink-0 text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                     />
                 </div>
             </button>
@@ -1101,7 +1101,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button type="button" onClick={toggle} className="group flex flex-1 items-center justify-between text-left">
                 <h2 className={titleClassName}>{title}</h2>
-                <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isOpen ? 'rotate-180' : ''}`} />
+                <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-muted group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             {renderSectionActions()}
         </div>
@@ -1121,7 +1121,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <h3 className="text-lg font-bold text-on-surface">{title}</h3>
                 <Icon
                     name={IconName.ChevronDown}
-                    className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 flex-shrink-0 text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 />
             </div>
         </button>
@@ -1144,7 +1144,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <h3 className="text-base font-bold text-on-surface">{title}</h3>
                 <Icon
                     name={IconName.ChevronDown}
-                    className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-4 h-4 flex-shrink-0 text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 />
             </div>
         </button>
@@ -1622,7 +1622,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                         <button
                                                             type="button"
                                                             onClick={() => setVisible(!visible)}
-                                                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            className="text-muted hover:text-gray-600 dark:hover:text-gray-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                                         >
                                                             <Icon
                                                                 name={visible ? IconName.EyeOff : IconName.Eye}
@@ -1668,10 +1668,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </p>
                                         </div>
                                         {googleRenewStatus.kind === 'opened' && (
-                                            <p className="text-xs text-green-600 mt-2">{googleRenewStatus.message}</p>
+                                            <p className="text-xs text-success mt-2">{googleRenewStatus.message}</p>
                                         )}
                                         {googleRenewStatus.kind === 'error' && (
-                                            <p className="text-xs text-red-600 mt-2">{googleRenewStatus.message}</p>
+                                            <p className="text-xs text-danger mt-2">{googleRenewStatus.message}</p>
                                         )}
                                     </div>
 
@@ -1726,10 +1726,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </button>
                                         </div>
                                         {gmailTestStatus.kind === 'ok' && (
-                                            <p className="text-xs text-green-600 mt-2">{gmailTestStatus.message}</p>
+                                            <p className="text-xs text-success mt-2">{gmailTestStatus.message}</p>
                                         )}
                                         {gmailTestStatus.kind === 'error' && (
-                                            <p className="text-xs text-red-600 mt-2">{gmailTestStatus.message}</p>
+                                            <p className="text-xs text-danger mt-2">{gmailTestStatus.message}</p>
                                         )}
                                         <p className="text-xs text-on-surface-secondary mt-2">
                                             {isEditing
@@ -2163,7 +2163,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-success-bg text-success' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                                         {zoomStatus.connected ? `Connected${zoomStatus.userEmail ? `: ${zoomStatus.userEmail}` : ''}` : 'Not connected'}
                                     </span>
                                     <Button size="sm" variant="secondary" onClick={handleConnectZoom} disabled={isEditing || zoomBusy || !hasZoomCredentialsInForm}>
@@ -2177,7 +2177,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </Button>
                                 </div>
                                 {isEditing ? (
-                                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-200">
+                                    <div className="rounded-md border border-amber-300 bg-warning-bg px-3 py-2 text-xs font-medium text-warning dark:border-amber-700/70">
                                         Save the Zoom OAuth App Client ID and Secret before connecting. The Connect Zoom button will unlock after the credentials are saved.
                                     </div>
                                 ) : (
@@ -2811,10 +2811,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </button>
                                         </div>
                                         {smtpTestStatus.kind === 'ok' && (
-                                            <p className="text-xs text-green-600 mt-2">{smtpTestStatus.message}</p>
+                                            <p className="text-xs text-success mt-2">{smtpTestStatus.message}</p>
                                         )}
                                         {smtpTestStatus.kind === 'error' && (
-                                            <p className="text-xs text-red-600 mt-2">{smtpTestStatus.message}</p>
+                                            <p className="text-xs text-danger mt-2">{smtpTestStatus.message}</p>
                                         )}
                                         <p className="text-xs text-on-surface-secondary mt-2">
                                             {isEditing
@@ -3343,7 +3343,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 </button>
                             ) : (
                                 <span
-                                    className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
+                                    className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-success' : 'text-muted'
                                         }`}
                                 >
                                     {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
@@ -3369,7 +3369,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             securitySettings: { ...prev.securitySettings, sanitiseAfterMonths: v },
                                         }));
                                     }}
-                                    className="w-20 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-20 rounded-md border border-strong bg-surface px-2 py-1 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             ) : (
                                 <span className="text-sm font-semibold text-on-surface tabular-nums">
@@ -3403,7 +3403,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </button>
                         ) : (
                             <span
-                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-green-600' : 'text-gray-400'
+                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-success' : 'text-muted'
                                     }`}
                             >
                                 {formData.securitySettings.enableOtpLogin ? 'Enabled' : 'Disabled'}
@@ -3430,7 +3430,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </button>
                                 ) : (
                                     <span
-                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-green-600' : 'text-gray-400'
+                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-success' : 'text-muted'
                                             }`}
                                     >
                                         {formData.securitySettings.enableDefaultOtp ? 'Enabled' : 'Disabled'}
@@ -3487,7 +3487,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </button>
                         ) : (
                             <span
-                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-green-600' : 'text-gray-400'
+                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-success' : 'text-muted'
                                     }`}
                             >
                                 {formData.securitySettings.forceFirstPasswordChange ? 'Enabled' : 'Disabled'}
@@ -3819,7 +3819,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                         }}
                                                         disabled={!isEditing}
                                                         placeholder={config?.label || keyName}
-                                                        className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                        className="flex-1 rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                     />
                                                     <button
                                                         type="button"
@@ -3851,7 +3851,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     return (
                                         <div
                                             key={appKey}
-                                            className={`rounded-lg border-2 p-4 transition-colors ${isDefault ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                                            className={`rounded-lg border-2 p-4 transition-colors ${isDefault ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-default'}`}
                                         >
                                             <div className="flex items-center gap-3 mb-3">
                                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -3866,12 +3866,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                                 apiKeys: { ...prev.apiKeys, QUICKBOOKS_DEFAULT_APP: appKey }
                                                             }));
                                                         }}
-                                                        className="w-4 h-4 text-green-600 accent-green-600"
+                                                        className="w-4 h-4 text-success accent-green-600"
                                                     />
                                                     <span className="font-semibold text-on-surface">{appLabel}</span>
                                                 </label>
                                                 {isDefault && (
-                                                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-800/30 dark:text-green-400">
+                                                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-success-bg text-success">
                                                         Default
                                                     </span>
                                                 )}
@@ -3896,7 +3896,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                                     }}
                                                                     disabled={!isEditing}
                                                                     placeholder={config?.label || keyName}
-                                                                    className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                                    className="flex-1 rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -3918,7 +3918,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 })}
 
                                 {/* Shared Quickbooks fields */}
-                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                <div className="mt-4 pt-4 border-t border-default">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {(['QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_REALM_ID'] as const).map((keyName) => {
                                             const keyValue = (formData.apiKeys || {})[keyName] || '';
@@ -3939,7 +3939,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                             }}
                                                             disabled={!isEditing}
                                                             placeholder={config?.label || keyName}
-                                                            className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                            className="flex-1 rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                         />
                                                         <button
                                                             type="button"
@@ -3959,7 +3959,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     {/* Redirect URI (override) — replaces the legacy QBO_REDIRECT_URI
                                         env var. Leave blank to use the computed default. Must match an
                                         entry in the Intuit Developer app's Redirect URIs allow list. */}
-                                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                    <div className="mt-4 pt-4 border-t border-default">
                                         {(() => {
                                             const savedOverride = (formData.integrations as any).qboRedirectUri || '';
                                             const computedDefault = typeof window !== 'undefined'
@@ -3982,7 +3982,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                                     } as any,
                                                                 }))
                                                             }
-                                                            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                            className="w-full rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                                             placeholder={`leave blank to use ${computedDefault}`}
                                                         />
                                                     ) : (
@@ -4019,7 +4019,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 const defaultApp = (formData.apiKeys || {} as any)['QUICKBOOKS_DEFAULT_APP'] || 'app1';
                                                 window.open(`/api/quickbooks/oauth/connect?app=${defaultApp}`, '_blank', 'width=600,height=700');
                                             }}
-                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-800 transition-colors"
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -4081,7 +4081,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         name="primary"
                                         value={formData.colorScheme || '#3B82F6'}
                                         onChange={handleColorChange}
-                                        className="w-10 h-10 rounded-md border-2 border-gray-300 cursor-pointer hover:border-primary transition-colors"
+                                        className="w-10 h-10 rounded-md border-2 border-strong cursor-pointer hover:border-primary transition-colors"
                                     />
                                     <span className="font-mono text-sm text-on-surface-secondary">{formData.colorScheme || '#3B82F6'}</span>
                                 </>

@@ -82,7 +82,7 @@ export function CoursePracticeExamSetting({ courseId }: { courseId: string }) {
   const known = !pick || catalog.some(c => c.slug === pick);
 
   return (
-    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+    <div className="p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
       <div className="flex justify-between items-center gap-3">
         <div>
           <p className="font-semibold text-sm">Practice Exam</p>
@@ -109,7 +109,7 @@ export function CoursePracticeExamSetting({ courseId }: { courseId: string }) {
             <select
               value={pick}
               onChange={e => setPick(e.target.value)}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              className="w-full rounded border border-strong bg-surface px-2 py-1.5 text-sm text-on-surface"
             >
               <option value="">— Select an exam —</option>
               {!known && <option value={pick}>{pick} (not found)</option>}
@@ -129,7 +129,7 @@ export function CoursePracticeExamSetting({ courseId }: { courseId: string }) {
         </div>
       )}
 
-      {note && <p className={`mt-2 text-xs ${note.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>{note.text}</p>}
+      {note && <p className={`mt-2 text-xs ${note.ok ? 'text-success' : 'text-danger'}`}>{note.text}</p>}
     </div>
   );
 }

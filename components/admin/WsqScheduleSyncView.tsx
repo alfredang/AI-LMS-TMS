@@ -91,10 +91,10 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
 };
 
 const STATUS_CLASS: Record<SyncStatus, string> = {
-  synced: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  missing_in_ssg: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  extra_in_ssg: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  unparsed: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+  synced: 'bg-success-bg text-success',
+  missing_in_ssg: 'bg-warning-bg text-warning',
+  extra_in_ssg: 'bg-info-bg text-info',
+  unparsed: 'bg-gray-200 text-on-surface-secondary dark:bg-gray-700',
 };
 
 const WsqScheduleSyncView: React.FC = () => {
@@ -426,7 +426,7 @@ const stopPolling = useCallback(() => {
           <button
             onClick={syncAll}
             disabled={isJobRunning || totalSyncable === 0}
-            className={`px-3 py-2 text-sm rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-600' : 'bg-primary'}`}
+            className={`px-3 py-2 text-sm rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-700' : 'bg-primary'}`}
           >
             {isJobRunning ? 'Syncing…' : filter === 'blocked' ? `Retry All (${totalSyncable})` : `Sync All to SSG (${totalSyncable})`}
           </button>
@@ -434,7 +434,7 @@ const stopPolling = useCallback(() => {
             onClick={refreshSupportPeriods}
             disabled={refreshingSupport || isJobRunning}
             title="Load each course's WSQ funding window from SSG so blocked dates are explainable"
-            className="px-3 py-2 text-sm rounded-md bg-surface-elevated text-on-surface border border-gray-300 dark:border-gray-700 hover:opacity-90 disabled:opacity-50"
+            className="px-3 py-2 text-sm rounded-md bg-surface-elevated text-on-surface border border-strong hover:opacity-90 disabled:opacity-50"
           >
             {refreshingSupport ? 'Refreshing support…' : 'Refresh Support Periods'}
           </button>
@@ -449,7 +449,7 @@ const stopPolling = useCallback(() => {
       </div>
 
       {error && (
-        <div className="p-3 rounded-md bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 text-sm">
+        <div className="p-3 rounded-md bg-danger-bg text-red-800 dark:text-red-100 text-sm">
           <div className="font-semibold">Failed to load schedule data</div>
           <div>{error.message || error.error}</div>
           {error.status && <div className="text-xs mt-1">Upstream status: {error.status}</div>}
@@ -458,7 +458,7 @@ const stopPolling = useCallback(() => {
       )}
 
       {notice && (
-        <div className="p-3 rounded-md bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 text-sm flex items-start justify-between gap-3">
+        <div className="p-3 rounded-md bg-warning-bg text-amber-900 dark:text-amber-100 text-sm flex items-start justify-between gap-3">
           <div>{notice}</div>
           <button onClick={() => setNotice(null)} className="text-xs underline">dismiss</button>
         </div>
@@ -475,7 +475,7 @@ const stopPolling = useCallback(() => {
               Sync History
               <span className="text-xs text-on-surface-secondary font-normal">({allJobs.length} run{allJobs.length !== 1 ? 's' : ''})</span>
               {allJobs[0].status === 'running' && (
-                <span className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-normal">
+                <span className="flex items-center gap-1.5 text-xs text-primary font-normal">
                   <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                   Syncing {allJobs[0].items_done} / {allJobs[0].total_items}
                 </span>
@@ -490,9 +490,9 @@ const stopPolling = useCallback(() => {
                 const isRunning = job.status === 'running';
                 const failures: ItemResult[] = visibleFailures(Array.isArray(job.failures) ? job.failures : []);
                 const jobHasFailures = failures.length > 0;
-                const statusCls = isRunning ? 'text-blue-600 dark:text-blue-400'
-                  : (job.status === 'failed' || jobHasFailures) ? 'text-red-600 dark:text-red-400'
-                  : 'text-green-600 dark:text-green-400';
+                const statusCls = isRunning ? 'text-primary'
+                  : (job.status === 'failed' || jobHasFailures) ? 'text-danger'
+                  : 'text-success';
                 return (
                   <div key={job.id} className="px-4 py-2 text-xs space-y-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -502,7 +502,7 @@ const stopPolling = useCallback(() => {
                           {new Date(job.started_at).toLocaleString()}
                           {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
                         </span>
-                        <span className={`px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+                        <span className={`px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                           {job.triggered_by === 'cron' ? 'Cron' : 'Manual'}
                         </span>
                         <span className={`font-medium ${statusCls}`}>
@@ -512,9 +512,9 @@ const stopPolling = useCallback(() => {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-on-surface-secondary">
-                        {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
+                        {job.submitted > 0 && <span className="text-success">{job.submitted} submitted</span>}
                         {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
-                        {job.ssg_errors > 0 && <span className="text-red-500">{job.ssg_errors} SSG errors</span>}
+                        {job.ssg_errors > 0 && <span className="text-danger">{job.ssg_errors} SSG errors</span>}
                         {job.skipped > 0 && <span>{job.skipped} skipped</span>}
                         {isRunning && (
                           <button
@@ -527,7 +527,7 @@ const stopPolling = useCallback(() => {
                               stopPolling();
                               await fetchJobs();
                             }}
-                            className="px-2 py-0.5 rounded border border-red-300 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                            className="px-2 py-0.5 rounded border border-red-300 text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             Cancel sync
                           </button>
@@ -535,7 +535,7 @@ const stopPolling = useCallback(() => {
                       </div>
                     </div>
                     {isRunning && job.total_items > 0 && (
-                      <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1.5">
+                      <div className="w-full bg-info-bg rounded-full h-1.5">
                         <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
                           style={{ width: `${Math.round((job.items_done / job.total_items) * 100)}%` }} />
                       </div>
@@ -545,7 +545,7 @@ const stopPolling = useCallback(() => {
                         {failures.map((f, fi) => (
                           <div key={fi} className="text-on-surface-secondary font-mono">
                             {f.course_code} {f.start_date} → {f.end_date}
-                            {f.message && <span className="text-red-500 ml-2">{normalizeError(f.message)}</span>}
+                            {f.message && <span className="text-danger ml-2">{normalizeError(f.message)}</span>}
                           </div>
                         ))}
                       </div>
@@ -577,10 +577,10 @@ const stopPolling = useCallback(() => {
               {cronLogs.map((l) => (
                 <div key={l.id} className="px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="font-mono text-on-surface-secondary">{new Date(l.created_at).toLocaleString()}</span>
-                  <span className={`px-1.5 py-0.5 rounded ${l.cron === 'weekly_blocked' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'}`}>
+                  <span className={`px-1.5 py-0.5 rounded ${l.cron === 'weekly_blocked' ? 'bg-warning-bg text-warning' : 'bg-info-bg text-primary'}`}>
                     {l.cron === 'weekly_blocked' ? 'Weekly retry' : 'Daily fresh'}
                   </span>
-                  <span className={`font-medium ${l.status === 'error' ? 'text-red-600 dark:text-red-400' : l.status === 'started' ? 'text-green-600 dark:text-green-400' : 'text-on-surface-secondary'}`}>
+                  <span className={`font-medium ${l.status === 'error' ? 'text-danger' : l.status === 'started' ? 'text-success' : 'text-on-surface-secondary'}`}>
                     {l.status}
                   </span>
                   {l.considered != null && <span className="text-on-surface-secondary">{l.considered} considered</span>}
@@ -619,7 +619,7 @@ const stopPolling = useCallback(() => {
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 text-xs rounded-full border ${
                   filter === f
-                    ? (f === 'blocked' ? 'bg-orange-600 text-white border-orange-600' : 'bg-primary text-white border-primary')
+                    ? (f === 'blocked' ? 'bg-orange-700 text-white border-orange-600' : 'bg-primary text-white border-primary')
                     : 'bg-surface text-on-surface border-default hover:bg-surface-elevated'
                 }`}
               >
@@ -676,15 +676,15 @@ const stopPolling = useCallback(() => {
                     </button>
                     <div className="flex items-center gap-2 text-xs">
                       {missingCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.missing_in_ssg}`}>{missingCount} missing</span>}
-                      {erroredCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">{erroredCount} errored</span>}
-                      {groupBlockedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">{groupBlockedCount} blocked</span>}
+                      {erroredCount > 0 && <span className="px-2 py-0.5 rounded-full bg-danger-bg text-danger">{erroredCount} errored</span>}
+                      {groupBlockedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-warning-bg text-warning">{groupBlockedCount} blocked</span>}
                       {syncedCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.synced}`}>{syncedCount} synced</span>}
                       <span className="text-on-surface-secondary">· {g.rows.length} rows</span>
                       {syncableCount > 0 && (
                         <button
                           onClick={(e) => { e.stopPropagation(); syncCourse(g); }}
                           disabled={isJobRunning}
-                          className={`ml-2 px-2 py-1 text-xs rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-600' : 'bg-primary'}`}
+                          className={`ml-2 px-2 py-1 text-xs rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-700' : 'bg-primary'}`}
                           title={filter === 'blocked' ? 'Retry — SSG previously rejected these as not eligible or outside the support period' : undefined}
                         >
                           {filter === 'blocked' ? `Retry (${syncableCount})` : `Sync to SSG (${syncableCount})`}
@@ -736,14 +736,14 @@ const stopPolling = useCallback(() => {
                                       <button
                                         onClick={() => syncRow(g, r)}
                                         disabled={isJobRunning}
-                                        className={`px-2 py-1 text-xs rounded-md text-white hover:opacity-90 disabled:opacity-50 ${blocked ? 'bg-orange-600' : 'bg-primary'}`}
+                                        className={`px-2 py-1 text-xs rounded-md text-white hover:opacity-90 disabled:opacity-50 ${blocked ? 'bg-orange-700' : 'bg-primary'}`}
                                         title={blocked ? 'Retry — SSG previously rejected this as not eligible or outside the support period' : undefined}
                                       >
                                         {lastError ? 'Retry sync' : 'Sync to SSG'}
                                       </button>
                                       {lastError && (
                                         <span
-                                          className={`text-xs cursor-help max-w-[220px] truncate ${blocked ? 'text-orange-600 dark:text-orange-400' : 'text-red-600 dark:text-red-400'}`}
+                                          className={`text-xs cursor-help max-w-[220px] truncate ${blocked ? 'text-warning' : 'text-danger'}`}
                                           title={lastError}
                                         >
                                           ✗ {lastError}

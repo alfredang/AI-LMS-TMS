@@ -217,7 +217,7 @@ const CourseSessionTimingView: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white';
+  const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -230,7 +230,7 @@ const CourseSessionTimingView: React.FC = () => {
       </div>
 
       {/* ── Bulk upload temporarily disabled ── */}
-      <Card className="p-6 text-center text-gray-400 dark:text-gray-500 text-sm">
+      <Card className="p-6 text-center text-muted text-sm">
         Bulk upload is currently disabled.
       </Card>
 

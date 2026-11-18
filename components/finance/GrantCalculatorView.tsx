@@ -210,27 +210,27 @@ export default function GrantCalculatorView() {
   const tabClass = (t: CalcTab) =>
     `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
       tab === t
-        ? 'bg-white dark:bg-slate-800 text-primary border-b-2 border-primary'
-        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'
+        ? 'bg-surface text-primary border-b-2 border-primary'
+        : 'text-muted hover:text-on-surface hover:bg-surface-hover'
     }`;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Grant Calculator</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-on-surface">Grant Calculator</h1>
+        <p className="mt-1 text-sm text-muted">
           POST /grantCalculators/individual (v3.0).{' '}
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success-bg text-success">
             Certificate + OAuth
           </span>
         </p>
       </div>
 
       <SsgAppSelector />
-      <p className="text-xs text-amber-600 dark:text-amber-400 -mt-2">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
+      <p className="text-xs text-warning -mt-2">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex gap-1 border-b border-default">
         <button onClick={() => setTab('personalised')} className={tabClass('personalised')}>
           Personalised
         </button>
@@ -243,7 +243,7 @@ export default function GrantCalculatorView() {
       {tab === 'baseline' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
               Courses (one per line: UEN, CourseRefNo)
             </label>
             <textarea
@@ -251,7 +251,7 @@ export default function GrantCalculatorView() {
               onChange={(e) => setCoursesText(e.target.value)}
               rows={4}
               placeholder="201200696W, TGS-2024043419"
-              className="w-full max-w-xl rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
+              className="w-full max-w-xl rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
             />
           </div>
 
@@ -264,14 +264,14 @@ export default function GrantCalculatorView() {
           </button>
 
           {baselineError && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+            <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-danger text-sm">
               {baselineError}
             </div>
           )}
 
           {baselineResult && (
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Grant Fee Summary</h2>
+              <h2 className="text-lg font-bold text-on-surface">Grant Fee Summary</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse">
                   <thead>
@@ -286,19 +286,19 @@ export default function GrantCalculatorView() {
                   <tbody>
                     {extractFeeSummary(baselineResult).length > 0 ? (
                       extractFeeSummary(baselineResult).map((row, i) => (
-                        <tr key={i} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                        <tr key={i} className="border-b border-default hover:bg-surface-hover">
                           <td className="px-4 py-3">
-                            <div className="font-medium text-gray-900 dark:text-white">{row.courseName}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{row.courseRef}</div>
+                            <div className="font-medium text-on-surface">{row.courseName}</div>
+                            <div className="text-xs text-muted">{row.courseRef}</div>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="text-gray-900 dark:text-white">{row.tpName}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{row.tpUen}</div>
+                            <div className="text-on-surface">{row.tpName}</div>
+                            <div className="text-xs text-muted">{row.tpUen}</div>
                           </td>
-                          <td className="px-4 py-3 text-right font-mono tabular-nums text-gray-900 dark:text-white">
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-on-surface">
                             {formatCurrency(row.approvedFee)}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono tabular-nums text-green-600 dark:text-green-400">
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-success">
                             − {formatCurrency(row.totalGrant)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-primary">
@@ -308,7 +308,7 @@ export default function GrantCalculatorView() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={5} className="px-4 py-6 text-center text-muted">
                           No course data returned. Check the JSON response for details.
                         </td>
                       </tr>
@@ -318,16 +318,16 @@ export default function GrantCalculatorView() {
               </div>
 
               {/* JSON Response collapsible */}
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="border border-default rounded-lg overflow-hidden">
                 <button
                   onClick={() => setShowBaselineJson(!showBaselineJson)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors"
                 >
                   <span>▶ JSON Response</span>
-                  <span className="text-xs text-gray-400">{showBaselineJson ? 'collapse' : 'expand'}</span>
+                  <span className="text-xs text-muted">{showBaselineJson ? 'collapse' : 'expand'}</span>
                 </button>
                 {showBaselineJson && (
-                  <pre className="px-4 py-3 bg-gray-50 dark:bg-slate-900 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto max-h-96 border-t border-gray-200 dark:border-gray-700">
+                  <pre className="px-4 py-3 bg-surface-elevated text-xs font-mono text-on-surface overflow-x-auto max-h-96 border-t border-default">
                     {JSON.stringify(baselineResult, null, 2)}
                   </pre>
                 )}
@@ -342,84 +342,84 @@ export default function GrantCalculatorView() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">UEN</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">UEN</label>
               <input
                 value={uen}
                 onChange={(e) => setUen(e.target.value)}
                 placeholder="e.g. 201200696W"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Ref Code *</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Ref Code *</label>
               <input
                 value={pCourseRef}
                 onChange={(e) => setPCourseRef(e.target.value)}
                 placeholder="TGS-2024043419"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-3xl">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">NRIC</label>
               <input
                 value={pNric}
                 onChange={(e) => setPNric(e.target.value)}
                 placeholder="S1234567A"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC Type</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">NRIC Type</label>
               <select
                 value={pNricType}
                 onChange={(e) => setPNricType(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
               >
                 <option value="SC">Singapore Citizen (SC)</option>
                 <option value="PR">Permanent Resident (PR)</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SME?</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">SME?</label>
               <select
                 value={pSme}
                 onChange={(e) => setPSme(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
               >
                 <option value="N">No</option>
                 <option value="Y">Yes</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Employer Sponsored?</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">Employer Sponsored?</label>
               <select
                 value={pEmployerSponsored}
                 onChange={(e) => setPEmployerSponsored(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
               >
                 <option value="N">No</option>
                 <option value="Y">Yes</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">Date of Birth</label>
               <input
                 type="date"
                 value={pDob}
                 onChange={(e) => setPDob(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sponsoring Employer UEN</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">Sponsoring Employer UEN</label>
               <input
                 value={pSponsorUen}
                 onChange={(e) => setPSponsorUen(e.target.value)}
                 placeholder="Optional"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
               />
             </div>
           </div>
@@ -433,14 +433,14 @@ export default function GrantCalculatorView() {
           </button>
 
           {personalisedError && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+            <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-danger text-sm">
               {personalisedError}
             </div>
           )}
 
           {personalisedResult && (
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Grant Fee Summary</h2>
+              <h2 className="text-lg font-bold text-on-surface">Grant Fee Summary</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse">
                   <thead>
@@ -455,19 +455,19 @@ export default function GrantCalculatorView() {
                   <tbody>
                     {extractFeeSummary(personalisedResult).length > 0 ? (
                       extractFeeSummary(personalisedResult).map((row, i) => (
-                        <tr key={i} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                        <tr key={i} className="border-b border-default hover:bg-surface-hover">
                           <td className="px-4 py-3">
-                            <div className="font-medium text-gray-900 dark:text-white">{row.courseName}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{row.courseRef}</div>
+                            <div className="font-medium text-on-surface">{row.courseName}</div>
+                            <div className="text-xs text-muted">{row.courseRef}</div>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="text-gray-900 dark:text-white">{row.tpName}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{row.tpUen}</div>
+                            <div className="text-on-surface">{row.tpName}</div>
+                            <div className="text-xs text-muted">{row.tpUen}</div>
                           </td>
-                          <td className="px-4 py-3 text-right font-mono tabular-nums text-gray-900 dark:text-white">
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-on-surface">
                             {formatCurrency(row.approvedFee)}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono tabular-nums text-green-600 dark:text-green-400">
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-success">
                             − {formatCurrency(row.totalGrant)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-primary">
@@ -477,7 +477,7 @@ export default function GrantCalculatorView() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={5} className="px-4 py-6 text-center text-muted">
                           No course data returned. Check the JSON response for details.
                         </td>
                       </tr>
@@ -487,16 +487,16 @@ export default function GrantCalculatorView() {
               </div>
 
               {/* JSON Response collapsible */}
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="border border-default rounded-lg overflow-hidden">
                 <button
                   onClick={() => setShowPersonalisedJson(!showPersonalisedJson)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors"
                 >
                   <span>▶ JSON Response</span>
-                  <span className="text-xs text-gray-400">{showPersonalisedJson ? 'collapse' : 'expand'}</span>
+                  <span className="text-xs text-muted">{showPersonalisedJson ? 'collapse' : 'expand'}</span>
                 </button>
                 {showPersonalisedJson && (
-                  <pre className="px-4 py-3 bg-gray-50 dark:bg-slate-900 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto max-h-96 border-t border-gray-200 dark:border-gray-700">
+                  <pre className="px-4 py-3 bg-surface-elevated text-xs font-mono text-on-surface overflow-x-auto max-h-96 border-t border-default">
                     {JSON.stringify(personalisedResult, null, 2)}
                   </pre>
                 )}

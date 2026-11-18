@@ -57,13 +57,13 @@ const StatusBadge: React.FC<{ value: string }> = ({ value }) => {
   const v = value.toLowerCase();
   let cls = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ';
   if (v === 'confirmed' || v === 'present' || v === 'attended') {
-    cls += 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+    cls += 'bg-success-bg text-success';
   } else if (v === 'absent') {
-    cls += 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+    cls += 'bg-danger-bg text-danger';
   } else if (v.includes('pending')) {
-    cls += 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+    cls += 'bg-warning-bg text-warning';
   } else if (v === 'cancelled' || v === 'withdrawn') {
-    cls += 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+    cls += 'bg-danger-bg text-danger';
   } else {
     cls += 'bg-surface-elevated text-on-surface-secondary';
   }
@@ -1553,7 +1553,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
           <div className="p-4">
             <label className="block text-xs font-medium text-on-surface-secondary mb-1">
-              Course Run ID <span className="text-red-500">*</span>
+              Course Run ID <span className="text-danger">*</span>
             </label>
             <div className="flex flex-wrap items-start gap-3">
               <div className="flex-1 min-w-[260px] space-y-2">
@@ -1593,7 +1593,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   disabled={isSearching}
                 />
                 {searchError && (
-                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-danger mt-1 flex items-center gap-1">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -1629,7 +1629,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       {!isAdminMode && !selectedCourse && (
         <div className="bg-surface rounded-lg border border-default shadow-sm p-4">
           <label className="block text-xs font-medium text-on-surface-secondary mb-1">
-            Class <span className="text-red-500">*</span>
+            Class <span className="text-danger">*</span>
           </label>
           {coursesLoading ? (
             <div className="flex items-center gap-2 px-3 py-2 border border-default rounded text-sm text-muted">
@@ -1768,7 +1768,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             ) : (
               <div className="space-y-3">
                 {digitalIdError && (
-                  <p className="text-xs text-red-500 flex items-center gap-1">
+                  <p className="text-xs text-danger flex items-center gap-1">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -1807,7 +1807,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       </button>
                     </div>
                     {manualDaIdError && (
-                      <p className="text-xs text-red-500 mt-1">{manualDaIdError}</p>
+                      <p className="text-xs text-danger mt-1">{manualDaIdError}</p>
                     )}
                   </div>
                 )}
@@ -1816,7 +1816,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
 
           {fetchError && (
-            <p className="text-sm text-red-500 flex items-center gap-1.5">
+            <p className="text-sm text-danger flex items-center gap-1.5">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -1869,7 +1869,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         />
         {enrolmentsOpen && (<>
         {enrolmentError && (
-          <p className="px-4 py-2 text-xs text-red-500 flex items-center gap-1.5 border-b border-default">
+          <p className="px-4 py-2 text-xs text-danger flex items-center gap-1.5 border-b border-default">
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -1964,7 +1964,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>
                     <td className="px-3 py-3 whitespace-nowrap">{item?._request ? (
                       item._request.userId ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400" title="Registered on the class from the SWDA Enrolment form">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success" title="Registered on the class from the SWDA Enrolment form">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                           Registered
                         </span>
@@ -1976,13 +1976,13 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       if (enrolStatus === 'cancelled') return <span className="text-muted text-xs">—</span>;
                       const status = learnerAccountMap[email.toLowerCase()];
                       if (status === 'exists') return (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                           Active
                         </span>
                       );
                       if (status === 'done') return (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                           Created
                         </span>
@@ -1995,7 +1995,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       );
                       const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
                       if (status === 'error') return (
-                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="text-xs text-red-500 hover:underline">
+                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="text-xs text-danger hover:underline">
                           Retry
                         </button>
                       );
@@ -2039,14 +2039,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               Learners scan this to check in for this session — no login. A learner not yet in this class is registered
               automatically on their first check-in. From the next session their phone number alone fills in their details.
             </p>
-            <p className="text-xs text-amber-500">This marks Manual Attendance in the LMS. Learners still take SSG e-attendance with the SSG QR code.</p>
+            <p className="text-xs text-warning">This marks Manual Attendance in the LMS. Learners still take SSG e-attendance with the SSG QR code.</p>
             <div className="flex justify-center">
               {checkinLoading ? (
                 <div className="w-64 h-64 rounded-xl bg-white flex items-center justify-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
                 </div>
               ) : checkinError ? (
-                <p className="text-sm text-red-500 py-10">{checkinError}</p>
+                <p className="text-sm text-danger py-10">{checkinError}</p>
               ) : checkinUrl ? (
                 <button type="button" onClick={() => setCheckinZoom(true)} title="Show full screen" className="bg-white p-4 rounded-xl cursor-zoom-in">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2115,7 +2115,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             <img src={qrSrc(checkinUrl, 1000)} alt={`Check-in QR code for ${selectedSessionLabel}`} style={{ width: 'min(68vh, 86vw)', height: 'min(68vh, 86vw)', imageRendering: 'pixelated' }} />
           </div>
           {selectedCourse?.courseRunCode && <p className="text-base md:text-xl text-white font-medium">Class {selectedCourse.courseRunCode}</p>}
-          <p className="text-xs md:text-sm text-gray-300 break-all text-center">{checkinUrl}</p>
+          <p className="text-xs md:text-sm text-muted break-all text-center">{checkinUrl}</p>
         </div>
       )}
 
@@ -2169,9 +2169,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm">
-            <span className="px-3 py-1 rounded-full bg-green-500/15 text-green-500 font-semibold">Present: {manualPresent}</span>
-            <span className="px-3 py-1 rounded-full bg-red-500/15 text-red-400 font-semibold">Absent: {manualRows.length - manualPresent}</span>
-            <span className="px-3 py-1 rounded-full bg-gray-500/15 text-on-surface-secondary font-semibold">Total: {manualRows.length}</span>
+            <span className="chip chip-success text-sm px-3 py-1">Present: {manualPresent}</span>
+            <span className="chip chip-danger text-sm px-3 py-1">Absent: {manualRows.length - manualPresent}</span>
+            <span className="chip chip-neutral text-sm px-3 py-1">Total: {manualRows.length}</span>
             {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
               <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary ml-1" />
             )}
@@ -2229,54 +2229,54 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         {/* Add Learner Modal */}
         {showAddLearnerModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAddLearnerModal(false)}>
-            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowAddLearnerModal(false)} className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <div className="relative bg-surface rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowAddLearnerModal(false)} className="absolute top-3 right-3 p-1.5 rounded-full text-muted hover:text-on-surface hover:bg-surface-hover transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Add Learner Manually</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">For learners who are <span className="font-semibold text-gray-700 dark:text-gray-300">not enrolled</span> in this class but are physically present.</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">An account will be created (if needed) and the learner will be added to all sessions for manual attendance tracking.</p>
+              <h3 className="text-base font-bold text-on-surface mb-1">Add Learner Manually</h3>
+              <p className="text-xs text-muted mb-1">For learners who are <span className="font-semibold text-on-surface-secondary">not enrolled</span> in this class but are physically present.</p>
+              <p className="text-xs text-muted mb-4">An account will be created (if needed) and the learner will be added to all sessions for manual attendance tracking.</p>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-on-surface-secondary mb-1">Full Name <span className="text-danger">*</span></label>
                   <input
                     type="text"
                     value={addLearnerForm.fullName}
                     onChange={e => setAddLearnerForm(f => ({ ...f, fullName: e.target.value }))}
                     placeholder="e.g. John Tan"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    className="w-full border border-strong rounded px-3 py-2 text-sm bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-on-surface-secondary mb-1">Email Address <span className="text-danger">*</span></label>
                   <input
                     type="email"
                     value={addLearnerForm.email}
                     onChange={e => setAddLearnerForm(f => ({ ...f, email: e.target.value }))}
                     placeholder="e.g. john@example.com"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    className="w-full border border-strong rounded px-3 py-2 text-sm bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <label className="block text-xs font-medium text-on-surface-secondary mb-1">NRIC <span className="text-muted font-normal">(optional)</span></label>
                   <input
                     type="text"
                     value={addLearnerForm.nric}
                     onChange={e => setAddLearnerForm(f => ({ ...f, nric: e.target.value }))}
                     placeholder="e.g. S1234567A"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    className="w-full border border-strong rounded px-3 py-2 text-sm bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Leave blank if NRIC is not available.</p>
+                  <p className="text-xs text-muted mt-1">Leave blank if NRIC is not available.</p>
                 </div>
                 {addLearnerError && (
-                  <p className="text-xs text-red-500 flex items-center gap-1">
+                  <p className="text-xs text-danger flex items-center gap-1">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     {addLearnerError}
                   </p>
                 )}
               </div>
               <div className="flex gap-2 mt-5">
-                <button onClick={() => setShowAddLearnerModal(false)} className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <button onClick={() => setShowAddLearnerModal(false)} className="flex-1 px-3 py-2 text-sm border border-strong rounded text-on-surface-secondary hover:bg-surface-hover transition-colors">
                   Cancel
                 </button>
                 <button
@@ -2294,21 +2294,21 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         {/* Remove Learner from Class Modal */}
         {showDeleteLearnerModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteLearnerModal(false)}>
-            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowDeleteLearnerModal(false)} className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <div className="relative bg-surface rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowDeleteLearnerModal(false)} className="absolute top-3 right-3 p-1.5 rounded-full text-muted hover:text-on-surface hover:bg-surface-hover transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Remove Learner from Class</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                Removes the learner's attendance across <span className="font-semibold text-gray-700 dark:text-gray-300">all sessions</span> and their enrolment for this class. Their account will not be deleted.
+              <h3 className="text-base font-bold text-on-surface mb-1">Remove Learner from Class</h3>
+              <p className="text-xs text-muted mb-4">
+                Removes the learner's attendance across <span className="font-semibold text-on-surface-secondary">all sessions</span> and their enrolment for this class. Their account will not be deleted.
               </p>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Select Learner <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-on-surface-secondary mb-1">Select Learner <span className="text-danger">*</span></label>
                   <select
                     value={deleteLearnerNric}
                     onChange={e => setDeleteLearnerNric(e.target.value)}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400"
+                    className="w-full border border-strong rounded px-3 py-2 text-sm bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400"
                   >
                     <option value="">— Select a learner —</option>
                     {extraAttendees.map(r => (
@@ -2322,20 +2322,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   </select>
                 </div>
                 {deleteLearnerError && (
-                  <p className="text-xs text-red-500 flex items-center gap-1">
+                  <p className="text-xs text-danger flex items-center gap-1">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     {deleteLearnerError}
                   </p>
                 )}
               </div>
               <div className="flex gap-2 mt-5">
-                <button onClick={() => setShowDeleteLearnerModal(false)} className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <button onClick={() => setShowDeleteLearnerModal(false)} className="flex-1 px-3 py-2 text-sm border border-strong rounded text-on-surface-secondary hover:bg-surface-hover transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleDeleteLearnerFromClass}
                   disabled={!deleteLearnerNric || isDeletingFromClass}
-                  className="flex-1 px-3 py-2 text-sm bg-red-500 text-white rounded font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-3 py-2 text-sm bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDeletingFromClass ? 'Removing...' : 'Remove from Class'}
                 </button>
@@ -2347,7 +2347,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         {(<>
         {/* Feedback banner */}
         {manualAttendanceMsg && (
-          <div className={`px-4 py-2 text-xs border-b border-default ${manualAttendanceMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
+          <div className={`px-4 py-2 text-xs border-b border-default ${manualAttendanceMsg.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
             {manualAttendanceMsg.text}
           </div>
         )}
@@ -2422,8 +2422,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     <td className="px-3 py-2 text-on-surface">
                       <div className="flex items-center gap-1.5 font-medium">
                         {record.fullName || '—'}
-                        {isExtra && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-medium">Manual</span>}
-                        {dirty[nric] && <span className="text-xs text-amber-500" title="Not saved yet">•</span>}
+                        {isExtra && <span className="text-xs px-1.5 py-0.5 rounded-full bg-info-bg text-primary font-medium">Manual</span>}
+                        {dirty[nric] && <span className="text-xs text-warning" title="Not saved yet">•</span>}
                       </div>
                       {showManualNric && shownNric && <div className="text-xs text-muted font-mono">{shownNric}</div>}
                     </td>
@@ -2439,7 +2439,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                           onChange={() => handleTogglePresent(nric)}
                           className="w-4 h-4 rounded border-default accent-primary cursor-pointer"
                         />
-                        <span className={`text-sm font-medium ${record.isPresent ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        <span className={`text-sm font-medium ${record.isPresent ? 'text-success' : 'text-red-500 dark:text-red-400'}`}>
                           {record.isPresent ? 'Present' : 'Absent'}
                         </span>
                       </label>
@@ -2462,7 +2462,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                             <button
                               onClick={() => handleRemoveLearner(nric)}
                               disabled={removingNric === nric}
-                              className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50"
+                              className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
                             >
                               {removingNric === nric ? '...' : 'Confirm'}
                             </button>
@@ -2478,7 +2478,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                             onClick={() => setConfirmRemoveNric(nric)}
                             title="Remove from this session"
                             aria-label={`Remove ${record.fullName || 'learner'} from this session`}
-                            className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            className="p-1.5 rounded text-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2527,7 +2527,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               </button>
             </div>
             <div className="flex items-center gap-3">
-              {dirtyCount > 0 && <span className="text-xs text-amber-500">{dirtyCount} unsaved change{dirtyCount === 1 ? '' : 's'}</span>}
+              {dirtyCount > 0 && <span className="text-xs text-warning">{dirtyCount} unsaved change{dirtyCount === 1 ? '' : 's'}</span>}
               <button
                 onClick={handleSaveAttendance}
                 disabled={savingAttendance || manualBusy || dirtyCount === 0}
@@ -2563,7 +2563,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         <SessionKpis kpis={sessionKpis} />
 
         {attendanceError && (
-          <p className="text-sm text-red-500 flex items-center gap-1.5">
+          <p className="text-sm text-danger flex items-center gap-1.5">
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -2571,7 +2571,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </p>
         )}
         {attendanceSuccess && !attendanceError && (
-          <p className="text-sm text-green-600 flex items-center gap-1.5">
+          <p className="text-sm text-success flex items-center gap-1.5">
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>

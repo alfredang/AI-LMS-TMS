@@ -430,7 +430,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div
-        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <ModalHeader
@@ -448,7 +448,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
           {step === 'verify' && (
             <div className="p-5 space-y-3">
               {error && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
+                <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger flex items-start gap-2">
                   <Icon name={IconName.Warning} className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -518,24 +518,24 @@ const ModalHeader: React.FC<{
   allVerified: boolean;
   onClose: () => void;
 }> = ({ step, verifiedCount, totalCount, progressPct, allVerified, onClose }) => (
-  <div className="p-5 border-b dark:border-gray-700 bg-white dark:bg-gray-900">
+  <div className="p-5 border-b dark:border-gray-700 bg-surface">
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-center gap-3 min-w-0">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
           step === 'ask'
-            ? 'bg-amber-100 dark:bg-amber-900/30'
+            ? 'bg-warning-bg'
             : allVerified
-              ? 'bg-emerald-100 dark:bg-emerald-900/30'
-              : 'bg-blue-100 dark:bg-blue-900/30'
+              ? 'bg-success-bg'
+              : 'bg-info-bg'
         }`}>
           <Icon
             name={step === 'ask' ? IconName.Warning : allVerified ? IconName.CheckCircle : IconName.Shield}
             className={`w-5 h-5 ${
               step === 'ask'
-                ? 'text-amber-600 dark:text-amber-400'
+                ? 'text-warning'
                 : allVerified
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-blue-600 dark:text-blue-400'
+                  ? 'text-success'
+                  : 'text-primary'
             }`}
           />
         </div>
@@ -543,7 +543,7 @@ const ModalHeader: React.FC<{
           <h3 className="text-lg font-bold dark:text-white truncate">
             {step === 'ask' ? 'Supporting Documents Check' : 'Verify Supporting Documents'}
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-sm text-muted mt-0.5">
             {step === 'ask'
               ? 'All learners are enrolled. Invoices are ready. Confirm docs, then send from View Company Application.'
               : totalCount > 0
@@ -555,10 +555,10 @@ const ModalHeader: React.FC<{
       <button
         type="button"
         onClick={onClose}
-        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+        className="p-2 rounded-lg hover:bg-surface-hover transition-colors flex-shrink-0"
         aria-label="Close"
       >
-        <Icon name={IconName.Close} className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+        <Icon name={IconName.Close} className="w-4 h-4 text-muted" />
       </button>
     </div>
 
@@ -583,15 +583,15 @@ const ModalFooter: React.FC<{
   onClose: () => void;
 }> = ({ step, allVerified, onClose }) => {
   const renderVerifiedMessage = () => (
-    <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
+    <span className="inline-flex items-center gap-1.5 text-success font-semibold">
       <Icon name={IconName.CheckCircle} className="w-4 h-4" />
       Every learner verified — go to View Company Application to send the invoice email.
     </span>
   );
 
   return (
-    <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between gap-3">
-      <p className="text-xs text-gray-500 dark:text-gray-400 flex-1">
+    <div className="p-4 border-t dark:border-gray-700 bg-surface flex items-center justify-between gap-3">
+      <p className="text-xs text-muted flex-1">
         {step === 'verify' && allVerified ? renderVerifiedMessage() : step === 'verify' ? (
           "Verify every learner here, then send invoice emails from View Company Application."
         ) : ''}
@@ -608,15 +608,15 @@ const ModalFooter: React.FC<{
 const AskStep: React.FC<{ onYes: () => void; onNo: () => void }> = ({ onYes, onNo }) => (
   <div className="p-8 md:p-10">
     <div className="max-w-xl mx-auto text-center">
-      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-800/60 mb-5">
-        <Icon name={IconName.Shield} className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-warning-bg ring-1 ring-amber-200 dark:ring-amber-800/60 mb-5">
+        <Icon name={IconName.Shield} className="w-8 h-8 text-warning" />
       </div>
-      <h4 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+      <h4 className="text-2xl font-bold text-on-surface tracking-tight">
         Are supporting documents ready?
       </h4>
-      <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
+      <p className="text-sm text-on-surface-secondary mt-3 leading-relaxed">
         Screenshots, CPF statements, payslips, or bank statements for each learner.
-        Each doc must match the Excel data — <strong className="text-gray-800 dark:text-gray-100">trainee name, NRIC, employer name, UEN</strong> —
+        Each doc must match the Excel data — <strong className="text-on-surface">trainee name, NRIC, employer name, UEN</strong> —
         before the invoice email can be released to the employer from View Company Application.
       </p>
 
@@ -632,14 +632,14 @@ const AskStep: React.FC<{ onYes: () => void; onNo: () => void }> = ({ onYes, onN
         <button
           type="button"
           onClick={onNo}
-          className="px-5 py-2.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className="px-5 py-2.5 text-sm font-medium rounded-lg border border-strong text-on-surface-secondary hover:bg-surface-hover transition-colors"
         >
           Not yet — I&apos;ll do this later
         </button>
         <button
           type="button"
           onClick={onYes}
-          className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 ring-1 ring-emerald-400/50 shadow-md shadow-emerald-900/40 transition-colors"
+          className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 ring-1 ring-emerald-400/50 shadow-md shadow-emerald-900/40 transition-colors"
         >
           Yes, upload &amp; verify
         </button>
@@ -649,18 +649,18 @@ const AskStep: React.FC<{ onYes: () => void; onNo: () => void }> = ({ onYes, onN
 );
 
 const FlowChip: React.FC<{ step: number; icon: IconName; label: string }> = ({ step, icon, label }) => (
-  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
-    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-default shadow-sm">
+    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-success-bg text-success text-[10px] font-bold">
       {step}
     </span>
-    <Icon name={icon} className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-    <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">{label}</span>
+    <Icon name={icon} className="w-4 h-4 text-success" />
+    <span className="text-[11px] font-semibold text-on-surface-secondary whitespace-nowrap">{label}</span>
   </div>
 );
 
 const FlowArrow: React.FC = () => (
   <svg
-    className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0"
+    className="w-3.5 h-3.5 text-muted flex-shrink-0"
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -674,14 +674,14 @@ const FlowArrow: React.FC = () => (
 // ── Loading / Empty ─────────────────────────────────────────────────────────
 
 const LoadingState: React.FC = () => (
-  <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
-    <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-500 mb-3" />
+  <div className="flex flex-col items-center justify-center py-16 text-muted">
+    <div className="animate-spin rounded-full h-8 w-8 border-2 border-strong border-t-blue-500 mb-3" />
     <p className="text-sm">Loading learners…</p>
   </div>
 );
 
 const EmptyState: React.FC = () => (
-  <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+  <div className="text-center py-16 text-muted">
     <Icon name={IconName.InfoCircle} className="w-8 h-8 mx-auto mb-2 opacity-60" />
     <p className="text-sm">No matching rows found.</p>
   </div>
@@ -855,14 +855,14 @@ const LearnerCard: React.FC<{
 
   return (
     <div
-      className={`rounded-xl bg-white dark:bg-gray-900 ring-1 ${ringColor} shadow-sm overflow-hidden transition-all ${isClickAssignTarget ? 'cursor-pointer' : ''}`}
+      className={`rounded-xl bg-surface ring-1 ${ringColor} shadow-sm overflow-hidden transition-all ${isClickAssignTarget ? 'cursor-pointer' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={isClickAssignTarget ? handleClickAssign : undefined}
     >
       {isClickAssignTarget && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-1.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+        <div className="bg-info-bg border-b border-blue-200 dark:border-blue-800 px-3 py-1.5 text-[11px] font-medium text-primary flex items-center gap-1.5">
           <Icon name={IconName.InfoCircle} className="w-3 h-3" />
           Click anywhere on this card to assign the selected document
         </div>
@@ -873,13 +873,13 @@ const LearnerCard: React.FC<{
           if (isClickAssignTarget) { e.stopPropagation(); handleClickAssign(); return; }
           if (isVerified) setCollapsed(c => !c);
         }}
-        className={`w-full px-4 py-3 flex items-center justify-between gap-3 ${isVerified ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50' : 'cursor-default'}`}
+        className={`w-full px-4 py-3 flex items-center justify-between gap-3 ${isVerified ? 'cursor-pointer hover:bg-surface-hover' : 'cursor-default'}`}
       >
         <div className="flex items-center gap-3 min-w-0">
           <StatusDot status={status} />
           <div className="min-w-0 text-left">
             <p className="text-sm font-semibold dark:text-white truncate">{row.traineeFullName || '(unnamed learner)'}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+            <p className="text-xs text-muted truncate">
               {row.employerOrgName || '(no employer)'} · {row.courseTitle || '(no course)'}
             </p>
           </div>
@@ -892,7 +892,7 @@ const LearnerCard: React.FC<{
           {isVerified && (
             <Icon
               name={IconName.ChevronDown}
-              className={`w-4 h-4 text-gray-400 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+              className={`w-4 h-4 text-muted transition-transform ${collapsed ? '' : 'rotate-180'}`}
             />
           )}
         </div>
@@ -906,7 +906,7 @@ const LearnerCard: React.FC<{
               {hasDoc ? (
                 <DocPreview fileId={row.supportingDocFileId} link={row.supportingDocLink} />
               ) : (
-                <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-6 text-center text-xs text-gray-500 dark:text-gray-400">
+                <div className="rounded-lg border border-dashed border-strong p-6 text-center text-xs text-muted">
                   Document reference no longer available. Status remains verified.
                 </div>
               )}
@@ -916,7 +916,7 @@ const LearnerCard: React.FC<{
                 <SectionLabel>From Excel</SectionLabel>
                 <ExcelDataPanel row={row} />
               </div>
-              <div className="rounded-lg p-3 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-200 dark:ring-emerald-800/60 text-xs text-emerald-700 dark:text-emerald-300 inline-flex items-start gap-2">
+              <div className="rounded-lg p-3 bg-success-bg ring-1 ring-emerald-200 dark:ring-emerald-800/60 text-xs text-success inline-flex items-start gap-2">
                 <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 <span>This row is locked. To make changes, delete the doc and re-upload from the other learners&apos; verify flow.</span>
               </div>
@@ -952,7 +952,7 @@ const LearnerCard: React.FC<{
                     type="button"
                     disabled={uploading || deleting}
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    className="text-xs px-3 py-1.5 rounded-lg border border-strong hover:bg-surface-hover disabled:opacity-50 inline-flex items-center gap-1.5"
                   >
                     <Icon name={IconName.Upload} className="w-3.5 h-3.5" />
                     {uploading ? 'Replacing…' : 'Replace document'}
@@ -961,7 +961,7 @@ const LearnerCard: React.FC<{
                     type="button"
                     disabled={uploading || deleting}
                     onClick={() => setConfirmingDelete(true)}
-                    className="text-xs px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    className="text-xs px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-danger hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 inline-flex items-center gap-1.5"
                     title="Remove the uploaded doc from Drive and reset this row"
                   >
                     <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
@@ -996,7 +996,7 @@ const LearnerCard: React.FC<{
               {hasDoc && (
                 <div>
                   <SectionLabel>Confirm fields match</SectionLabel>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2 -mt-1">
+                  <p className="text-[10px] text-muted mb-2 -mt-1">
                     Trainee name and employer are required to confirm verified.
                     NRIC and UEN are sanity-check info — mark <strong>N/A</strong> if the document doesn&apos;t show them.
                   </p>
@@ -1018,7 +1018,7 @@ const LearnerCard: React.FC<{
                       disabled={submitting || !allMatched}
                       onClick={() => submitVerdict('verified')}
                       title={!allMatched ? 'Mark trainee name and employer name as match before confirming.' : 'Confirm trainee name and employer match'}
-                      className="text-xs px-3 py-2 rounded-lg font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+                      className="text-xs px-3 py-2 rounded-lg font-semibold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
                     >
                       <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
                       {submitting ? 'Saving…' : 'Verified documents'}
@@ -1040,7 +1040,7 @@ const LearnerCard: React.FC<{
           </div>
 
           {error && (
-            <div className="mt-3 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
+            <div className="mt-3 p-2 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-xs text-danger">
               {error}
             </div>
           )}
@@ -1053,11 +1053,11 @@ const LearnerCard: React.FC<{
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">{children}</p>
+  <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">{children}</p>
 );
 
 const ExcelDataPanel: React.FC<{ row: LearnerRow }> = ({ row }) => (
-  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5 text-xs">
+  <div className="rounded-lg border border-default bg-surface-elevated p-3 space-y-1.5 text-xs">
     <ExcelField label="Name" value={row.traineeFullName} />
     <ExcelField label="NRIC / FIN" value={maskNric(row.traineeNric)} mono />
     <ExcelField label="Employer" value={row.employerOrgName} />
@@ -1067,8 +1067,8 @@ const ExcelDataPanel: React.FC<{ row: LearnerRow }> = ({ row }) => (
 
 const ExcelField: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono }) => (
   <div className="flex justify-between gap-2 min-w-0">
-    <span className="text-gray-500 dark:text-gray-400 shrink-0">{label}</span>
-    <span className={`text-gray-900 dark:text-gray-100 truncate text-right ${mono ? 'font-mono' : ''}`} title={value}>
+    <span className="text-muted shrink-0">{label}</span>
+    <span className={`text-on-surface truncate text-right ${mono ? 'font-mono' : ''}`} title={value}>
       {value || '—'}
     </span>
   </div>
@@ -1079,7 +1079,7 @@ const DocPreview: React.FC<{ fileId: string; link: string }> = ({ fileId, link }
   // Falls back to a link if no file ID (shouldn't happen, but defensive).
   const previewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : '';
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 overflow-hidden">
+    <div className="rounded-lg border border-default bg-surface-elevated overflow-hidden">
       {previewUrl ? (
         <iframe
           src={previewUrl}
@@ -1088,20 +1088,20 @@ const DocPreview: React.FC<{ fileId: string; link: string }> = ({ fileId, link }
           allow="autoplay"
         />
       ) : (
-        <div className="p-4 text-center text-xs text-gray-500">
+        <div className="p-4 text-center text-xs text-muted">
           Preview unavailable —{' '}
-          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+          <a href={link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
             open in Drive
           </a>
         </div>
       )}
-      <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-900">
-        <span className="text-[10px] uppercase tracking-wide text-gray-500">Uploaded document</span>
+      <div className="px-3 py-2 border-t border-default flex items-center justify-between bg-surface">
+        <span className="text-[10px] uppercase tracking-wide text-muted">Uploaded document</span>
         <a
           href={link}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
         >
           <Icon name={IconName.ExternalLink} className="w-3 h-3" />
           Open in Drive
@@ -1159,26 +1159,26 @@ const UploadDropzone: React.FC<{
       onDrop={handleDrop}
       className={`w-full h-72 rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-2 select-none ${
         uploading
-          ? 'opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/40'
+          ? 'opacity-50 cursor-not-allowed border-strong bg-surface'
           : isDragOver
-            ? 'cursor-copy border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : 'cursor-pointer border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/40 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/30 dark:hover:bg-blue-900/10'
+            ? 'cursor-copy border-blue-500 bg-info-bg'
+            : 'cursor-pointer border-strong bg-surface hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/30 dark:hover:bg-blue-900/10'
       }`}
     >
       {uploading ? (
         <>
-          <div className="animate-spin rounded-full h-7 w-7 border-2 border-gray-300 border-t-blue-500" />
-          <p className="text-sm text-gray-600 dark:text-gray-400">Uploading…</p>
+          <div className="animate-spin rounded-full h-7 w-7 border-2 border-strong border-t-blue-500" />
+          <p className="text-sm text-on-surface-secondary">Uploading…</p>
         </>
       ) : (
         <>
-          <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-            <Icon name={IconName.Upload} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <div className="w-12 h-12 rounded-xl bg-info-bg flex items-center justify-center">
+            <Icon name={IconName.Upload} className="w-6 h-6 text-primary" />
           </div>
-          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+          <p className="text-sm font-semibold text-on-surface-secondary">
             {isDragOver ? 'Drop to upload' : 'Click or drop a file to upload'}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Image or PDF · max 20MB</p>
+          <p className="text-xs text-muted">Image or PDF · max 20MB</p>
         </>
       )}
     </div>
@@ -1192,26 +1192,26 @@ const FieldVerdictPill: React.FC<{
   required?: boolean;
 }> = ({ label, value, onChange, required = false }) => (
   <div className="flex items-center justify-between gap-2 py-1">
-    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 inline-flex items-center gap-1">
+    <span className="text-xs text-on-surface-secondary flex-1 inline-flex items-center gap-1">
       {label}
       {required ? (
-        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-info-bg text-primary">
           Required
         </span>
       ) : (
-        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-surface-elevated text-muted">
           Optional
         </span>
       )}
     </span>
-    <div className="inline-flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+    <div className="inline-flex rounded-lg overflow-hidden border border-strong">
       <button
         type="button"
         onClick={() => onChange(value === 'match' ? '' : 'match')}
         className={`px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors ${
           value === 'match'
-            ? 'bg-emerald-600 text-white'
-            : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+            ? 'bg-emerald-700 text-white'
+            : 'bg-surface text-muted hover:bg-surface-hover'
         }`}
         title="Field matches"
       >
@@ -1221,10 +1221,10 @@ const FieldVerdictPill: React.FC<{
       <button
         type="button"
         onClick={() => onChange(value === 'mismatch' ? '' : 'mismatch')}
-        className={`px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-gray-300 dark:border-gray-600 ${
+        className={`px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-strong ${
           value === 'mismatch'
             ? 'bg-red-600 text-white'
-            : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+            : 'bg-surface text-muted hover:bg-surface-hover'
         }`}
         title="Field does not match"
       >
@@ -1234,10 +1234,10 @@ const FieldVerdictPill: React.FC<{
       <button
         type="button"
         onClick={() => onChange(value === 'na' ? '' : 'na')}
-        className={`px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-gray-300 dark:border-gray-600 ${
+        className={`px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-strong ${
           value === 'na'
             ? 'bg-gray-600 text-white'
-            : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+            : 'bg-surface text-muted hover:bg-surface-hover'
         }`}
         title="Field is not shown on the document"
       >
@@ -1261,7 +1261,7 @@ const StatusDot: React.FC<{ status: string }> = ({ status }) => {
 const StatusPill: React.FC<{ status: string }> = ({ status }) => {
   if (status === 'verified') {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-success-bg text-success">
         <Icon name={IconName.CheckCircle} className="w-3 h-3" />
         Verified
       </span>
@@ -1269,14 +1269,14 @@ const StatusPill: React.FC<{ status: string }> = ({ status }) => {
   }
   if (status === 'mismatch') {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-danger-bg text-danger">
         <Icon name={IconName.Warning} className="w-3 h-3" />
         Mismatch
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-warning-bg text-warning">
       Pending
     </span>
   );
@@ -1318,8 +1318,8 @@ const BulkUploadZone: React.FC<{
     <div
       className={`rounded-xl border-2 border-dashed transition-colors ${
         isDragOverZone
-          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-          : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40'
+          ? 'border-blue-500 bg-info-bg'
+          : 'border-strong bg-surface'
       }`}
       onDragOver={onZoneDragOver}
       onDragLeave={onZoneDragLeave}
@@ -1328,8 +1328,8 @@ const BulkUploadZone: React.FC<{
       <div className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-              <Icon name={IconName.Upload} className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className="w-10 h-10 rounded-lg bg-info-bg flex items-center justify-center flex-shrink-0">
+              <Icon name={IconName.Upload} className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold dark:text-white flex items-center gap-2">
@@ -1341,7 +1341,7 @@ const BulkUploadZone: React.FC<{
                   </span>
                 )}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 {aiDisabled
                   ? 'Pick all files at once, then drag or click each thumbnail onto its learner card below.'
                   : 'Pick all files at once — AI reads each doc, matches by trainee name + employer, and pre-fills the verification verdicts. Manual drag/click is the fallback for unmatched files.'}
@@ -1370,14 +1370,14 @@ const BulkUploadZone: React.FC<{
         </div>
 
         {unassignedFiles.length === 0 ? (
-          <p className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 italic">
+          <p className="mt-3 text-[11px] text-muted italic">
             No files queued. Drop files here or click <span className="font-semibold">Select files</span> to start.
           </p>
         ) : (
           <div className="mt-3">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-secondary">
                   {unassignedFiles.length} file{unassignedFiles.length === 1 ? '' : 's'} queued
                 </p>
                 {unassignedFiles.some(f => f.aiProcessing) && (
@@ -1388,7 +1388,7 @@ const BulkUploadZone: React.FC<{
                 )}
                 {unassignedFiles.some(f => f.aiNoMatch && !f.aiProcessing) && (
                   <span
-                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60"
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-danger-bg text-danger ring-1 ring-red-300/60"
                     title="AI couldn't match these docs to any learner in this batch — likely wrong document or unreadable NRIC. Drag or click-assign manually, or remove."
                   >
                     <Icon name={IconName.Warning} className="w-3 h-3" />
@@ -1400,7 +1400,7 @@ const BulkUploadZone: React.FC<{
                 <button
                   type="button"
                   onClick={() => onSelectFile(null)}
-                  className="text-[11px] text-gray-500 dark:text-gray-400 hover:underline"
+                  className="text-[11px] text-muted hover:underline"
                 >
                   Clear selection
                 </button>
@@ -1417,7 +1417,7 @@ const BulkUploadZone: React.FC<{
                 />
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+            <p className="mt-2 text-[11px] text-muted">
               {selectedFileId
                 ? '✓ File selected — click a learner card below to assign it.'
                 : 'Drag a thumbnail onto a learner card, or click a thumbnail then click a learner card.'}
@@ -1426,24 +1426,24 @@ const BulkUploadZone: React.FC<{
               const noMatch = unassignedFiles.filter(f => f.aiNoMatch && !f.aiProcessing);
               if (noMatch.length === 0) return null;
               return (
-                <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-900/20 ring-1 ring-red-200 dark:ring-red-800/60 p-2.5">
+                <div className="mt-2 rounded-lg bg-danger-bg ring-1 ring-red-200 dark:ring-red-800/60 p-2.5">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <Icon name={IconName.Warning} className="w-3.5 h-3.5 text-red-600 dark:text-red-400 flex-shrink-0" />
-                    <span className="text-[11px] font-semibold text-red-700 dark:text-red-300">
+                    <Icon name={IconName.Warning} className="w-3.5 h-3.5 text-danger flex-shrink-0" />
+                    <span className="text-[11px] font-semibold text-danger">
                       {noMatch.length} file{noMatch.length === 1 ? '' : 's'} flagged by AI
                     </span>
                   </div>
                   <ul className="space-y-1 ml-5">
                     {noMatch.map(f => (
-                      <li key={f.id} className="text-[11px] text-red-700 dark:text-red-300 leading-snug">
-                        <span className="font-mono text-red-800 dark:text-red-200">{f.file.name}</span>
+                      <li key={f.id} className="text-[11px] text-danger leading-snug">
+                        <span className="font-mono text-danger">{f.file.name}</span>
                         {f.aiNoMatchReason && (
-                          <span className="block text-red-600 dark:text-red-400">{f.aiNoMatchReason}</span>
+                          <span className="block text-danger">{f.aiNoMatchReason}</span>
                         )}
                       </li>
                     ))}
                   </ul>
-                  <p className="text-[10px] text-red-600 dark:text-red-400 mt-1.5 ml-5 italic">
+                  <p className="text-[10px] text-danger mt-1.5 ml-5 italic">
                     Drag the thumbnail onto the correct learner card to assign manually — or remove it if uploaded by mistake.
                   </p>
                 </div>
@@ -1487,7 +1487,7 @@ const ThumbnailTile: React.FC<{
               ? 'border-teal-400 ring-2 ring-teal-300/60 dark:ring-teal-700/60'
               : file.aiNoMatch
                 ? 'border-red-500 ring-2 ring-red-300/60 dark:ring-red-700/60'
-                : 'border-gray-200 dark:border-gray-700 hover:border-blue-400'
+                : 'border-default hover:border-blue-400'
       } ${busy ? 'opacity-60' : ''}`}
       title={
         file.aiProcessing
@@ -1501,9 +1501,9 @@ const ThumbnailTile: React.FC<{
         // eslint-disable-next-line @next/next/no-img-element
         <img src={file.previewUrl} alt={file.file.name} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 px-1">
-          <Icon name={IconName.FileText} className="w-7 h-7 text-gray-400" />
-          <span className="text-[9px] text-gray-500 mt-1 text-center truncate w-full">PDF</span>
+        <div className="w-full h-full flex flex-col items-center justify-center bg-surface-elevated px-1">
+          <Icon name={IconName.FileText} className="w-7 h-7 text-muted" />
+          <span className="text-[9px] text-muted mt-1 text-center truncate w-full">PDF</span>
         </div>
       )}
 
@@ -1531,7 +1531,7 @@ const ThumbnailTile: React.FC<{
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 hover:bg-red-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
           title="Remove file"
         >
           <Icon name={IconName.Close} className="w-3 h-3" />
@@ -1566,7 +1566,7 @@ const AiBadge: React.FC<{ result: AiResult }> = ({ result }) => {
   }
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+      className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-warning-bg text-warning"
       title="AI flagged at least one mismatch — review before confirming"
     >
       <Icon name={IconName.Warning} className="w-3 h-3" />
@@ -1598,7 +1598,7 @@ const AiConfirmedBanner: React.FC<{
       type="button"
       onClick={onApproveAll}
       disabled={approving}
-      className="text-xs font-semibold px-3.5 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 flex-shrink-0"
+      className="text-xs font-semibold px-3.5 py-2 rounded-lg bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 flex-shrink-0"
     >
       {approving ? (
         <>

@@ -370,34 +370,34 @@ const RescheduleCancelView: React.FC = () => {
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      Confirmed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-      Pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-      Cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+      Confirmed: 'bg-success-bg text-success',
+      Pending: 'bg-warning-bg text-warning',
+      Cancelled: 'bg-danger-bg text-danger',
     };
-    return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{status}</span>;
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || 'bg-surface-elevated text-on-surface-secondary'}`}>{status}</span>;
   };
 
-  const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white';
+  const inputCls = 'w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white';
 
   return (
     <div>
       <div className="mb-3">
         <h2 className="text-3xl font-bold dark:text-white">Reschedule &amp; Cancel</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Reschedule or cancel individual sessions, move a class to another run, or cancel / reactivate a whole class.</p>
+        <p className="text-sm text-muted mt-1">Reschedule or cancel individual sessions, move a class to another run, or cancel / reactivate a whole class.</p>
       </div>
 
       {/* Calendar sync + notify opt-ins */}
-      <div className="mb-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 text-sm space-y-2">
-        <p className="text-xs text-gray-500 dark:text-gray-400 -mb-1 flex items-center gap-1">
+      <div className="mb-4 rounded-md border border-default bg-surface-elevated p-3 text-sm space-y-2">
+        <p className="text-xs text-muted -mb-1 flex items-center gap-1">
           Page defaults
           <HelpTip>Every reschedule, cancel and move on this page uses these settings — you can still change either one when you confirm an action.</HelpTip>
         </p>
-        <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">
-          <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+        <label className="flex items-center gap-2 cursor-pointer select-none text-on-surface-secondary">
+          <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
           <span><strong>Sync Google Calendar</strong> — also move or remove the matching Google Calendar event when a change is applied. Off by default.</span>
         </label>
-        <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">
-          <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+        <label className="flex items-center gap-2 cursor-pointer select-none text-on-surface-secondary">
+          <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
           <span><strong>Notify attendees by email</strong> — open each confirmation with the email ready to send to the learners and trainer(s). Off by default; never automatic.</span>
         </label>
       </div>
@@ -405,10 +405,10 @@ const RescheduleCancelView: React.FC = () => {
       {/* Filters */}
       <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
         <div className="flex flex-wrap gap-3 items-center mb-3">
-          <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+          <div className="flex gap-1 p-1 bg-surface-elevated rounded-lg">
             {STATUS_TABS.map((t) => (
               <button key={t.key} type="button" onClick={() => setStatusFilter(t.key)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === t.key ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === t.key ? 'bg-surface text-primary shadow-sm' : 'text-muted hover:text-on-surface'}`}>
                 {t.label}
               </button>
             ))}
@@ -425,29 +425,29 @@ const RescheduleCancelView: React.FC = () => {
         </form>
 
         {showAdvanced && (
-          <div className="mt-3 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg">
+          <div className="mt-3 bg-surface-elevated p-4 rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                 <input type="text" value={fCourseTitle} onChange={(e) => setFCourseTitle(e.target.value)} placeholder="Enter course title…" className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Code</label>
                 <input type="text" value={fCourseCode} onChange={(e) => setFCourseCode(e.target.value)} placeholder="Enter course code…" className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Run ID</label>
                 <input type="text" value={fCourseRunId} onChange={(e) => setFCourseRunId(e.target.value)} placeholder="Enter run ID…" className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer</label>
                 <select value={fTrainer} onChange={(e) => setFTrainer(e.target.value)} className={inputCls}>
                   <option value="">All trainers</option>
                   {trainers.map((t, i) => <option key={t.trainer_name || i} value={t.trainer_name}>{t.trainer_name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Class Type</label>
                 <select value={fClassType} onChange={(e) => setFClassType(e.target.value)} className={inputCls}>
                   <option value="">All types</option>
                   <option value="Physical">Physical</option>
@@ -464,60 +464,60 @@ const RescheduleCancelView: React.FC = () => {
         )}
       </Card>
 
-      {busy && <div className="mb-3 text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Working…</div>}
-      {error && <div className="mb-3 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300">{error}</div>}
+      {busy && <div className="mb-3 text-sm text-primary flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Working…</div>}
+      {error && <div className="mb-3 p-3 rounded-md text-sm bg-danger-bg border border-red-200 dark:border-red-700 text-danger">{error}</div>}
 
       {loading ? (
-        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" /> Loading classes…</div>
+        <div className="flex items-center gap-2 text-muted"><span className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" /> Loading classes…</div>
       ) : classes.length === 0 ? (
-        <Card className="p-6 text-center text-gray-500 dark:text-gray-400 dark:bg-gray-800 dark:border-gray-700">No classes found for this filter.</Card>
+        <Card className="p-6 text-center text-muted dark:bg-gray-800 dark:border-gray-700">No classes found for this filter.</Card>
       ) : (
         <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-700/50">
+              <thead className="bg-surface-elevated">
                 <tr>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Run ID</th>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course</th>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Dates</th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Lrn</th>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-2 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider"></th>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Run ID</th>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course</th>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Dates</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-muted uppercase tracking-wider">Lrn</th>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Status</th>
+                  <th className="px-2 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              <tbody className="divide-y divide-default">
                 {classes.map((run) => {
                   const sx = sessionsByRun[run.id];
                   const isOpen = !!expanded[run.id];
                   const isCancelled = run.classStatus === 'Cancelled';
                   return (
                     <React.Fragment key={run.id}>
-                      <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 align-middle">
+                      <tr className="hover:bg-surface-hover align-middle">
                         <td className="px-2 py-2">
                           <div className="flex flex-col gap-1 items-start">
                             <button type="button" onClick={() => toggleExpand(run)} title="Show sessions for this class"
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 whitespace-nowrap ${isOpen ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}>
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 whitespace-nowrap ${isOpen ? 'bg-info-bg border-blue-300 text-primary dark:border-blue-700' : 'bg-surface-elevated border-strong text-on-surface-secondary hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'}`}>
                               <CaretIcon open={isOpen} />
                               {isOpen ? 'Hide' : 'View Sessions'}
                             </button>
                             <button type="button" onClick={() => setPeopleTarget(run)} title="View trainer & learners for this class"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium whitespace-nowrap">
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover text-xs font-medium whitespace-nowrap">
                               👥 People
                             </button>
                           </div>
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">{run.courseRunId}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-on-surface-secondary">{run.courseRunId}</td>
                         <td className="px-2 py-2 max-w-[260px]">
-                          <div className="font-medium text-gray-900 dark:text-white truncate" title={run.courseTitle}>{run.courseTitle}</div>
-                          <div className="text-xs text-gray-400 truncate">{run.courseCode}</div>
+                          <div className="font-medium text-on-surface truncate" title={run.courseTitle}>{run.courseTitle}</div>
+                          <div className="text-xs text-muted truncate">{run.courseCode}</div>
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-gray-600 dark:text-gray-400">{fmtDateRange(run.startDate, run.endDate)}</td>
-                        <td className="px-2 py-2 text-center text-gray-600 dark:text-gray-400">{run.numOfTrainee}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-on-surface-secondary">{fmtDateRange(run.startDate, run.endDate)}</td>
+                        <td className="px-2 py-2 text-center text-on-surface-secondary">{run.numOfTrainee}</td>
                         <td className="px-2 py-2 whitespace-nowrap">{statusBadge(run.classStatus)}</td>
                         <td className="px-2 py-2 text-right">
                           {isCancelled ? (
-                            <button type="button" onClick={() => reactivateClass(run)} className="px-2 py-1 rounded-md text-xs font-medium text-white bg-green-600 hover:bg-green-700 whitespace-nowrap">Reactivate</button>
+                            <button type="button" onClick={() => reactivateClass(run)} className="px-2 py-1 rounded-md text-xs font-medium text-white bg-green-700 hover:bg-green-800 whitespace-nowrap">Reactivate</button>
                           ) : (
                             <div className="flex flex-col gap-1 items-end">
                               <button type="button" onClick={() => setMoveTarget(run)} className="w-full px-2 py-1 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">Move class to another course run</button>
@@ -528,38 +528,38 @@ const RescheduleCancelView: React.FC = () => {
                       </tr>
                       {isOpen && (
                         <tr className="bg-gray-50/50 dark:bg-gray-900/30">
-                          <td colSpan={7} className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+                          <td colSpan={7} className="px-4 py-3 border-t border-default">
                             {sx?.loading ? (
-                              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading sessions…</div>
+                              <div className="text-sm text-muted flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading sessions…</div>
                             ) : sx?.ssgError ? (
-                              <div className="text-sm text-amber-600 dark:text-amber-400">Couldn't load sessions from SSG: {sx.ssgError}</div>
+                              <div className="text-sm text-warning">Couldn't load sessions from SSG: {sx.ssgError}</div>
                             ) : (sx?.sessions || []).length === 0 ? (
-                              <div className="text-sm text-gray-500 dark:text-gray-400">No sessions found for this run.</div>
+                              <div className="text-sm text-muted">No sessions found for this run.</div>
                             ) : (
                               <div className="space-y-3">
                                 <div className="flex items-center justify-end">
                                   <button type="button" onClick={() => void syncRunCalendar(run)} disabled={calBusyRun === run.id}
                                     title="Add Google Calendar events for any sessions that don't have one (and update attendees)"
-                                    className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 whitespace-nowrap">
+                                    className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 whitespace-nowrap">
                                     {calBusyRun === run.id ? 'Creating…' : '🗓️ Create missing calendar events'}
                                   </button>
                                 </div>
                                 {groupByDay(sx?.sessions || []).map((group) => {
                                   const dayEditing = dayEdit && dayEdit.runUuid === run.id && dayEdit.date === group.date;
                                   return (
-                                    <div key={group.date} className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">📅 {fmtDay(group.date)} <span className="text-xs font-normal text-gray-500 dark:text-gray-400">· {group.sessions.length} session{group.sessions.length === 1 ? '' : 's'}</span></div>
+                                    <div key={group.date} className="rounded-md border border-default overflow-hidden">
+                                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-surface-elevated border-b border-default">
+                                        <div className="text-sm font-medium text-on-surface">📅 {fmtDay(group.date)} <span className="text-xs font-normal text-muted">· {group.sessions.length} session{group.sessions.length === 1 ? '' : 's'}</span></div>
                                         {dayEditing ? (
                                           <div className="flex items-center gap-2">
-                                            <input type="date" value={dayEdit!.newDate} onChange={(e) => setDayEdit({ ...dayEdit!, newDate: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs dark:bg-gray-700 dark:text-white" />
+                                            <input type="date" value={dayEdit!.newDate} onChange={(e) => setDayEdit({ ...dayEdit!, newDate: e.target.value })} className="border border-strong rounded px-2 py-1 text-xs dark:bg-gray-700 dark:text-white" />
                                             <button type="button" onClick={() => void saveDayReschedule(run, group)} className="px-2 py-1 rounded-md text-xs font-medium text-white bg-blue-600 hover:bg-blue-700">Save day</button>
-                                            <button type="button" onClick={() => setDayEdit(null)} className="px-2 py-1 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+                                            <button type="button" onClick={() => setDayEdit(null)} className="px-2 py-1 rounded-md text-xs font-medium border border-strong text-on-surface-secondary hover:bg-surface-hover">Cancel</button>
                                           </div>
                                         ) : (
                                           <div className="flex items-center gap-2">
-                                            <button type="button" onClick={() => setDayEdit({ runUuid: run.id, date: group.date, newDate: group.date, syncCalendar })} className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 whitespace-nowrap">Reschedule entire day</button>
-                                            <button type="button" onClick={() => void cancelEntireDay(run, group)} className="px-2 py-1 rounded-md text-xs font-medium border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 whitespace-nowrap">Cancel entire day</button>
+                                            <button type="button" onClick={() => setDayEdit({ runUuid: run.id, date: group.date, newDate: group.date, syncCalendar })} className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 whitespace-nowrap">Reschedule entire day</button>
+                                            <button type="button" onClick={() => void cancelEntireDay(run, group)} className="px-2 py-1 rounded-md text-xs font-medium border border-red-300 dark:border-red-700 text-danger hover:bg-red-50 dark:hover:bg-red-900/20 whitespace-nowrap">Cancel entire day</button>
                                           </div>
                                         )}
                                       </div>
@@ -569,41 +569,41 @@ const RescheduleCancelView: React.FC = () => {
                                             const key = sessionKeyOf(s);
                                             const editing = edit && edit.runUuid === run.id && edit.sessionKey === key;
                                             return (
-                                              <tr key={key || i} className="border-b border-gray-100 dark:border-gray-800 align-middle last:border-0">
-                                                <td className="py-2 px-3 text-gray-500 dark:text-gray-400 w-10">S{s.sessionNumber ?? i + 1}</td>
+                                              <tr key={key || i} className="border-b border-default align-middle last:border-0">
+                                                <td className="py-2 px-3 text-muted w-10">S{s.sessionNumber ?? i + 1}</td>
                                                 {editing ? (
                                                   <>
-                                                    <td className="py-2 px-2"><input type="date" value={edit!.startDate} onChange={(e) => setEdit({ ...edit!, startDate: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white" /></td>
+                                                    <td className="py-2 px-2"><input type="date" value={edit!.startDate} onChange={(e) => setEdit({ ...edit!, startDate: e.target.value })} className="border border-strong rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white" /></td>
                                                     <td className="py-2 px-2">
                                                       <div className="flex items-center gap-1">
-                                                        <input type="time" value={edit!.startTime} onChange={(e) => setEdit({ ...edit!, startTime: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-1 py-1 text-sm dark:bg-gray-700 dark:text-white" />
+                                                        <input type="time" value={edit!.startTime} onChange={(e) => setEdit({ ...edit!, startTime: e.target.value })} className="border border-strong rounded px-1 py-1 text-sm dark:bg-gray-700 dark:text-white" />
                                                         <span>–</span>
-                                                        <input type="time" value={edit!.endTime} onChange={(e) => setEdit({ ...edit!, endTime: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-1 py-1 text-sm dark:bg-gray-700 dark:text-white" />
+                                                        <input type="time" value={edit!.endTime} onChange={(e) => setEdit({ ...edit!, endTime: e.target.value })} className="border border-strong rounded px-1 py-1 text-sm dark:bg-gray-700 dark:text-white" />
                                                       </div>
                                                     </td>
                                                     <td className="py-2 px-2">
-                                                      <select value={edit!.modeOfTraining} onChange={(e) => setEdit({ ...edit!, modeOfTraining: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
+                                                      <select value={edit!.modeOfTraining} onChange={(e) => setEdit({ ...edit!, modeOfTraining: e.target.value })} className="border border-strong rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
                                                         <option value="">—</option>
                                                         {modeOfTrainingOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                       </select>
                                                     </td>
                                                     <td className="py-2 px-2 text-right whitespace-nowrap">
                                                       <button type="button" onClick={() => void saveReschedule(run, s)} className="px-2.5 py-1 rounded-md text-xs font-medium text-white bg-blue-600 hover:bg-blue-700">Save</button>
-                                                      <button type="button" onClick={() => setEdit(null)} className="ml-2 px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+                                                      <button type="button" onClick={() => setEdit(null)} className="ml-2 px-2.5 py-1 rounded-md text-xs font-medium border border-strong text-on-surface-secondary hover:bg-surface-hover">Cancel</button>
                                                     </td>
                                                   </>
                                                 ) : (
                                                   <>
-                                                    <td className="py-2 px-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{convertSsgDateToHtml(s.startDate || '') || '—'}</td>
-                                                    <td className="py-2 px-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{s.startTime || '—'}{s.endTime ? `–${s.endTime}` : ''}</td>
-                                                    <td className="py-2 px-2 text-gray-700 dark:text-gray-300">{s.modeOfTraining ? getModeLabel(s.modeOfTraining).replace(/^\d+\s*-\s*/, '') : '—'}</td>
+                                                    <td className="py-2 px-2 text-on-surface-secondary whitespace-nowrap">{convertSsgDateToHtml(s.startDate || '') || '—'}</td>
+                                                    <td className="py-2 px-2 text-on-surface-secondary whitespace-nowrap">{s.startTime || '—'}{s.endTime ? `–${s.endTime}` : ''}</td>
+                                                    <td className="py-2 px-2 text-on-surface-secondary">{s.modeOfTraining ? getModeLabel(s.modeOfTraining).replace(/^\d+\s*-\s*/, '') : '—'}</td>
                                                     <td className="py-2 px-2">
                                                       {!sx?.calendarChecked ? (
-                                                        <span className="text-gray-400" title="Google Calendar wasn't reachable in this environment.">not checked</span>
+                                                        <span className="text-muted" title="Google Calendar wasn't reachable in this environment.">not checked</span>
                                                       ) : s.calendarMatched && s.calendarLink ? (
-                                                        <a href={s.calendarLink} target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 hover:underline">On calendar ↗</a>
+                                                        <a href={s.calendarLink} target="_blank" rel="noopener noreferrer" className="text-success hover:underline">On calendar ↗</a>
                                                       ) : (
-                                                        <span className="text-amber-600 dark:text-amber-400">Not on calendar</span>
+                                                        <span className="text-warning">Not on calendar</span>
                                                       )}
                                                     </td>
                                                     <td className="py-2 px-2 text-right whitespace-nowrap">
@@ -620,11 +620,11 @@ const RescheduleCancelView: React.FC = () => {
                                     </div>
                                   );
                                 })}
-                                <p className="text-xs text-gray-400 flex items-center gap-1">
+                                <p className="text-xs text-muted flex items-center gap-1">
                                   Sessions by day
                                   <HelpTip>Rescheduling moves the session to a new date; cancelling permanently deletes it from the schedule and SSG.</HelpTip>
                                 </p>
-                                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <div className="pt-3 border-t border-default">
                                   <CalendarAttendeesPanel courseRunId={run.courseRunId} calendarSync={syncCalendar} onChanged={() => { void loadSessions(run, true); void fetchClasses(); }} />
                                 </div>
                               </div>
@@ -645,7 +645,7 @@ const RescheduleCancelView: React.FC = () => {
       {!loading && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 mt-4 text-sm">
           <Button variant="ghost" disabled={page <= 0} onClick={() => { const p = page - 1; setPage(p); void fetchClasses({ page: p }); }}>Prev</Button>
-          <span className="text-gray-500 dark:text-gray-400">Page {page + 1} of {totalPages}</span>
+          <span className="text-muted">Page {page + 1} of {totalPages}</span>
           <Button variant="ghost" disabled={page >= totalPages - 1} onClick={() => { const p = page + 1; setPage(p); void fetchClasses({ page: p }); }}>Next</Button>
         </div>
       )}
@@ -686,12 +686,12 @@ const RescheduleCancelView: React.FC = () => {
       {/* Popup (confirm / success / error) */}
       {popup.open && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border dark:border-gray-700 p-6">
-            <h3 className={`text-lg font-semibold mb-2 ${popup.type === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{popup.title}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 whitespace-pre-line">{popup.message}</p>
+          <div className="bg-surface rounded-lg shadow-xl max-w-lg w-full border dark:border-gray-700 p-6">
+            <h3 className={`text-lg font-semibold mb-2 ${popup.type === 'error' ? 'text-danger' : 'text-on-surface'}`}>{popup.title}</h3>
+            <p className="text-sm text-on-surface-secondary mb-4 whitespace-pre-line">{popup.message}</p>
             <div className="flex justify-end gap-2">
               {popup.type === 'confirm' && popup.cancelText && (
-                <button type="button" onClick={() => { const fn = popup.onCancel; closePopup(); fn?.(); }} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">{popup.cancelText}</button>
+                <button type="button" onClick={() => { const fn = popup.onCancel; closePopup(); fn?.(); }} className="px-4 py-2 text-on-surface-secondary hover:bg-surface-hover rounded-md">{popup.cancelText}</button>
               )}
               <button type="button" onClick={() => { const fn = popup.onConfirm; closePopup(); if (popup.type === 'confirm' && fn) fn(); }}
                 className={`px-4 py-2 rounded-md text-white ${popup.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>

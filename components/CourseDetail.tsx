@@ -141,10 +141,10 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
                     className="w-full flex items-center justify-between text-left"
                     aria-expanded={open}
                 >
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+                    <h3 className="text-xl font-bold text-on-surface">{title}</h3>
                     <Icon
                         name={IconName.ChevronDown}
-                        className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
+                        className={`w-5 h-5 text-muted transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
                     />
                 </button>
                 {open && <div className="mt-4">{children}</div>}
@@ -153,7 +153,7 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
     }
     return (
         <Card className={`p-6 ${className}`}>
-            {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
+            {title && <h3 className="text-xl font-bold mb-4 text-on-surface">{title}</h3>}
             {children}
         </Card>
     );
@@ -167,7 +167,7 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
 //     if (!course.learners || course.learners.length === 0) {
 //         return (
 //             <ContentSection title="Game Leaderboard">
-//                 <p className="text-gray-500 text-center py-4">
+//                 <p className="text-muted text-center py-4">
 //                     No learners enrolled yet. Be the first!
 //                 </p>
 //             </ContentSection>
@@ -196,12 +196,12 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
 //             {currentUserData && (
 //                 <div className="p-4 bg-blue-50 rounded-lg mb-4 flex justify-between items-center">
 //                     <div>
-//                         <p className="text-sm font-semibold text-blue-600">Your Score</p>
-//                         <p className="text-3xl font-bold text-blue-600">{currentUserData.score} Points</p>
+//                         <p className="text-sm font-semibold text-primary">Your Score</p>
+//                         <p className="text-3xl font-bold text-primary">{currentUserData.score} Points</p>
 //                     </div>
 //                     <div className="text-right">
-//                          <p className="text-sm font-semibold text-blue-600">Your Rank</p>
-//                         <p className="text-3xl font-bold text-blue-600">#{currentUserRank}</p>
+//                          <p className="text-sm font-semibold text-primary">Your Rank</p>
+//                         <p className="text-3xl font-bold text-primary">#{currentUserRank}</p>
 //                     </div>
 //                 </div>
 //             )}
@@ -212,7 +212,7 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
 //                         <div className="flex-grow">
 //                             <p className="font-semibold">{learner.name}</p>
 //                         </div>
-//                         <span className="font-bold text-blue-600">{learner.score} pts</span>
+//                         <span className="font-bold text-primary">{learner.score} pts</span>
 //                     </li>
 //                 ))}
 //             </ol>
@@ -521,10 +521,10 @@ const AssessmentsSection: React.FC<{
     if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink && !hasEnabledMethods) {
         return (
             <ContentSection title="Assessment" collapsible>
-                <div className="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
-                    <Icon name={IconName.ClipboardCheck} className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-gray-600 dark:text-gray-300 mb-2">No Assessments Available</h4>
-                    <p className="text-gray-500 dark:text-gray-400">
+                <div className="text-center p-6 bg-surface-elevated rounded-lg border dark:border-gray-700">
+                    <Icon name={IconName.ClipboardCheck} className="w-16 h-16 text-muted mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-on-surface-secondary mb-2">No Assessments Available</h4>
+                    <p className="text-muted">
                         {userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin
                             ? "No assessments have been created for this course yet."
                             : "This section will display the assessment once it is published by your trainer. The assessment may be either a handwritten assessment or a soft copy assessment, depending on your trainer's arrangement."
@@ -729,8 +729,8 @@ const AssessmentsSection: React.FC<{
         if (!assessment.published) {
             return (
                 <div className="text-center py-4 px-2">
-                    <Icon name={IconName.ClipboardCheck} className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <Icon name={IconName.ClipboardCheck} className="w-10 h-10 text-muted mx-auto mb-2" />
+                    <p className="text-sm text-muted">
                         This section will display the assessment once it is published by your trainer. The assessment may be either a handwritten assessment or a soft copy assessment, depending on your trainer's arrangement.
                     </p>
                 </div>
@@ -741,11 +741,11 @@ const AssessmentsSection: React.FC<{
             const vStatus = verificationStatus[assessment.id];
             
             return (
-                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
+                <div className="bg-success-bg p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
                     <div className="flex justify-between items-center">
                         <div>
-                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {submission.file_name}</p>
-                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(submission.submitted_at).toLocaleString()}</p>
+                            <p className="font-semibold text-success">Submitted: {submission.file_name}</p>
+                            <p className="text-xs text-success">On: {new Date(submission.submitted_at).toLocaleString()}</p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: true }))}>
                             Resubmit
@@ -758,7 +758,7 @@ const AssessmentsSection: React.FC<{
                         />
                     )}
                     {vStatus && (
-                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
+                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-info-bg text-blue-700' : vStatus.exists ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
                             {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
                             {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
                             {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
@@ -774,12 +774,12 @@ const AssessmentsSection: React.FC<{
                     <div className="mb-4">
                         <div
                             onClick={(e) => handleFileDownload(assessment.file_url!, e)}
-                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                            className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer"
                         >
-                            <Icon name={IconName.FilePdf} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                            <Icon name={IconName.FilePdf} className="w-8 h-8 text-danger flex-shrink-0" />
                             <div>
-                                <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(assessment.file_url)}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download assessment questions</p>
+                                <p className="font-semibold text-on-surface">{extractFilenameFromPath(assessment.file_url)}</p>
+                                <p className="text-xs text-muted">Click to download assessment questions</p>
                             </div>
                         </div>
                     </div>
@@ -796,7 +796,7 @@ const AssessmentsSection: React.FC<{
                         <button
                             type="button"
                             onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: false }))}
-                            className="mt-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 underline"
+                            className="mt-2 text-sm text-on-surface-secondary hover:text-on-surface underline"
                         >
                             Cancel — keep my previous submission
                         </button>
@@ -813,12 +813,12 @@ const AssessmentsSection: React.FC<{
                 {assessment.file_url && (
                     <div
                         onClick={(e) => handleFileDownload(assessment.file_url!, e)}
-                        className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                        className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer"
                     >
-                        <Icon name={IconName.FilePdf} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                        <Icon name={IconName.FilePdf} className="w-8 h-8 text-danger flex-shrink-0" />
                         <div>
-                            <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(assessment.file_url)}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download assessment questions</p>
+                            <p className="font-semibold text-on-surface">{extractFilenameFromPath(assessment.file_url)}</p>
+                            <p className="text-xs text-muted">Click to download assessment questions</p>
                         </div>
                     </div>
                 )}
@@ -827,9 +827,9 @@ const AssessmentsSection: React.FC<{
                 {userRole === UserRole.Trainer && (
                     assessment.published ? (
                         <div className="space-y-3">
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
-                                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
-                                <p className="text-xs text-blue-600 dark:text-blue-400">Learners can now submit their work.</p>
+                            <div className="bg-info-bg p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
+                                <p className="text-sm font-semibold text-info">Assessment is Live</p>
+                                <p className="text-xs text-primary">Learners can now submit their work.</p>
                             </div>
                             <Button
                                 onClick={() => handleUnpublish(assessment.id)}
@@ -850,7 +850,7 @@ const AssessmentsSection: React.FC<{
     return (
         <ContentSection title="Assessment" collapsible>
             {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-sm text-muted mb-4">
                     Open the assessment link, download the questions as a Microsoft Word document (or make a Google Doc copy), fill in the answers, then submit the completed file on the LMS.
                 </p>
             )}
@@ -861,8 +861,8 @@ const AssessmentsSection: React.FC<{
                         <li key={assessment.id} className="p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center">
-                                    <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600 mr-3" />
-                                    <span className="font-semibold text-gray-900 dark:text-white">{assessment.title}</span>
+                                    <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-primary mr-3" />
+                                    <span className="font-semibold text-on-surface">{assessment.title}</span>
                                 </div>
                                 <span className="text-sm font-medium bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">{assessment.category}</span>
                             </div>
@@ -887,12 +887,12 @@ const AssessmentsSection: React.FC<{
                 return effectiveWrittenLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-on-surface flex items-center gap-2">
+                            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-primary" />
                             Written Exam
                         </h4>
                         {writtenPublished && (
-                            <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                            <span className="text-xs font-medium bg-success-bg text-success px-2 py-1 rounded-full">Published</span>
                         )}
                     </div>
 
@@ -903,12 +903,12 @@ const AssessmentsSection: React.FC<{
                                     href={effectiveWrittenLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                 >
-                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                        <p className="font-medium text-on-surface">Open Assessment Link</p>
+                                        <p className="text-xs text-muted">Click to open external form</p>
                                     </div>
                                 </a>
                                 {userRole === UserRole.Trainer && (
@@ -933,15 +933,15 @@ const AssessmentsSection: React.FC<{
                                 {/* Show all uploaded files */}
                                 {writtenSubs.length > 0 && (
                                     <div className="space-y-2">
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({writtenSubs.length})</p>
+                                        <p className="text-sm font-medium text-on-surface-secondary">Uploaded Files ({writtenSubs.length})</p>
                                         {writtenSubs.map((sub) => (
-                                            <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                            <div key={sub.id} className="bg-success-bg p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
-                                                    <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                    <p className="font-medium text-success truncate">{sub.file_name}</p>
+                                                    <p className="text-xs text-success">{new Date(sub.submitted_at).toLocaleString()}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary text-sm font-medium">
                                                         View
                                                     </a>
                                                     <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
@@ -977,12 +977,12 @@ const AssessmentsSection: React.FC<{
                 return effectivePracticalLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-on-surface flex items-center gap-2">
+                            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-primary" />
                             Practical Exam
                         </h4>
                         {practicalPublished && (
-                            <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                            <span className="text-xs font-medium bg-success-bg text-success px-2 py-1 rounded-full">Published</span>
                         )}
                     </div>
 
@@ -993,12 +993,12 @@ const AssessmentsSection: React.FC<{
                                     href={effectivePracticalLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                 >
-                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                        <p className="font-medium text-on-surface">Open Assessment Link</p>
+                                        <p className="text-xs text-muted">Click to open external form</p>
                                     </div>
                                 </a>
                                 {userRole === UserRole.Trainer && (
@@ -1023,15 +1023,15 @@ const AssessmentsSection: React.FC<{
                                 {/* Show all uploaded files */}
                                 {practicalSubs.length > 0 && (
                                     <div className="space-y-2">
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({practicalSubs.length})</p>
+                                        <p className="text-sm font-medium text-on-surface-secondary">Uploaded Files ({practicalSubs.length})</p>
                                         {practicalSubs.map((sub) => (
-                                            <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                            <div key={sub.id} className="bg-success-bg p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
-                                                    <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                    <p className="font-medium text-success truncate">{sub.file_name}</p>
+                                                    <p className="text-xs text-success">{new Date(sub.submitted_at).toLocaleString()}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary text-sm font-medium">
                                                         View
                                                     </a>
                                                     <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
@@ -1077,12 +1077,12 @@ const AssessmentsSection: React.FC<{
                 return (
                     <div key={methodKey} className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                            <h4 className="font-semibold text-on-surface flex items-center gap-2">
+                                <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-primary" />
                                 {label}
                             </h4>
                             {isPublished && (
-                                <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                                <span className="text-xs font-medium bg-success-bg text-success px-2 py-1 rounded-full">Published</span>
                             )}
                         </div>
 
@@ -1091,12 +1091,12 @@ const AssessmentsSection: React.FC<{
                                 href={config.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                             >
-                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                    <p className="font-medium text-on-surface">Open Assessment Link</p>
+                                    <p className="text-xs text-muted">Click to open external form</p>
                                 </div>
                             </a>
                             {userRole === UserRole.Trainer && (
@@ -1117,15 +1117,15 @@ const AssessmentsSection: React.FC<{
                                 <div className="mt-3 space-y-3">
                                     {methodSubs.length > 0 && (
                                         <div className="space-y-2">
-                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({methodSubs.length})</p>
+                                            <p className="text-sm font-medium text-on-surface-secondary">Uploaded Files ({methodSubs.length})</p>
                                             {methodSubs.map((sub) => (
-                                                <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                <div key={sub.id} className="bg-success-bg p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
                                                     <div className="min-w-0 flex-1">
-                                                        <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
-                                                        <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                        <p className="font-medium text-success truncate">{sub.file_name}</p>
+                                                        <p className="text-xs text-success">{new Date(sub.submitted_at).toLocaleString()}</p>
                                                     </div>
                                                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                                        <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                                                        <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary text-sm font-medium">
                                                             View
                                                         </a>
                                                         <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
@@ -1161,7 +1161,7 @@ const URL_IN_TEXT_RE = /(https?:\/\/[^\s<>"')\]]+)/g;
 const linkifyText = (text: string): React.ReactNode[] =>
     text.split(URL_IN_TEXT_RE).map((part, i) =>
         i % 2 === 1 ? (
-            <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{part}</a>
+            <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{part}</a>
         ) : (
             <React.Fragment key={i}>{part}</React.Fragment>
         )
@@ -1291,19 +1291,19 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
         const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         return newestFirst ? -diff : diff;
     });
-    const inputClass = 'w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500';
+    const inputClass = 'w-full px-3 py-2 text-sm bg-surface border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500';
 
     return (
         <ContentSection title={!loading && announcements.length > 0 ? `Announcements (${announcements.length})` : 'Announcements'} collapsible defaultOpen={false}>
             <div className="space-y-4">
                 {isTrainerOrAdmin && (
                     <div
-                        className={`p-4 rounded-lg border-2 border-dashed space-y-3 transition-colors ${isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'}`}
+                        className={`p-4 rounded-lg border-2 border-dashed space-y-3 transition-colors ${isDragging ? 'border-blue-500 bg-info-bg' : 'border-default bg-surface-elevated'}`}
                         onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
                         onDragLeave={() => setIsDragging(false)}
                         onDrop={e => { e.preventDefault(); setIsDragging(false); pickFile(e.dataTransfer.files?.[0]); }}
                     >
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                        <p className="text-sm font-medium text-on-surface-secondary">
                             Post to this class — every learner sees it on their LMS class page.
                         </p>
                         <textarea
@@ -1325,21 +1325,21 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="flex items-center gap-2 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 flex-shrink-0"
+                                    className="flex items-center gap-2 px-3 py-2 text-sm bg-surface border border-strong rounded-md hover:bg-surface-hover text-on-surface-secondary flex-shrink-0"
                                 >
                                     <Icon name={IconName.Upload} className="w-4 h-4" />
                                     {pendingFile ? 'Change document' : 'Attach document'}
                                 </button>
                                 {pendingFile ? (
-                                    <span className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200 min-w-0">
+                                    <span className="flex items-center gap-1 text-sm text-on-surface-secondary min-w-0">
                                         <Icon name={IconName.FileText} className="w-4 h-4 flex-shrink-0" />
                                         <span className="truncate" title={pendingFile.name}>{pendingFile.name}</span>
-                                        <button type="button" onClick={clearFile} className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" aria-label="Remove document">
+                                        <button type="button" onClick={clearFile} className="p-1 text-danger hover:bg-red-50 dark:hover:bg-red-900/30 rounded" aria-label="Remove document">
                                             <Icon name={IconName.X} className="w-4 h-4" />
                                         </button>
                                     </span>
                                 ) : (
-                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">or drag a file here (max 50 MB) — saved to this class's cloud folder</span>
+                                    <span className="hidden sm:inline text-xs text-muted">or drag a file here (max 50 MB) — saved to this class's cloud folder</span>
                                 )}
                             </div>
                             <button
@@ -1360,41 +1360,41 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                         <Icon name={IconName.Spinner} className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
                 ) : announcements.length === 0 ? (
-                    <div className="text-center p-6 text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Bell} className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                        <p className="font-medium text-gray-600 dark:text-gray-300">No posts yet</p>
+                    <div className="text-center p-6 text-muted">
+                        <Icon name={IconName.Bell} className="w-10 h-10 text-muted mx-auto mb-2" />
+                        <p className="font-medium text-on-surface-secondary">No posts yet</p>
                         {isTrainerOrAdmin && <p className="text-sm mt-1">Use the box above to share a message, web link or document with the class.</p>}
                     </div>
                 ) : (
                     <>
                         <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                            <p className="text-sm font-semibold text-on-surface-secondary">
                                 {announcements.length} {announcements.length === 1 ? 'post' : 'posts'}
                             </p>
                             <button
                                 type="button"
                                 onClick={() => setNewestFirst(v => !v)}
-                                className="text-xs font-medium text-blue-600 hover:underline"
+                                className="text-xs font-medium text-primary hover:underline"
                             >
                                 {newestFirst ? 'Newest first — show oldest first' : 'Oldest first — show newest first'}
                             </button>
                         </div>
                         <ul className="space-y-3">
                             {sorted.map(a => (
-                                <li key={a.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <li key={a.id} className="p-4 bg-surface border border-default rounded-lg">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                            <p className="text-xs font-medium text-muted">
                                                 {formatPostedAt(a.createdAt)} · {a.postedBy}
                                             </p>
                                             {a.title && (
-                                                <p className="mt-1 font-semibold text-gray-900 dark:text-white">{a.title}</p>
+                                                <p className="mt-1 font-semibold text-on-surface">{a.title}</p>
                                             )}
                                         </div>
                                         {isTrainerOrAdmin && (
                                             <button
                                                 onClick={() => handleDelete(a.id)}
-                                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors flex-shrink-0"
+                                                className="p-2 text-danger hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors flex-shrink-0"
                                                 title="Delete"
                                             >
                                                 <Icon name={IconName.Delete} className="w-5 h-5" />
@@ -1402,7 +1402,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                                         )}
                                     </div>
                                     {a.message && (
-                                        <p className="mt-2 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{linkifyText(a.message)}</p>
+                                        <p className="mt-2 text-sm text-on-surface whitespace-pre-wrap break-words">{linkifyText(a.message)}</p>
                                     )}
                                     {(a.linkUrl || a.fileUrl) && (
                                         <div className="mt-3 flex flex-wrap gap-2">
@@ -1411,7 +1411,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                                                     href={a.linkUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-2 max-w-full px-3 py-1.5 text-sm text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:underline"
+                                                    className="inline-flex items-center gap-2 max-w-full px-3 py-1.5 text-sm text-blue-600 bg-info-bg rounded-md hover:underline"
                                                 >
                                                     <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0" />
                                                     <span className="truncate">{a.linkUrl}</span>
@@ -1423,7 +1423,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     download={a.fileName || undefined}
-                                                    className="inline-flex items-center gap-2 max-w-full px-3 py-1.5 text-sm text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:underline"
+                                                    className="inline-flex items-center gap-2 max-w-full px-3 py-1.5 text-sm text-blue-600 bg-info-bg rounded-md hover:underline"
                                                 >
                                                     <Icon name={IconName.Download} className="w-4 h-4 flex-shrink-0" />
                                                     <span className="truncate">{a.fileName || 'Attachment'}</span>
@@ -1528,7 +1528,7 @@ const CourseSessionsSection: React.FC<{ courseCode: string }> = ({ courseCode })
         return rows;
     };
 
-    const inputCls = 'w-full px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono';
+    const inputCls = 'w-full px-2 py-1 text-sm rounded border border-strong bg-surface text-on-surface focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono';
 
     const source = editing ? draft : (timing ?? {});
     const rows = buildRows(source);
@@ -1537,37 +1537,37 @@ const CourseSessionsSection: React.FC<{ courseCode: string }> = ({ courseCode })
     return (
         <ContentSection title="Course Sessions">
             {loading && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-muted">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                     Loading session timing…
                 </div>
             )}
             {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
             {saveSuccess && !editing && (
-                <p className="text-sm text-green-600 dark:text-green-400 mb-2">Saved successfully.</p>
+                <p className="text-sm text-success mb-2">Saved successfully.</p>
             )}
             {!loading && !timing && !editing && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">No session timing configured for this course.</p>
+                <p className="text-sm text-muted mb-3">No session timing configured for this course.</p>
             )}
 
             {!loading && (
                 <>
                     {(hasAnyData || editing) && (
-                        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 mb-4">
+                        <div className="overflow-x-auto rounded-lg border border-default mb-4">
                             <table className="w-full text-sm border-collapse">
-                                <thead className="bg-gray-50 dark:bg-gray-800">
+                                <thead className="bg-surface-elevated">
                                     <tr>
                                         {['Session', 'Start Time', 'End Time', 'Mode of Training'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-on-surface-secondary uppercase tracking-wider border-b border-default">
                                                 {h}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                                <tbody className="divide-y divide-default bg-surface">
                                     {rows.map(row => (
-                                        <tr key={row.key} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                                            <td className="px-4 py-2 text-gray-700 dark:text-gray-300 font-medium whitespace-nowrap">{row.label}</td>
+                                        <tr key={row.key} className="hover:bg-surface-hover transition-colors">
+                                            <td className="px-4 py-2 text-on-surface-secondary font-medium whitespace-nowrap">{row.label}</td>
                                             {editing ? (
                                                 <>
                                                     <td className="px-4 py-1.5">
@@ -1594,9 +1594,9 @@ const CourseSessionsSection: React.FC<{ courseCode: string }> = ({ courseCode })
                                                 </>
                                             ) : (
                                                 <>
-                                                    <td className="px-4 py-2 text-gray-900 dark:text-white font-mono">{source[row.startKey] || '—'}</td>
-                                                    <td className="px-4 py-2 text-gray-900 dark:text-white font-mono">{source[row.endKey] || '—'}</td>
-                                                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                                                    <td className="px-4 py-2 text-on-surface font-mono">{source[row.startKey] || '—'}</td>
+                                                    <td className="px-4 py-2 text-on-surface font-mono">{source[row.endKey] || '—'}</td>
+                                                    <td className="px-4 py-2 text-on-surface-secondary">
                                                         {source[row.modeKey]
                                                             ? (MODE_OPTIONS.find(o => o.value === String(source[row.modeKey]).trim())?.label ?? source[row.modeKey])
                                                             : '—'}
@@ -1616,12 +1616,12 @@ const CourseSessionsSection: React.FC<{ courseCode: string }> = ({ courseCode })
                                 <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
                                     {saving ? 'Saving…' : 'Save'}
                                 </button>
-                                <button onClick={cancelEdit} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <button onClick={cancelEdit} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover transition-colors">
                                     Cancel
                                 </button>
                             </>
                         ) : (
-                            <button onClick={startEdit} className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <button onClick={startEdit} className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover transition-colors">
                                 {timing ? 'Edit' : 'Add Session Timing'}
                             </button>
                         )}
@@ -1671,42 +1671,42 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
                 <>
                     {localCertUrl ? (
                         verification.checking ? (
-                            <div className="text-center p-8 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                            <div className="text-center p-8 bg-info-bg rounded-xl border border-blue-200 dark:border-blue-800">
                                 <Icon name={IconName.Spinner} className="w-16 h-16 text-blue-500 mx-auto mb-4 animate-spin" />
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Verifying Certificate...</h4>
-                                <p className="text-blue-700 dark:text-blue-400 mt-1 mb-4">Please wait while we locate your secure certificate record.</p>
+                                <h4 className="text-xl font-bold text-on-surface">Verifying Certificate...</h4>
+                                <p className="text-primary mt-1 mb-4">Please wait while we locate your secure certificate record.</p>
                             </div>
                         ) : verification.exists ? (
-                            <div className="text-center p-8 bg-green-50 dark:bg-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
+                            <div className="text-center p-8 bg-success-bg rounded-xl border border-green-200 dark:border-green-800">
                                 <Icon name={IconName.CheckCircle} className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Ready</h4>
-                                <p className="text-green-700 dark:text-green-400 mt-1 mb-6">Your certificate has been formally issued and verified in the secure folder.</p>
+                                <h4 className="text-xl font-bold text-on-surface">Certificate Ready</h4>
+                                <p className="text-success mt-1 mb-6">Your certificate has been formally issued and verified in the secure folder.</p>
                                 <a href={localCertUrl} target="_blank" rel="noopener noreferrer" className="inline-block bg-primary text-white font-semibold py-2 px-6 rounded-lg hover:bg-secondary transition-colors shadow-md hover:shadow-lg">
                                     Download Certificate
                                 </a>
                             </div>
                         ) : (
-                            <div className="text-center p-8 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-800">
-                                <Icon name={IconName.Close} className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Missing</h4>
-                                <p className="text-red-700 dark:text-red-400 mt-1 mb-4">You have achieved competency, but your certificate file could not be found in the secure folder.</p>
-                                <p className="text-sm font-semibold text-gray-500">Please contact your training provider for assistance.</p>
+                            <div className="text-center p-8 bg-danger-bg rounded-xl border border-red-200 dark:border-red-800">
+                                <Icon name={IconName.Close} className="w-16 h-16 text-danger mx-auto mb-4" />
+                                <h4 className="text-xl font-bold text-on-surface">Certificate Missing</h4>
+                                <p className="text-danger mt-1 mb-4">You have achieved competency, but your certificate file could not be found in the secure folder.</p>
+                                <p className="text-sm font-semibold text-muted">Please contact your training provider for assistance.</p>
                             </div>
                         )
                     ) : (
-                        <div className="text-center p-8 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-800">
-                            <Icon name={IconName.Clock} className="w-16 h-16 text-amber-500 mx-auto mb-4 animate-pulse" />
-                            <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Generating</h4>
-                            <p className="text-amber-700 dark:text-amber-400 mt-1 mb-4">You have achieved competency! Your certificate is currently being securely generated.</p>
-                            <p className="text-sm font-semibold text-gray-500 line-clamp-2">Please refresh the page in a few moments.</p>
+                        <div className="text-center p-8 bg-warning-bg rounded-xl border border-amber-200 dark:border-amber-800">
+                            <Icon name={IconName.Clock} className="w-16 h-16 text-warning mx-auto mb-4 animate-pulse" />
+                            <h4 className="text-xl font-bold text-on-surface">Certificate Generating</h4>
+                            <p className="text-warning mt-1 mb-4">You have achieved competency! Your certificate is currently being securely generated.</p>
+                            <p className="text-sm font-semibold text-muted line-clamp-2">Please refresh the page in a few moments.</p>
                         </div>
                     )}
                 </>
             ) : (
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md border border-gray-200 dark:border-gray-600 text-center">
-                    <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">Minimum Attendance Not Fulfilled</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <div className="bg-surface-elevated p-4 rounded-md border border-default text-center">
+                    <Icon name={IconName.FileText} className="w-12 h-12 text-muted mx-auto mb-3" />
+                    <p className="text-on-surface-secondary font-medium">Minimum Attendance Not Fulfilled</p>
+                    <p className="text-sm text-muted mt-1">
                         When you have fulfilled the minimum attendance requirement, your certificate will be available here.
                     </p>
                 </div>
@@ -1730,8 +1730,8 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
 
     const DetailRow = ({ label, value }: { label: string, value: React.ReactNode }) => (
         <div className="flex justify-between items-start gap-4">
-            <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">{label}</p>
-            <div className="font-semibold text-gray-900 dark:text-gray-100 text-right">{value}</div>
+            <p className="text-muted flex-shrink-0">{label}</p>
+            <div className="font-semibold text-on-surface text-right">{value}</div>
         </div>
     );
 
@@ -1740,15 +1740,15 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
     const trainers = (course.trainerNames || '').split(',').map(t => t.trim()).filter(Boolean);
     const classStatus = (course.classStatus || '').toLowerCase();
     const classStatusStyle: Record<string, string> = {
-        cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-        pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-        confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+        cancelled: 'bg-danger-bg text-danger',
+        pending:   'bg-warning-bg text-warning',
+        confirmed: 'bg-success-bg text-success',
     };
 
     return (
         <>
             <div className="p-6 border-b dark:border-gray-700">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Course Details</h3>
+                <h3 className="font-bold text-lg text-on-surface mb-6">Course Details</h3>
                 <div className="space-y-4 text-sm">
                     <DetailRow label="Course Title" value={course.title} />
                     <DetailRow label="Course Ref Code" value={displayCourseCodes(course)} />
@@ -1759,24 +1759,24 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                     )}
                     <DetailRow label="Funding Validity Start Date" value={fmtDate(course.fundingValidityStart)} />
                     <DetailRow label="Funding Validity End Date" value={
-                        <span className={expiry && isExpired ? 'text-red-600 dark:text-red-400' : expiry ? 'text-green-600 dark:text-green-400' : ''}>
+                        <span className={expiry && isExpired ? 'text-danger' : expiry ? 'text-success' : ''}>
                             {fmtDate(course.fundingValidity)}{expiry && !isNaN(expiry.getTime()) ? (isExpired ? ' (Expired)' : ' (Valid)') : ''}
                         </span>
                     } />
                     <div className="pt-4">
-                        <p className="font-semibold text-gray-500 dark:text-gray-400 mb-3">Course Duration</p>
+                        <p className="font-semibold text-muted mb-3">Course Duration</p>
                         <div className="space-y-3">
                             <div className="flex justify-between items-baseline">
-                                <p className="text-gray-500 dark:text-gray-400">Training Hours:</p>
-                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.trainingHours} hrs</p>
+                                <p className="text-muted">Training Hours:</p>
+                                <p className="font-semibold text-on-surface">{course.trainingHours} hrs</p>
                             </div>
                             <div className="flex justify-between items-baseline">
-                                <p className="text-gray-500 dark:text-gray-400">Assessment Hours:</p>
-                                <p className="font-semibold text-gray-900 dark:text-gray-100">{course.assessmentHours} hrs</p>
+                                <p className="text-muted">Assessment Hours:</p>
+                                <p className="font-semibold text-on-surface">{course.assessmentHours} hrs</p>
                             </div>
                             <div className="flex justify-between items-baseline font-bold">
-                                <p className="text-gray-900 dark:text-white">Total Duration:</p>
-                                <p className="text-gray-900 dark:text-white">{totalDuration} hrs</p>
+                                <p className="text-on-surface">Total Duration:</p>
+                                <p className="text-on-surface">{totalDuration} hrs</p>
                             </div>
                         </div>
                     </div>
@@ -1785,7 +1785,7 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
 
             {showRunFields && (
                 <div className="p-6 border-b dark:border-gray-700">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Class Details</h3>
+                    <h3 className="font-bold text-lg text-on-surface mb-6">Class Details</h3>
                     <div className="space-y-4 text-sm">
                         <DetailRow label={trainers.length > 1 ? 'Trainers' : 'Trainer'} value={
                             trainers.length === 0 ? 'N/A' : trainers.map(t => <div key={t}>{t}</div>)
@@ -1796,15 +1796,15 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
                         <DetailRow label="Class Type" value={
                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                course.classType === 'Virtual' ? 'bg-info-bg text-info'
                                 : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                : 'bg-surface-elevated text-on-surface-secondary'
                             }`}>
                                 {course.classType || 'Physical'}
                             </span>
                         } />
                         <DetailRow label="Class Status" value={
-                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${classStatusStyle[classStatus] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${classStatusStyle[classStatus] || 'bg-surface-elevated text-on-surface-secondary'}`}>
                                 {course.classStatus || 'N/A'}
                             </span>
                         } />
@@ -1943,7 +1943,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
             target: 'Assessment',
         },
         {
-            text: <><span className="font-bold">All questions must be answered.</span> Once completed, <span className="font-bold">submit the assessment online</span>. You must see the <span className="font-bold text-green-700 dark:text-green-400">green notification</span> that the assessment is submitted successfully.</>,
+            text: <><span className="font-bold">All questions must be answered.</span> Once completed, <span className="font-bold">submit the assessment online</span>. You must see the <span className="font-bold text-success">green notification</span> that the assessment is submitted successfully.</>,
             target: 'Assessment',
         },
     ];
@@ -1966,7 +1966,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
                             <a
                                 href={`#${toId(item.label)}`}
                                 onClick={(e) => { e.preventDefault(); handleItemClick(item.label); }}
-                                className={`flex items-center space-x-3 px-4 py-3 rounded-md font-semibold transition-colors ${activeItem === item.label ? 'bg-primary/10 text-primary' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                className={`flex items-center space-x-3 px-4 py-3 rounded-md font-semibold transition-colors ${activeItem === item.label ? 'bg-primary/10 text-primary' : 'text-on-surface-secondary hover:bg-surface-hover'}`}
                             >
                                 <Icon name={item.icon} className="w-5 h-5" />
                                 <span>{item.label}</span>
@@ -1978,13 +1978,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
             {criticalReminders.length > 0 && (
                 <div
                     id="critical-reminders"
-                    className="mx-2 mb-2 mt-1 rounded-xl border-2 border-red-400 bg-red-50 dark:border-red-500/70 dark:bg-red-950/40 p-4"
+                    className="mx-2 mb-2 mt-1 rounded-xl border-2 border-red-400 bg-danger-bg dark:border-red-500/70 p-4"
                 >
                     <div className="flex items-center gap-2 mb-3">
-                        <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-                        <h4 className="text-sm font-extrabold uppercase tracking-wide text-red-700 dark:text-red-300">Critical Reminders</h4>
+                        <Icon name={IconName.Warning} className="w-5 h-5 text-danger flex-shrink-0" />
+                        <h4 className="text-sm font-extrabold uppercase tracking-wide text-danger">Critical Reminders</h4>
                     </div>
-                    <ol className="space-y-2.5 text-[13px] leading-snug text-gray-800 dark:text-gray-200">
+                    <ol className="space-y-2.5 text-[13px] leading-snug text-on-surface">
                         {criticalReminders.map((item, i) => (
                             <li key={i} className="flex gap-2.5">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center mt-px">{i + 1}</span>
@@ -2071,10 +2071,10 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <div className="flex-grow mr-4">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-white">{displayTitle}</h4>
+                    <h4 className="font-bold text-lg text-on-surface">{displayTitle}</h4>
                     {userRole === UserRole.Learner && (
                         <div className="flex items-center mt-2 gap-2">
-                            <p className="text-sm font-bold text-green-600 w-12 flex-shrink-0">{progress.toFixed(0)}%</p>
+                            <p className="text-sm font-bold text-success w-12 flex-shrink-0">{progress.toFixed(0)}%</p>
                             <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                 <div className="bg-green-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                             </div>
@@ -2082,7 +2082,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                 onClick={handleMarkTopicComplete}
                                 className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
                                     isAllCompleted
-                                        ? 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                        ? 'bg-success-bg text-success border-green-300 hover:bg-green-200 dark:border-green-700'
                                         : 'bg-surface text-on-surface-secondary border-default hover:bg-surface-elevated hover:text-on-surface'
                                 }`}
                             >
@@ -2097,7 +2097,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
             </button>
             {isOpen && hasSubtopics && (
                 <div className="px-4 pb-2">
-                    <ul className="border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                    <ul className="border-t border-default divide-y divide-default">
                             {topic.subtopics.map(subtopic => {
                                 const isBookmarked = bookmarkedSubtopics.has(subtopic.id);
                                 const isCompleted = completedSubtopics.has(subtopic.id);
@@ -2116,7 +2116,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                             e.stopPropagation();
                                                             onToggleCompletion(subtopic.id);
                                                         }}
-                                                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
+                                                        className="h-5 w-5 rounded border-strong text-primary focus:ring-primary mr-3 flex-shrink-0"
                                                         aria-label={`Mark '${subtopic.title}' as complete`}
                                                     />
                                                 )}
@@ -2132,7 +2132,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                         {subtopic.title}
                                                     </a>
                                                 ) : (
-                                                    <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
+                                                    <span className={`font-medium text-on-surface group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-muted' : ''}`}>
                                                         {subtopic.title}
                                                     </span>
                                                 )}
@@ -2140,7 +2140,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                             {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
                                                 <button
                                                     onClick={(e) => onToggleBookmark(e, subtopic.id)}
-                                                    className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                    className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-muted hover:text-primary hover:bg-surface-hover'}`}
                                                     aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
                                                 >
                                                     <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
@@ -2166,20 +2166,20 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                         const canTake = userRole === UserRole.Learner && !!userId && !!courseId;
                                                         return (
                                                             <div key={rl.id}>
-                                                                <div className="p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 flex items-center justify-between gap-2">
+                                                                <div className="p-2 rounded-md bg-success-bg border border-green-200 dark:border-green-800/50 flex items-center justify-between gap-2">
                                                                     <div className="flex items-center gap-2 min-w-0">
                                                                         <Icon
                                                                             name={IconName.FileText}
-                                                                            className="w-3.5 h-3.5 flex-shrink-0 text-green-600 dark:text-green-400"
+                                                                            className="w-3.5 h-3.5 flex-shrink-0 text-success"
                                                                         />
-                                                                        <span className="text-sm font-semibold text-green-700 dark:text-green-300 truncate">
+                                                                        <span className="text-sm font-semibold text-success truncate">
                                                                             {rl.title || 'Quiz'}
                                                                         </span>
                                                                         <span className="text-[11px] text-green-600/80 dark:text-green-400/80 flex-shrink-0">
                                                                             · {questions.length} question{questions.length === 1 ? '' : 's'}
                                                                         </span>
                                                                         {prev && (
-                                                                            <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-green-200 dark:bg-green-800/60 text-green-800 dark:text-green-200 flex-shrink-0">
+                                                                            <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-green-200 dark:bg-green-800/60 text-success flex-shrink-0">
                                                                                 Last: {prev.score}/{prev.total}
                                                                             </span>
                                                                         )}
@@ -2190,7 +2190,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                                                 e.stopPropagation();
                                                                                 setOpenQuizId(rl.id);
                                                                             }}
-                                                                            className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                                                            className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md bg-green-700 text-white hover:bg-green-800 transition-colors"
                                                                         >
                                                                             {prev ? 'Retake Quiz' : 'Take Quiz'}
                                                                         </button>
@@ -2232,7 +2232,7 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                                         {rl.title || 'Activity'}
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                                                <p className="text-xs text-on-surface-secondary whitespace-pre-wrap leading-relaxed">
                                                                     {rl.instructions}
                                                                 </p>
                                                             </div>
@@ -2456,7 +2456,7 @@ export const CourseDetail: React.FC = () => {
                 <Card key={i} className="p-6">
                     <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
                     <div className="space-y-3">
-                        <div className="h-16 bg-gray-100 dark:bg-gray-800 rounded-md"></div>
+                        <div className="h-16 bg-surface-elevated rounded-md"></div>
                     </div>
                 </Card>
             ))}
@@ -2466,7 +2466,7 @@ export const CourseDetail: React.FC = () => {
                 <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
                 <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                        <div key={i} className="p-4 bg-surface-elevated rounded-lg">
                             <div className="h-5 w-64 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
                             <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
                         </div>
@@ -2694,20 +2694,20 @@ export const CourseDetail: React.FC = () => {
             {/* Delete Confirmation Dialog */}
             {showDeleteConfirmation && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto">
+                    <div className="bg-surface rounded-lg shadow-xl max-w-md w-full mx-auto">
                         <div className="p-6">
                             <div className="flex items-center gap-4 mb-4">
-                                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <Icon name={IconName.Delete} className="w-6 h-6 text-red-600" />
+                                <div className="w-12 h-12 bg-danger-bg rounded-full flex items-center justify-center flex-shrink-0">
+                                    <Icon name={IconName.Delete} className="w-6 h-6 text-danger" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Delete Course</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">This action cannot be undone</p>
+                                    <h3 className="text-lg font-semibold text-on-surface mb-1">Delete Course</h3>
+                                    <p className="text-sm text-muted">This action cannot be undone</p>
                                 </div>
                             </div>
 
                             <div className="mb-6">
-                                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                                <p className="text-on-surface-secondary mb-4">
                                     Are you sure you want to delete the course <strong>"{selectedCourse?.title}"</strong>?
                                 </p>
                             </div>
@@ -2751,12 +2751,12 @@ export const CourseDetail: React.FC = () => {
                             onClick={() => setIsCourseMenuOpen(false)}
                         >
                             <div
-                                className="absolute left-0 top-0 h-full w-72 max-w-[calc(100%-3rem)] bg-white dark:bg-gray-800 shadow-xl flex flex-col"
+                                className="absolute left-0 top-0 h-full w-72 max-w-[calc(100%-3rem)] bg-surface shadow-xl flex flex-col"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <div className="p-4 flex justify-between items-center border-b dark:border-gray-700 flex-shrink-0">
                                     <h3 className="font-bold dark:text-white">Course Menu</h3>
-                                    <button onClick={() => setIsCourseMenuOpen(false)} className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                                    <button onClick={() => setIsCourseMenuOpen(false)} className="p-2 -mr-2 text-on-surface-secondary hover:text-on-surface">
                                         <Icon name={IconName.X} className="w-6 h-6" />
                                     </button>
                                 </div>
@@ -2836,16 +2836,16 @@ export const CourseDetail: React.FC = () => {
                                                 setSelectedCourse(null);
                                                 setTrainerPage(TrainerPage.EAttendance);
                                             }}
-                                            className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            className="flex items-center gap-3 p-3 w-full text-left bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                         >
-                                            <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                            <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-primary flex-shrink-0" />
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white">E-Attendance</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                <p className="font-semibold text-on-surface">E-Attendance</p>
+                                                <p className="text-xs text-muted">
                                                     Open E-Attendance for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
                                                 </p>
                                             </div>
-                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-muted flex-shrink-0" />
                                         </button>
                                     </ContentSection>
                                 </div>
@@ -2893,19 +2893,19 @@ export const CourseDetail: React.FC = () => {
                                                 href={attendanceLink}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                className="flex items-center gap-3 p-3 w-full text-left bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                             >
-                                                <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-primary flex-shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">E-Attendance</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <p className="font-semibold text-on-surface">E-Attendance</p>
+                                                    <p className="text-xs text-muted">
                                                         Open E-Attendance for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
                                                     </p>
                                                 </div>
-                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-muted flex-shrink-0" />
                                             </a>
                                         ) : (
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                            <p className="text-sm text-muted italic">
                                                 E-Attendance link not yet available for this course run.
                                             </p>
                                         )}
@@ -2951,16 +2951,16 @@ export const CourseDetail: React.FC = () => {
                                                         href={zoomStartUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                        className="flex items-center gap-3 p-3 w-full bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                                     >
-                                                        <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                        <Icon name={IconName.Video} className="w-6 h-6 text-success flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Start Zoom Meeting</p>
-                                                            <p className="text-xs text-amber-600 dark:text-amber-400 truncate">
+                                                            <p className="font-semibold text-on-surface">Start Zoom Meeting</p>
+                                                            <p className="text-xs text-warning truncate">
                                                                 Trainer-only host URL. Do not share with learners.
                                                             </p>
                                                         </div>
-                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-muted flex-shrink-0" />
                                                     </a>
                                                 )}
                                                 {zoomJoinUrl && (
@@ -2968,16 +2968,16 @@ export const CourseDetail: React.FC = () => {
                                                         href={zoomJoinUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                        className="flex items-center gap-3 p-3 w-full bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                                     >
-                                                        <Icon name={IconName.Video} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <Icon name={IconName.Video} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Join as Participant</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                            <p className="font-semibold text-on-surface">Join as Participant</p>
+                                                            <p className="text-xs text-muted truncate">
                                                                 {zoomJoinUrl}
                                                             </p>
                                                         </div>
-                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-muted flex-shrink-0" />
                                                     </a>
                                                 )}
                                             </div>
@@ -2986,24 +2986,24 @@ export const CourseDetail: React.FC = () => {
                                                 href={convertedCourse.virtualMeetingLink || undefined}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                className="flex items-center gap-3 p-3 w-full bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                             >
-                                                <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                <Icon name={IconName.Video} className="w-6 h-6 text-success flex-shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">{`Join ${providerLabel}`}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                    <p className="font-semibold text-on-surface">{`Join ${providerLabel}`}</p>
+                                                    <p className="text-xs text-muted truncate">
                                                         {convertedCourse.virtualMeetingLink}
                                                     </p>
                                                 </div>
-                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-muted flex-shrink-0" />
                                             </a>
                                         )
                                     ) : (
-                                        <div className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                            <Icon name={IconName.Video} className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                                        <div className="flex items-center gap-3 p-3 w-full bg-surface-elevated rounded-md border dark:border-gray-600">
+                                            <Icon name={IconName.Video} className="w-6 h-6 text-muted flex-shrink-0" />
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-500 dark:text-gray-400">N/A</p>
-                                                <p className="text-xs text-gray-400 dark:text-gray-500">No virtual meeting link for this class</p>
+                                                <p className="font-semibold text-muted">N/A</p>
+                                                <p className="text-xs text-muted">No virtual meeting link for this class</p>
                                             </div>
                                         </div>
                                     )}
@@ -3034,12 +3034,12 @@ export const CourseDetail: React.FC = () => {
                                                     href={convertedCourse.courseLink}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                                 >
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Courseware Link</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        <p className="font-semibold text-on-surface">Courseware Link</p>
+                                                        <p className="text-xs text-muted">Click to open</p>
                                                     </div>
                                                 </a>
                                             )}
@@ -3047,19 +3047,19 @@ export const CourseDetail: React.FC = () => {
                                             {/* Lesson Plan */}
                                             {convertedCourse.lessonPlanUrl && (
                                                 isLessonPlanExternal ? (
-                                                    <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Lesson Plan</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 ) : (
-                                                    <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            <p className="font-semibold text-on-surface">Lesson Plan</p>
+                                                            <p className="text-xs text-muted">Click to download</p>
                                                         </div>
                                                     </div>
                                                 )
@@ -3068,19 +3068,19 @@ export const CourseDetail: React.FC = () => {
                                             {/* Learner Guide */}
                                             {convertedCourse.learnerGuideUrl && (
                                                 isLearnerGuideExternal ? (
-                                                    <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Learner Guide</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 ) : (
-                                                    <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            <p className="font-semibold text-on-surface">Learner Guide</p>
+                                                            <p className="text-xs text-muted">Click to download</p>
                                                         </div>
                                                     </div>
                                                 )
@@ -3089,19 +3089,19 @@ export const CourseDetail: React.FC = () => {
                                             {/* Facilitator Guide */}
                                             {convertedCourse.facilitatorGuideUrl && (
                                                 isFacilitatorGuideExternal ? (
-                                                    <a href={convertedCourse.facilitatorGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.facilitatorGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Facilitator Guide</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 ) : (
-                                                    <div onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            <p className="font-semibold text-on-surface">Facilitator Guide</p>
+                                                            <p className="text-xs text-muted">Click to download</p>
                                                         </div>
                                                     </div>
                                                 )
@@ -3110,19 +3110,19 @@ export const CourseDetail: React.FC = () => {
                                             {/* Trainer Slides */}
                                             {convertedCourse.trainerSlidesUrl && (
                                                 isTrainerSlidesExternal ? (
-                                                    <a href={convertedCourse.trainerSlidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.trainerSlidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Trainer Slides</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 ) : (
-                                                    <div onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-orange-600 flex-shrink-0" />
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-warning flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            <p className="font-semibold text-on-surface">Trainer Slides</p>
+                                                            <p className="text-xs text-muted">Click to download</p>
                                                         </div>
                                                     </div>
                                                 )
@@ -3131,19 +3131,19 @@ export const CourseDetail: React.FC = () => {
                                             {/* Activities/Lab */}
                                             {convertedCourse.activitiesUrl && (
                                                 isActivitiesExternal ? (
-                                                    <a href={convertedCourse.activitiesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.activitiesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Activities/Lab</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Activities/Lab</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 ) : (
-                                                    <div onClick={(e) => handleFileDownload(convertedCourse.activitiesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.activitiesUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-success flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Activities/Lab</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            <p className="font-semibold text-on-surface">Activities/Lab</p>
+                                                            <p className="text-xs text-muted">Click to download</p>
                                                         </div>
                                                     </div>
                                                 )
@@ -3151,22 +3151,22 @@ export const CourseDetail: React.FC = () => {
 
                                             {/* Lab Simulator */}
                                             {convertedCourse.labSimulatorUrl && (
-                                                <a href={convertedCourse.labSimulatorUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <a href={convertedCourse.labSimulatorUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Lab Simulator</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        <p className="font-semibold text-on-surface">Lab Simulator</p>
+                                                        <p className="text-xs text-muted">Click to open</p>
                                                     </div>
                                                 </a>
                                             )}
 
                                             {/* Practice Exam */}
                                             {convertedCourse.practiceExamUrl && (
-                                                <a href={convertedCourse.practiceExamUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <a href={convertedCourse.practiceExamUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Practice Exam</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        <p className="font-semibold text-on-surface">Practice Exam</p>
+                                                        <p className="text-xs text-muted">Click to open</p>
                                                     </div>
                                                 </a>
                                             )}
@@ -3174,19 +3174,19 @@ export const CourseDetail: React.FC = () => {
                                             {/* Assessment Plan */}
                                             {convertedCourse.assessmentPlanUrl && (
                                                 isAssessmentPlanExternal ? (
-                                                    <a href={convertedCourse.assessmentPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.assessmentPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Assessment Plan</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 ) : (
-                                                    <div onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            <p className="font-semibold text-on-surface">Assessment Plan</p>
+                                                            <p className="text-xs text-muted">Click to download</p>
                                                         </div>
                                                     </div>
                                                 )
@@ -3198,19 +3198,19 @@ export const CourseDetail: React.FC = () => {
                                                     href={convertedCourse.skillsfutureLink}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                                 >
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">SkillsFuture Link</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        <p className="font-semibold text-on-surface">SkillsFuture Link</p>
+                                                        <p className="text-xs text-muted">Click to open</p>
                                                     </div>
                                                 </a>
                                             )}
 
                                             {/* Show message if nothing available */}
                                             {!convertedCourse.courseLink && !convertedCourse.skillsfutureLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.labSimulatorUrl && !convertedCourse.practiceExamUrl && !convertedCourse.assessmentPlanUrl && (
-                                                <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
+                                                <p className="text-muted text-sm">No courseware available.</p>
                                             )}
                                         </div>
                                     </ContentSection>
@@ -3219,11 +3219,11 @@ export const CourseDetail: React.FC = () => {
 
                             {/* Materials locked banner for Learners */}
                             {!isMaterialsUnlocked && materialsUnlockTime && (
-                                <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 mb-2">
+                                <div className="flex items-start gap-3 bg-warning-bg border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 mb-2">
                                     <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-6a4 4 0 100-8 4 4 0 000 8zm0 0v1" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0v4M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" /></svg>
                                     <div>
-                                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Course materials are not yet available</p>
-                                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                                        <p className="text-sm font-semibold text-warning">Course materials are not yet available</p>
+                                        <p className="text-xs text-warning mt-0.5">
                                             Materials will be accessible from <span className="font-semibold">8:30 AM SGT</span> on{' '}
                                             <span className="font-semibold">
                                                 {materialsUnlockTime.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Singapore' })}
@@ -3239,25 +3239,25 @@ export const CourseDetail: React.FC = () => {
                                 <div id={toId("Courseware Link")}>
                                     <ContentSection title="Courseware">
                                         {!isMaterialsUnlocked ? (
-                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
+                                            <p className="text-sm text-warning italic">Available from 8:30 AM SGT on your course start date.</p>
                                         ) : (
                                             <div className="space-y-3">
                                                 {/* Lesson Plan (gated by Company Admin Setting) */}
                                                 {trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl && (
                                                     isLessonPlanExternal ? (
-                                                        <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                                <p className="font-semibold text-on-surface">Lesson Plan</p>
+                                                                <p className="text-xs text-muted">Click to open</p>
                                                             </div>
                                                         </a>
                                                     ) : (
-                                                        <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                                <p className="font-semibold text-on-surface">Lesson Plan</p>
+                                                                <p className="text-xs text-muted">Click to download</p>
                                                             </div>
                                                         </div>
                                                     )
@@ -3266,19 +3266,19 @@ export const CourseDetail: React.FC = () => {
                                                 {/* Learner Guide */}
                                                 {convertedCourse.learnerGuideUrl && (
                                                     isLearnerGuideExternal ? (
-                                                        <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                                <p className="font-semibold text-on-surface">Learner Guide</p>
+                                                                <p className="text-xs text-muted">Click to open</p>
                                                             </div>
                                                         </a>
                                                     ) : (
-                                                        <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                                <p className="font-semibold text-on-surface">Learner Guide</p>
+                                                                <p className="text-xs text-muted">Click to download</p>
                                                             </div>
                                                         </div>
                                                     )
@@ -3287,19 +3287,19 @@ export const CourseDetail: React.FC = () => {
                                                 {/* Learner Slides */}
                                                 {convertedCourse.slidesUrl && (
                                                     isLearnerSlidesExternal ? (
-                                                        <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                                <p className="font-semibold text-on-surface">Learner Slides</p>
+                                                                <p className="text-xs text-muted">Click to open</p>
                                                             </div>
                                                         </a>
                                                     ) : (
-                                                        <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-danger flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                                <p className="font-semibold text-on-surface">Learner Slides</p>
+                                                                <p className="text-xs text-muted">Click to download</p>
                                                             </div>
                                                         </div>
                                                     )
@@ -3308,19 +3308,19 @@ export const CourseDetail: React.FC = () => {
                                                 {/* Activities/Lab */}
                                                 {convertedCourse.activitiesUrl && (
                                                     isActivitiesExternal ? (
-                                                        <a href={convertedCourse.activitiesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <a href={convertedCourse.activitiesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Activities/Lab</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                                <p className="font-semibold text-on-surface">Activities/Lab</p>
+                                                                <p className="text-xs text-muted">Click to open</p>
                                                             </div>
                                                         </a>
                                                     ) : (
-                                                        <div onClick={(e) => handleFileDownload(convertedCourse.activitiesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.activitiesUrl!, e)} className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-success flex-shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">Activities/Lab</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                                <p className="font-semibold text-on-surface">Activities/Lab</p>
+                                                                <p className="text-xs text-muted">Click to download</p>
                                                             </div>
                                                         </div>
                                                     )
@@ -3328,40 +3328,40 @@ export const CourseDetail: React.FC = () => {
 
                                                 {/* Lab Simulator */}
                                                 {convertedCourse.labSimulatorUrl && (
-                                                    <a href={convertedCourse.labSimulatorUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.labSimulatorUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Lab Simulator</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Lab Simulator</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 )}
 
                                                 {/* Practice Exam */}
                                                 {convertedCourse.practiceExamUrl && (
-                                                    <a href={convertedCourse.practiceExamUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.practiceExamUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Practice Exam</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">Practice Exam</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 )}
 
                                                 {/* SkillsFuture Link */}
                                                 {convertedCourse.skillsfutureLink && (
-                                                    <a href={convertedCourse.skillsfutureLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <a href={convertedCourse.skillsfutureLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">SkillsFuture Link</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            <p className="font-semibold text-on-surface">SkillsFuture Link</p>
+                                                            <p className="text-xs text-muted">Click to open</p>
                                                         </div>
                                                     </a>
                                                 )}
 
                                                 {/* Empty state */}
                                                 {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.labSimulatorUrl && !convertedCourse.practiceExamUrl && !convertedCourse.skillsfutureLink && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
-                                                    <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
+                                                    <p className="text-muted text-sm">No courseware available.</p>
                                                 )}
                                             </div>
                                         )}
@@ -3373,7 +3373,7 @@ export const CourseDetail: React.FC = () => {
                             <div id="lessons">
                                 <Card className="p-0 overflow-hidden">
                                     <button className="w-full text-left p-6 flex justify-between items-center" onClick={() => setIsLessonsOpen(!isLessonsOpen)} aria-expanded={isLessonsOpen}>
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Lesson</h3>
+                                        <h3 className="text-xl font-bold text-on-surface">Lesson</h3>
                                         <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${isLessonsOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isLessonsOpen && (
@@ -3435,16 +3435,16 @@ export const CourseDetail: React.FC = () => {
                                                 onClick={() => setIsTraqomOpen(!isTraqomOpen)}
                                                 aria-expanded={isTraqomOpen}
                                             >
-                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{[
+                                                <h3 className="text-xl font-bold text-on-surface">{[
                                                     trainingProviderProfile?.showCertificateDelivery ? 'Course Feedback' : null,
                                                     'TRAQOM Survey',
                                                 ].filter(Boolean).join(' & ')}</h3>
-                                                <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
+                                                <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-primary flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setIsQrZoomed(true)}
-                                                className="p-2 rounded-md text-blue-600 hover:bg-surface-elevated transition-colors flex-shrink-0"
+                                                className="p-2 rounded-md text-primary hover:bg-surface-elevated transition-colors flex-shrink-0"
                                                 title="Show QR codes full screen"
                                                 aria-label="Show QR codes full screen"
                                             >
@@ -3463,7 +3463,7 @@ export const CourseDetail: React.FC = () => {
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
-                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm cursor-zoom-in" onClick={() => setIsQrZoomed(true)}>
+                                                                <div className="bg-white p-3 rounded-xl border border-default shadow-sm cursor-zoom-in" onClick={() => setIsQrZoomed(true)}>
                                                                     <img
                                                                         src={certDeliveryQrCodeUrl}
                                                                         alt="Course Feedback QR Code"
@@ -3506,7 +3506,7 @@ export const CourseDetail: React.FC = () => {
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
-                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm cursor-zoom-in" onClick={() => setIsQrZoomed(true)}>
+                                                                <div className="bg-white p-3 rounded-xl border border-default shadow-sm cursor-zoom-in" onClick={() => setIsQrZoomed(true)}>
                                                                     <img
                                                                         src={traqomQrCodeUrl}
                                                                         alt="TRAQOM Survey QR Code"
@@ -3522,7 +3522,7 @@ export const CourseDetail: React.FC = () => {
                                                                         href={traqomSurveyLink}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        className="flex-1 text-center text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2 transition-colors"
+                                                                        className="flex-1 text-center text-sm font-medium bg-teal-700 hover:bg-teal-800 text-white rounded-lg py-2 transition-colors"
                                                                     >
                                                                         Open Link
                                                                     </a>
@@ -3593,7 +3593,7 @@ export const CourseDetail: React.FC = () => {
                                                                 />
                                                             </div>
                                                             {p.ref && <p className="mt-4 text-base md:text-2xl text-white font-medium">{p.ref}</p>}
-                                                            <p className="mt-1 text-xs md:text-sm text-gray-300 break-all text-center" style={{ maxWidth: qrSize }}>{p.link}</p>
+                                                            <p className="mt-1 text-xs md:text-sm text-muted break-all text-center" style={{ maxWidth: qrSize }}>{p.link}</p>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -3608,7 +3608,7 @@ export const CourseDetail: React.FC = () => {
                             {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
                                 <div id={toId("Briefing on Assessment")}>
                                     <ContentSection title="Briefing on Assessment" collapsible defaultOpen={false}>
-                                        <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300 list-disc pl-5">
+                                        <ul className="space-y-2 text-sm text-on-surface-secondary list-disc pl-5">
                                             {(trainingProviderProfile?.briefingOnAssessment && trainingProviderProfile.briefingOnAssessment.trim()
                                                 ? trainingProviderProfile.briefingOnAssessment.split('\n').map(line => line.trim()).filter(Boolean)
                                                 : DEFAULT_ASSESSMENT_BRIEFING
@@ -3660,16 +3660,16 @@ export const CourseDetail: React.FC = () => {
                                                         setSelectedCourse(null);
                                                         setTrainerPage(TrainerPage.AssessmentGrading);
                                                     }}
-                                                    className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    className="flex items-center gap-3 p-3 w-full text-left bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                                 >
-                                                    <Icon name={IconName.Edit} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <Icon name={IconName.Edit} className="w-6 h-6 text-primary flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Grading</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        <p className="font-semibold text-on-surface">Assessment Grading</p>
+                                                        <p className="text-xs text-muted">
                                                             Open Assessment Grading for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
                                                         </p>
                                                     </div>
-                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 text-muted flex-shrink-0" />
                                                 </button>
                                             )}
                                             {convertedCourse.assessmentRecordLink && (
@@ -3677,17 +3677,17 @@ export const CourseDetail: React.FC = () => {
                                                     href={convertedCourse.assessmentRecordLink}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                                                 >
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Record Link</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        <p className="font-semibold text-on-surface">Assessment Record Link</p>
+                                                        <p className="text-xs text-muted">Click to open</p>
                                                     </div>
                                                 </a>
                                             )}
                                             {!convertedCourse.assessmentRecordLink && userRole !== UserRole.Trainer && (
-                                                <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment grading available.</p>
+                                                <p className="text-muted text-sm">No assessment grading available.</p>
                                             )}
                                         </div>
                                     </ContentSection>
@@ -3708,7 +3708,19 @@ export const CourseDetail: React.FC = () => {
                             {/* Post Course Feedback Summary — links to /class-feedback/[runId] for every response in full */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId) && (
                                 <div id={toId("Post Course Feedback Summary")}>
-                                    <ClassFeedbackSection courseRunUuid={String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '')} />
+                                    <ClassFeedbackSection
+                                        courseRunUuid={String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '')}
+                                        onViewAll={userRole === UserRole.Trainer ? () => {
+                                            // In-app page beside the trainer menu, with Back to Class (like E-Attendance)
+                                            try {
+                                                sessionStorage.setItem('feedbackCourseRunUuid', String(effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''));
+                                                if (selectedCourse) sessionStorage.setItem('feedbackSourceCourse', JSON.stringify(selectedCourse));
+                                            } catch {}
+                                            setSelectedCourse(null);
+                                            setTrainerPage(TrainerPage.ClassFeedback);
+                                            if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+                                        } : undefined}
+                                    />
                                 </div>
                             )}
 

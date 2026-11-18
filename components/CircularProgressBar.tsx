@@ -52,7 +52,7 @@ const CircularProgressBar: React.FC<CircularProgressBarProps> = ({
       </svg>
       {/* Percentage text in center */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xs font-semibold text-gray-700 dark:text-white">
+        <span className="text-xs font-semibold text-on-surface-secondary">
           {Math.round(percentage)}%
         </span>
       </div>

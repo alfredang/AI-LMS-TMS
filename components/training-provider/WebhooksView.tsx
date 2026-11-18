@@ -141,7 +141,7 @@ export default function WebhooksView() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => setViewMode('list')} className="text-gray-400 hover:text-on-surface transition-colors">
+          <button onClick={() => setViewMode('list')} className="text-muted hover:text-on-surface transition-colors">
             <Icon name={IconName.Back} className="w-5 h-5" />
           </button>
           <h1 className="text-2xl font-bold text-on-surface">{editingWebhook ? 'Edit Webhook' : 'Create Webhook'}</h1>
@@ -151,17 +151,17 @@ export default function WebhooksView() {
           <div>
             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Name *</label>
             <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g. Course Completion Trigger"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary" />
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Description</label>
             <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={2} placeholder="Optional description"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary" />
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <label className="block text-sm font-medium text-on-surface-secondary mb-1">HTTP Method</label>
             <select value={formMethod} onChange={e => setFormMethod(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary">
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary">
               <option value="POST">POST</option>
               <option value="GET">GET</option>
             </select>
@@ -169,7 +169,7 @@ export default function WebhooksView() {
           <div>
             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Auth Token (optional)</label>
             <input value={formAuthToken} onChange={e => setFormAuthToken(e.target.value)} placeholder="Bearer token for callers"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary" />
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary" />
             <p className="text-xs text-on-surface-secondary mt-1">If set, callers must include <code>Authorization: Bearer &lt;token&gt;</code></p>
           </div>
 
@@ -178,7 +178,7 @@ export default function WebhooksView() {
               <label className="block text-sm font-medium text-on-surface-secondary mb-1">Endpoint URL</label>
               <div className="flex items-center gap-2">
                 <input value={getEndpointUrl(editingWebhook.endpoint_token)} readOnly
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-slate-800 text-on-surface px-3 py-2 text-sm font-mono" />
+                  className="flex-1 rounded-lg border border-strong bg-surface-elevated text-on-surface px-3 py-2 text-sm font-mono" />
                 <button onClick={() => copyToClipboard(getEndpointUrl(editingWebhook.endpoint_token), 'url')}
                   className="px-3 py-2 rounded-lg bg-gray-200 dark:bg-slate-600 text-sm hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors">
                   {copied === 'url' ? 'Copied!' : 'Copy'}
@@ -187,7 +187,7 @@ export default function WebhooksView() {
             </div>
           )}
 
-          {formError && <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">{formError}</div>}
+          {formError && <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-danger text-sm">{formError}</div>}
 
           <div className="flex gap-3">
             <button onClick={handleSave} disabled={saving}
@@ -208,7 +208,7 @@ export default function WebhooksView() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => setViewMode('list')} className="text-gray-400 hover:text-on-surface transition-colors">
+          <button onClick={() => setViewMode('list')} className="text-muted hover:text-on-surface transition-colors">
             <Icon name={IconName.Back} className="w-5 h-5" />
           </button>
           <div>
@@ -226,24 +226,24 @@ export default function WebhooksView() {
         ) : (
           <div className="space-y-2">
             {logs.map(log => (
-              <div key={log.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div key={log.id} className="border border-default rounded-lg overflow-hidden">
                 <button
                   onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors"
                 >
                   <div className="flex items-center gap-3 text-sm">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${log.status_code === 200 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${log.status_code === 200 ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
                       {log.status_code}
                     </span>
                     <span className="font-mono text-xs text-on-surface-secondary">{log.http_method}</span>
                     <span className="text-on-surface-secondary">{log.source_ip || '—'}</span>
                     <span className="text-on-surface-secondary">{new Date(log.received_at).toLocaleString()}</span>
-                    {log.error_message && <span className="text-red-500 text-xs">{log.error_message}</span>}
+                    {log.error_message && <span className="text-danger text-xs">{log.error_message}</span>}
                   </div>
-                  <Icon name={IconName.ChevronDown} className={`w-4 h-4 text-gray-400 transition-transform ${expandedLog === log.id ? 'rotate-180' : ''}`} />
+                  <Icon name={IconName.ChevronDown} className={`w-4 h-4 text-muted transition-transform ${expandedLog === log.id ? 'rotate-180' : ''}`} />
                 </button>
                 {expandedLog === log.id && (
-                  <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900 space-y-3">
+                  <div className="px-4 py-3 border-t border-default bg-surface-elevated space-y-3">
                     {log.query_params && Object.keys(log.query_params).length > 1 && (
                       <div>
                         <p className="text-xs font-semibold text-on-surface-secondary uppercase mb-1">Query Params</p>
@@ -302,13 +302,13 @@ export default function WebhooksView() {
             <div key={i} className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50/50 dark:bg-green-900/10">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="font-semibold text-on-surface">{w.name}</h3>
-                <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">{w.method}</span>
-                <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Active</span>
-                <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">Built-in</span>
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-success-bg text-success">{w.method}</span>
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-success-bg text-success">Active</span>
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-info-bg text-info">Built-in</span>
               </div>
               <p className="text-sm text-on-surface-secondary mb-2">{w.description}</p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono text-on-surface-secondary bg-white dark:bg-slate-800 px-3 py-1.5 rounded truncate border border-gray-200 dark:border-gray-700">
+                <code className="flex-1 text-xs font-mono text-on-surface-secondary bg-surface px-3 py-1.5 rounded truncate border border-default">
                   {w.url}
                 </code>
                 <button
@@ -323,7 +323,7 @@ export default function WebhooksView() {
         </div>
       </div>
 
-      <hr className="border-gray-200 dark:border-gray-700" />
+      <hr className="border-default" />
 
       {/* Custom Webhooks */}
       <h2 className="text-lg font-semibold text-on-surface">Custom Webhooks</h2>
@@ -334,37 +334,37 @@ export default function WebhooksView() {
         </div>
       ) : webhooks.length === 0 ? (
         <div className="text-center py-16">
-          <Icon name={IconName.Link} className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <Icon name={IconName.Link} className="w-12 h-12 text-muted mx-auto mb-4" />
           <p className="text-on-surface-secondary mb-4">No webhooks created yet</p>
           <button onClick={handleCreate} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium">Create your first webhook</button>
         </div>
       ) : (
         <div className="space-y-4">
           {webhooks.map(w => (
-            <div key={w.id} className={`border rounded-lg p-4 transition-colors ${w.enabled ? 'border-gray-200 dark:border-gray-700' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
+            <div key={w.id} className={`border rounded-lg p-4 transition-colors ${w.enabled ? 'border-default' : 'border-default opacity-60'}`}>
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-on-surface">{w.name}</h3>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${w.http_method === 'GET' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${w.http_method === 'GET' ? 'bg-success-bg text-success' : 'bg-info-bg text-info'}`}>
                       {w.http_method}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${w.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${w.enabled ? 'bg-success-bg text-success' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                       {w.enabled ? 'Active' : 'Disabled'}
                     </span>
                   </div>
                   {w.description && <p className="text-sm text-on-surface-secondary mt-1">{w.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleToggle(w)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={w.enabled ? 'Disable' : 'Enable'}>
+                  <button onClick={() => handleToggle(w)} className="p-1.5 rounded hover:bg-surface-hover transition-colors" title={w.enabled ? 'Disable' : 'Enable'}>
                     <div className={`w-8 h-4 rounded-full relative transition-colors ${w.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                       <div className={`w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all ${w.enabled ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
                   </button>
-                  <button onClick={() => handleEdit(w)} className="p-1.5 rounded text-gray-400 hover:text-primary hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+                  <button onClick={() => handleEdit(w)} className="p-1.5 rounded text-muted hover:text-primary hover:bg-surface-hover transition-colors">
                     <Icon name={IconName.Edit} className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(w.id)} className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+                  <button onClick={() => handleDelete(w.id)} className="p-1.5 rounded text-muted hover:text-red-500 hover:bg-surface-hover transition-colors">
                     <Icon name={IconName.Delete} className="w-4 h-4" />
                   </button>
                 </div>
@@ -372,7 +372,7 @@ export default function WebhooksView() {
 
               {/* Endpoint URL */}
               <div className="flex items-center gap-2 mb-2">
-                <code className="flex-1 text-xs font-mono text-on-surface-secondary bg-gray-100 dark:bg-slate-800 px-3 py-1.5 rounded truncate">
+                <code className="flex-1 text-xs font-mono text-on-surface-secondary bg-surface-elevated px-3 py-1.5 rounded truncate">
                   {getEndpointUrl(w.endpoint_token)}
                 </code>
                 <button onClick={() => copyToClipboard(getEndpointUrl(w.endpoint_token), w.id)}

@@ -53,11 +53,11 @@ export const ClassPhotoUpload: React.FC<ClassPhotoUploadProps> = ({ courseRunUui
     };
 
     return (
-        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+        <div className="mt-4 p-4 bg-info-bg rounded-lg border border-blue-100 dark:border-blue-800">
             <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-1 uppercase tracking-wider">
                 Class Photo
             </h4>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+            <p className="text-xs text-on-surface-secondary mb-3">
                 Upload to the session folder (YYYY_MM_DD_&lt;Trainer Name&gt;) under Assessment Records.
             </p>
 
@@ -66,18 +66,18 @@ export const ClassPhotoUpload: React.FC<ClassPhotoUploadProps> = ({ courseRunUui
                 accept="image/*"
                 onChange={handleUpload}
                 disabled={isUploading}
-                className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
+                className="block w-full text-xs text-muted file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
             />
 
             {isUploading && (
-                <div className="flex items-center gap-2 mt-3 text-blue-600 dark:text-blue-400 text-sm italic">
+                <div className="flex items-center gap-2 mt-3 text-primary text-sm italic">
                     <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />
                     <span>Uploading class photo to session folder...</span>
                 </div>
             )}
 
             {success && (
-                <div className="mt-3 text-green-600 dark:text-green-400 text-sm font-medium flex items-start gap-2">
+                <div className="mt-3 text-success text-sm font-medium flex items-start gap-2">
                     <Icon name={IconName.CheckCircle} className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <span>
                         Uploaded <span className="font-semibold">{success.fileName}</span> to{' '}
@@ -95,7 +95,7 @@ export const ClassPhotoUpload: React.FC<ClassPhotoUploadProps> = ({ courseRunUui
             )}
 
             {error && (
-                <div className="mt-3 text-red-600 dark:text-red-400 text-sm font-medium">
+                <div className="mt-3 text-danger text-sm font-medium">
                     Error: {error}
                 </div>
             )}

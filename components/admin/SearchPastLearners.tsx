@@ -26,12 +26,12 @@ interface EnrolmentResult {
 const getStatusColor = (status: string | null) => {
   const s = (status || '').toLowerCase();
   if (s === 'confirmed' || s === 'approved' || s === 'completed')
-    return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    return 'bg-success-bg text-success';
   if (s === 'cancelled' || s === 'rejected')
-    return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    return 'bg-danger-bg text-danger';
   if (s === 'pending' || s === 'processing')
-    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
+    return 'bg-warning-bg text-warning';
+  return 'bg-surface-elevated text-gray-800 dark:text-gray-400';
 };
 
 const formatDate = (dateStr: string | null) => {
@@ -64,7 +64,7 @@ const SearchPastLearners: React.FC = () => {
   }, [currentPage]);
 
   const itemsPerPage = 10;
-  const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
+  const inputClasses = "w-full px-3 py-2 border border-strong rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400";
 
   const handleSearch = async () => {
     const trimmed = searchTerm.trim();
@@ -115,8 +115,8 @@ const SearchPastLearners: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Search Past Learners</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <h1 className="text-3xl font-bold text-on-surface">Search Past Learners</h1>
+        <p className="mt-2 text-on-surface-secondary">
           Search a trainee by NRIC to view their SSG enrolment history and linked grant details. Use this to investigate grant cancellation reasons.
         </p>
       </div>
@@ -125,12 +125,12 @@ const SearchPastLearners: React.FC = () => {
       <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1">
-            <label htmlFor="search-past-learners" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="search-past-learners" className="block text-sm font-medium text-on-surface-secondary">
               NRIC
             </label>
             <div className="relative mt-1">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Icon name={IconName.User} className="w-5 h-5 text-gray-400" />
+                <Icon name={IconName.User} className="w-5 h-5 text-muted" />
               </div>
               <input
                 type="text"
@@ -151,8 +151,8 @@ const SearchPastLearners: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <Card className="p-4 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
-          <p className="text-red-600 dark:text-red-400">{error}</p>
+        <Card className="p-4 border-red-300 dark:border-red-700 bg-danger-bg">
+          <p className="text-danger">{error}</p>
         </Card>
       )}
 
@@ -162,64 +162,64 @@ const SearchPastLearners: React.FC = () => {
           {paginatedResults.length > 0 ? (
             <>
               <div className="p-4 border-b dark:border-gray-700">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Found <span className="font-semibold text-gray-900 dark:text-white">{uniqueEnrolments}</span> enrolment{uniqueEnrolments !== 1 ? 's' : ''} ({results.length} row{results.length !== 1 ? 's' : ''} incl. grants) for <span className="font-mono font-semibold text-gray-900 dark:text-white">{searchedTerm}</span>
+                <p className="text-sm text-on-surface-secondary">
+                  Found <span className="font-semibold text-on-surface">{uniqueEnrolments}</span> enrolment{uniqueEnrolments !== 1 ? 's' : ''} ({results.length} row{results.length !== 1 ? 's' : ''} incl. grants) for <span className="font-mono font-semibold text-on-surface">{searchedTerm}</span>
                 </p>
               </div>
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+              <table className="min-w-full divide-y divide-default">
+                <thead className="bg-surface-elevated">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainee</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Enrolment ID</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Enrolment Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Sponsorship</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Enrolment Date</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Completion Date</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Grant ID</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Grant Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Funding Scheme</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Component</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Est. Grant</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Approved Grant</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Trainee</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Run</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Enrolment ID</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Enrolment Status</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Sponsorship</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Enrolment Date</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Completion Date</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Grant ID</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Grant Status</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Funding Scheme</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Component</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Est. Grant</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Approved Grant</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                <tbody className="bg-surface divide-y divide-default">
                   {paginatedResults.map((row, index) => (
-                    <tr key={`${row.enrolment_id}-${row.grant_id}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr key={`${row.enrolment_id}-${row.grant_id}-${index}`} className="hover:bg-surface-hover">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{row.trainee_name || '-'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{row.trainee_nric || '-'}</div>
+                        <div className="text-sm font-medium text-on-surface">{row.trainee_name || '-'}</div>
+                        <div className="text-xs text-muted font-mono">{row.trainee_nric || '-'}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 dark:text-white max-w-xs truncate" title={row.course_title || ''}>{row.course_title || '-'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{row.course_reference || '-'}</div>
+                        <div className="text-sm text-on-surface max-w-xs truncate" title={row.course_title || ''}>{row.course_title || '-'}</div>
+                        <div className="text-xs text-muted">{row.course_reference || '-'}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{row.course_run_id || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">{row.enrolment_id || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">{row.course_run_id || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted font-mono">{row.enrolment_id || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(row.enrolment_status)}`}>
                           {row.enrolment_status || '-'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{row.sponsorship_type || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(row.enrolment_date)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(row.completion_date)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">{row.grant_id || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">{row.sponsorship_type || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">{formatDate(row.enrolment_date)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">{formatDate(row.completion_date)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted font-mono">{row.grant_id || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {row.grant_status ? (
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(row.grant_status)}`}>
                             {row.grant_status}
                           </span>
                         ) : (
-                          <span className="text-sm text-gray-400">-</span>
+                          <span className="text-sm text-muted">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={row.funding_scheme_description || ''}>{row.funding_scheme_description || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={row.component_description || ''}>{row.component_description || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">{formatCurrency(row.estimated_grant_amount)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">{formatCurrency(row.approved_grant_amount)}</td>
+                      <td className="px-6 py-4 text-sm text-muted max-w-xs truncate" title={row.funding_scheme_description || ''}>{row.funding_scheme_description || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-muted max-w-xs truncate" title={row.component_description || ''}>{row.component_description || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface font-medium">{formatCurrency(row.estimated_grant_amount)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface font-medium">{formatCurrency(row.approved_grant_amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -229,7 +229,7 @@ const SearchPastLearners: React.FC = () => {
                   <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
                     Previous
                   </Button>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-muted">
                     Page {currentPage} of {totalPages}
                   </span>
                   <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
@@ -240,9 +240,9 @@ const SearchPastLearners: React.FC = () => {
             </>
           ) : (
             <div className="text-center py-12">
-              <Icon name={IconName.User} className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No results found</h3>
-              <p className="text-gray-500 dark:text-gray-400">
+              <Icon name={IconName.User} className="w-16 h-16 text-muted mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-on-surface mb-2">No results found</h3>
+              <p className="text-muted">
                 No enrolment records found for <span className="font-mono font-semibold">{searchedTerm}</span>.
               </p>
             </div>

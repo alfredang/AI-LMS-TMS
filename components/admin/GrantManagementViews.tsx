@@ -37,11 +37,11 @@ const getStatusColor = (status: string) => {
         case 'Failed':
             return 'bg-red-100 text-red-800 border-red-200';
         default:
-            return 'bg-gray-100 text-gray-800 border-gray-200';
+            return 'bg-gray-100 text-on-surface border-default';
     }
 };
 
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
 // Map common SSG/HTTP error messages to user-friendly text
 const friendlyErrorMessages: Record<string, string> = {
@@ -96,7 +96,7 @@ const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
     <div>
         <h2 className="text-3xl font-bold mb-6 dark:text-white">{title}</h2>
         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-gray-500 text-center py-12 dark:text-gray-400">
+            <p className="text-muted text-center py-12">
                 Functionality for '{title}' will be available here.
             </p>
         </Card>
@@ -163,7 +163,7 @@ export const ApplyNewGrantView: React.FC = () => {
             <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="class-select-grant" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
+                        <label htmlFor="class-select-grant" className="block text-sm font-bold text-on-surface-secondary mb-1">
                             1. Select an Upcoming Class
                         </label>
                         <select
@@ -188,17 +188,17 @@ export const ApplyNewGrantView: React.FC = () => {
                             )}
                         </select>
                         {courses.length === 0 && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
+                            <p className="text-sm text-muted mt-2">No classes found. Please create classes first.</p>
                         )}
                         {courses.length > 0 && upcomingClasses.length === 0 && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No upcoming classes found.</p>
+                            <p className="text-sm text-muted mt-2">No upcoming classes found.</p>
                         )}
                     </div>
 
                     {selectedCourse && (
                         <div>
-                            <h3 className="text-lg font-bold text-gray-800 mb-2 dark:text-white">2. Select Learners for Submission</h3>
-                            <p className="text-sm text-gray-500 mb-4 dark:text-gray-400">
+                            <h3 className="text-lg font-bold text-on-surface mb-2">2. Select Learners for Submission</h3>
+                            <p className="text-sm text-muted mb-4">
                                 Select one or more learners from the list below to include in the grant application to SSG.
                             </p>
                         </div>
@@ -209,26 +209,26 @@ export const ApplyNewGrantView: React.FC = () => {
             {selectedCourse && (
                 <Card className="p-0 dark:bg-gray-800 dark:border-gray-700">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <table className="min-w-full divide-y divide-default">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                         <input
                                             type="checkbox"
                                             onChange={handleSelectAll}
                                             checked={selectedCourse?.learners?.length > 0 && selectedLearners.size === selectedCourse.learners.length}
                                         />
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Learner</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Grant Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Sponsorship</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Learner</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Email</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Grant Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Sponsorship</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {selectedCourse.learners && selectedCourse.learners.length > 0 ? (
                                     selectedCourse.learners.map((learner: any) => (
-                                        <tr key={learner.email} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                        <tr key={learner.email} className="hover:bg-surface-hover">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
@@ -237,24 +237,24 @@ export const ApplyNewGrantView: React.FC = () => {
                                                 />
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
+                                                <div className="font-medium text-on-surface">{learner.name || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
+                                                <div className="text-sm text-on-surface">{learner.email || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(learner.grantStatus || 'Pending')}`}>
                                                     {learner.grantStatus || 'Pending'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {learner.courseSponsorship || 'N/A'}
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                        <td colSpan={5} className="px-6 py-12 text-center text-muted">
                                             No learners enrolled in this class yet.
                                         </td>
                                     </tr>
@@ -267,7 +267,7 @@ export const ApplyNewGrantView: React.FC = () => {
 
             {selectedCourse && (
                 <div className="mt-6 flex justify-end items-center gap-4">
-                    {submissionStatus && <p className="text-green-600 font-semibold">{submissionStatus}</p>}
+                    {submissionStatus && <p className="text-success font-semibold">{submissionStatus}</p>}
                     <Button onClick={handleSubmit} disabled={isSubmitting || selectedLearners.size === 0}>
                         {isSubmitting ? (
                             <div className="flex items-center">
@@ -341,10 +341,10 @@ export const ViewGrantStatusView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div>
-                    <label htmlFor="grant-search" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
+                    <label htmlFor="grant-search" className="block text-sm font-bold text-on-surface-secondary mb-1">
                         Search Grant Status
                     </label>
-                    <p className="text-sm text-gray-500 mb-3 dark:text-gray-400">
+                    <p className="text-sm text-muted mb-3">
                         Enter Grant ID - e.g. GRN-2512-016146
                     </p>
                     <div className="flex gap-3">
@@ -377,7 +377,7 @@ export const ViewGrantStatusView: React.FC = () => {
                         </Button>
                     </div>
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-2">{searchError}</p>
+                        <p className="text-danger text-sm mt-2">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -387,7 +387,7 @@ export const ViewGrantStatusView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching grant status from SSG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching grant status from SSG...</p>
                     </div>
                 </div>
             )}
@@ -397,20 +397,20 @@ export const ViewGrantStatusView: React.FC = () => {
                 <Card className="p-0 dark:bg-gray-800 dark:border-gray-700">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Grant Status Results</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Grant ID: "{searchInput}"</p>
+                        <p className="text-muted mt-1">Grant ID: "{searchInput}"</p>
                     </div>
                     <div className="p-6">
                         <div className="space-y-6">
                             {/* Grant Summary */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
-                                    <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Grant Reference Number</h4>
-                                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                                <div className="bg-surface border border-default rounded-lg p-4">
+                                    <h4 className="text-sm font-medium text-muted mb-2">Grant Reference Number</h4>
+                                    <p className="text-lg font-semibold text-on-surface">
                                         {grantData.referenceNumber || 'N/A'}
                                     </p>
                                 </div>
-                                <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
-                                    <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Status</h4>
+                                <div className="bg-surface border border-default rounded-lg p-4">
+                                    <h4 className="text-sm font-medium text-muted mb-2">Status</h4>
                                     <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full border ${getStatusColor(grantData.status || 'Pending')}`}>
                                         {grantData.status || 'Pending'}
                                     </span>
@@ -419,18 +419,18 @@ export const ViewGrantStatusView: React.FC = () => {
 
                             {/* Funding Information */}
                             {grantData.fundingScheme && (
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-blue-900/20 dark:border-blue-800">
+                                <div className="bg-info-bg border border-blue-200 rounded-lg p-4 dark:border-blue-800">
                                     <h4 className="font-semibold text-blue-900 mb-3 dark:text-blue-300">Funding Information</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Scheme</p>
+                                            <p className="text-sm text-primary font-medium">Funding Scheme</p>
                                             <p className="text-blue-900 dark:text-blue-200">
                                                 {grantData.fundingScheme.code} - {grantData.fundingScheme.description}
                                             </p>
                                         </div>
                                         {grantData.fundingComponent && (
                                             <div>
-                                                <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Component</p>
+                                                <p className="text-sm text-primary font-medium">Funding Component</p>
                                                 <p className="text-blue-900 dark:text-blue-200">
                                                     {grantData.fundingComponent.code} - {grantData.fundingComponent.description}
                                                 </p>
@@ -442,23 +442,23 @@ export const ViewGrantStatusView: React.FC = () => {
 
                             {/* Grant Amount Details */}
                             {grantData.grantAmount && (
-                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 dark:bg-green-900/20 dark:border-green-800">
+                                <div className="bg-success-bg border border-green-200 rounded-lg p-4 dark:border-green-800">
                                     <h4 className="font-semibold text-green-900 mb-3 dark:text-green-300">Grant Amount</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
-                                            <p className="text-sm text-green-700 font-medium dark:text-green-400">Estimated</p>
+                                            <p className="text-sm text-success font-medium">Estimated</p>
                                             <p className="text-xl font-bold text-green-900 dark:text-green-200">
                                                 ${grantData.grantAmount.estimated?.toFixed(2) || '0.00'}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-green-700 font-medium dark:text-green-400">Paid</p>
+                                            <p className="text-sm text-success font-medium">Paid</p>
                                             <p className="text-xl font-bold text-green-900 dark:text-green-200">
                                                 ${grantData.grantAmount.paid?.toFixed(2) || '0.00'}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-green-700 font-medium dark:text-green-400">Recovery</p>
+                                            <p className="text-sm text-success font-medium">Recovery</p>
                                             <p className="text-xl font-bold text-green-900 dark:text-green-200">
                                                 ${grantData.grantAmount.recovery?.toFixed(2) || '0.00'}
                                             </p>
@@ -469,20 +469,20 @@ export const ViewGrantStatusView: React.FC = () => {
 
                             {/* Enrolment Information */}
                             {grantData.enrolment && (
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
-                                    <h4 className="font-semibold text-gray-900 mb-2 dark:text-white">Enrolment Reference</h4>
-                                    <p className="text-gray-700 dark:text-gray-300">
+                                <div className="bg-surface-elevated border border-default rounded-lg p-4">
+                                    <h4 className="font-semibold text-on-surface mb-2">Enrolment Reference</h4>
+                                    <p className="text-on-surface-secondary">
                                         {grantData.enrolment.referenceNumber || 'N/A'}
                                     </p>
                                 </div>
                             )}
 
                             {/* Raw JSON Response (Collapsible) */}
-                            <details className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
-                                <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600 dark:text-white dark:hover:text-gray-300">
+                            <details className="bg-surface-elevated border border-default rounded-lg p-4">
+                                <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
                                     View Raw JSON Response
                                 </summary>
-                                <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700">
+                                <pre className="mt-3 text-sm text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-700">
                                     {JSON.stringify(grantData, null, 2)}
                                 </pre>
                             </details>
@@ -506,8 +506,8 @@ export const ViewGrantStatusView: React.FC = () => {
             {/* Empty State */}
             {!grantData && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">No search results yet</p>
                         <p className="text-sm mt-2">Enter a search query above to fetch grant status information</p>
                     </div>
@@ -534,7 +534,7 @@ export const SubmitAssessmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [paymentWarning, setPaymentWarning] = useState<string | null>(null);
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     // Auto-determine idType based on first letter of trainee ID
     const getIdType = (id: string): string => {
@@ -626,15 +626,15 @@ export const SubmitAssessmentView: React.FC = () => {
 
             {/* Input Form Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Assessment Details</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Assessment Details</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     All fields marked with * are required.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="submit-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                        <label htmlFor="submit-course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-course-run-id"
@@ -647,8 +647,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="submit-course-ref" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Reference Number <span className="text-red-500">*</span>
+                        <label htmlFor="submit-course-ref" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Reference Number <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-course-ref"
@@ -661,8 +661,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="submit-trainee-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Trainee ID <span className="text-red-500">*</span>
+                        <label htmlFor="submit-trainee-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Trainee ID <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-trainee-id"
@@ -674,15 +674,15 @@ export const SubmitAssessmentView: React.FC = () => {
                             disabled={isSubmitting}
                         />
                         {traineeId && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <p className="text-xs text-muted mt-1">
                                 ID Type: {getIdType(traineeId)}
                             </p>
                         )}
                         <AttendanceChecker courseRunId={courseRunId} traineeId={traineeId} />
                     </div>
                     <div>
-                        <label htmlFor="submit-trainee-name" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Trainee Full Name <span className="text-red-500">*</span>
+                        <label htmlFor="submit-trainee-name" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Trainee Full Name <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-trainee-name"
@@ -695,8 +695,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="submit-assessment-date" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Assessment Date <span className="text-red-500">*</span>
+                        <label htmlFor="submit-assessment-date" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Assessment Date <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-assessment-date"
@@ -709,8 +709,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="submit-assessment-result" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Assessment Result <span className="text-red-500">*</span>
+                        <label htmlFor="submit-assessment-result" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Assessment Result <span className="text-danger">*</span>
                         </label>
                         <select
                             id="submit-assessment-result"
@@ -725,8 +725,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="submit-tp-uen" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Training Partner UEN <span className="text-red-500">*</span>
+                        <label htmlFor="submit-tp-uen" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Training Partner UEN <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-tp-uen"
@@ -739,8 +739,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="submit-tp-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Training Partner Code <span className="text-red-500">*</span>
+                        <label htmlFor="submit-tp-code" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Training Partner Code <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-tp-code"
@@ -753,8 +753,8 @@ export const SubmitAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="submit-skill-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Skill Code <span className="text-red-500">*</span>
+                        <label htmlFor="submit-skill-code" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Skill Code <span className="text-danger">*</span>
                         </label>
                         <input
                             id="submit-skill-code"
@@ -791,7 +791,7 @@ export const SubmitAssessmentView: React.FC = () => {
                 </div>
 
                 {error && !result && (
-                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                    <p className="text-danger text-sm mt-3">{error}</p>
                 )}
             </Card>
 
@@ -800,7 +800,7 @@ export const SubmitAssessmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Submitting assessment...</p>
+                        <p className="mt-4 text-on-surface-secondary">Submitting assessment...</p>
                     </div>
                 </div>
             )}
@@ -809,32 +809,32 @@ export const SubmitAssessmentView: React.FC = () => {
             {!isSubmitting && result && (
                 <Card className="p-6">
                     {error ? (
-                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                        <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-danger" />
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">Submission Creation Failed</h4>
                             </div>
-                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                            <p className="text-sm text-danger pl-7">{error}</p>
                             {/TGS-?425/i.test(error) && (
-                                <p className="text-sm text-red-800 dark:text-red-300 pl-7 mt-1">
+                                <p className="text-sm text-danger pl-7 mt-1">
                                     <strong>Submit one assessment for this course directly in SSG TPGateway</strong> — that fixes this automatically. Then retry.
                                 </p>
                             )}
                         </div>
                     ) : (
-                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                        <div className="bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">Assessment Submitted Successfully</h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                <p className="text-sm text-green-700 dark:text-green-300">
+                                <p className="text-sm text-success">
                                     <span className="font-medium">Reference:</span>{' '}
-                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                    <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                         {result?.assessment?.referenceNumber || 'N/A'}
                                     </span>
                                 </p>
-                                <p className="text-sm text-green-700 dark:text-green-300">
+                                <p className="text-sm text-success">
                                     <span className="font-medium">Status:</span>{' '}
                                     <span className="font-semibold">Confirmed</span>
                                 </p>
@@ -843,9 +843,9 @@ export const SubmitAssessmentView: React.FC = () => {
                     )}
 
                     {paymentWarning && (
-                        <div className="mt-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                        <div className="mt-3 bg-warning-bg border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-warning" />
                                 <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{paymentWarning}</p>
                             </div>
                         </div>
@@ -853,10 +853,10 @@ export const SubmitAssessmentView: React.FC = () => {
 
                     {/* Raw Response (collapsible) */}
                     {/* <details className="mt-4">
-                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                        <summary className="text-sm text-muted cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                             View Raw Response
                         </summary>
-                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                        <pre className="mt-2 text-xs bg-surface-elevated p-3 rounded overflow-auto max-h-60">
                             {JSON.stringify(result, null, 2)}
                         </pre>
                     </details> */}
@@ -883,7 +883,7 @@ export const UpdateAssessmentView: React.FC = () => {
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [traineeId, setTraineeId] = useState<string>('');
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const handleSubmit = async () => {
         if (!referenceNumber.trim()) { setError('Assessment Reference Number is required'); return; }
@@ -960,15 +960,15 @@ export const UpdateAssessmentView: React.FC = () => {
 
             {/* Input Form Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Assessment Update Details</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Assessment Update Details</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Update or void an existing assessment record. For void action, only Reference Number and Action are required.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="update-reference-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Assessment Reference Number <span className="text-red-500">*</span>
+                        <label htmlFor="update-reference-number" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Assessment Reference Number <span className="text-danger">*</span>
                         </label>
                         <input
                             id="update-reference-number"
@@ -981,8 +981,8 @@ export const UpdateAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="update-action" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Action <span className="text-red-500">*</span>
+                        <label htmlFor="update-action" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Action <span className="text-danger">*</span>
                         </label>
                         <select
                             id="update-action"
@@ -998,8 +998,8 @@ export const UpdateAssessmentView: React.FC = () => {
 
                     {/* Course run + trainee — drives the attendance check and the cancelled-class / cancelled-enrolment guard */}
                     <div>
-                        <label htmlFor="update-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-xs font-normal text-gray-400">(for attendance + cancelled guard)</span>
+                        <label htmlFor="update-course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-xs font-normal text-muted">(for attendance + cancelled guard)</span>
                         </label>
                         <input
                             id="update-course-run-id"
@@ -1012,8 +1012,8 @@ export const UpdateAssessmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="update-trainee-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Trainee ID (NRIC/FIN) <span className="text-xs font-normal text-gray-400">(for attendance + cancelled guard)</span>
+                        <label htmlFor="update-trainee-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Trainee ID (NRIC/FIN) <span className="text-xs font-normal text-muted">(for attendance + cancelled guard)</span>
                         </label>
                         <input
                             id="update-trainee-id"
@@ -1031,8 +1031,8 @@ export const UpdateAssessmentView: React.FC = () => {
                     {action === 'update' && (
                         <>
                             <div>
-                                <label htmlFor="update-result" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Assessment Result <span className="text-red-500">*</span>
+                                <label htmlFor="update-result" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Assessment Result <span className="text-danger">*</span>
                                 </label>
                                 <select
                                     id="update-result"
@@ -1047,8 +1047,8 @@ export const UpdateAssessmentView: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="update-trainee-name" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Trainee Full Name <span className="text-red-500">*</span>
+                                <label htmlFor="update-trainee-name" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Trainee Full Name <span className="text-danger">*</span>
                                 </label>
                                 <input
                                     id="update-trainee-name"
@@ -1061,8 +1061,8 @@ export const UpdateAssessmentView: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label htmlFor="update-assessment-date" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Assessment Date <span className="text-red-500">*</span>
+                                <label htmlFor="update-assessment-date" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Assessment Date <span className="text-danger">*</span>
                                 </label>
                                 <input
                                     id="update-assessment-date"
@@ -1075,8 +1075,8 @@ export const UpdateAssessmentView: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label htmlFor="update-skill-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Skill Code <span className="text-red-500">*</span>
+                                <label htmlFor="update-skill-code" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Skill Code <span className="text-danger">*</span>
                                 </label>
                                 <input
                                     id="update-skill-code"
@@ -1091,7 +1091,7 @@ export const UpdateAssessmentView: React.FC = () => {
                             </div>
                             {/* Grade and Score fields hidden
                             <div>
-                                <label htmlFor="update-grade" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <label htmlFor="update-grade" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                     Grade
                                 </label>
                                 <select
@@ -1111,7 +1111,7 @@ export const UpdateAssessmentView: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="update-score" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <label htmlFor="update-score" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                     Score
                                 </label>
                                 <input
@@ -1154,7 +1154,7 @@ export const UpdateAssessmentView: React.FC = () => {
                 </div>
 
                 {error && !apiResult && (
-                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                    <p className="text-danger text-sm mt-3">{error}</p>
                 )}
             </Card>
 
@@ -1163,7 +1163,7 @@ export const UpdateAssessmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">
+                        <p className="mt-4 text-on-surface-secondary">
                             {action === 'void' ? 'Voiding assessment...' : 'Updating assessment...'}
                         </p>
                     </div>
@@ -1174,49 +1174,49 @@ export const UpdateAssessmentView: React.FC = () => {
             {!isSubmitting && apiResult && (
                 <Card className="p-6">
                     {error ? (
-                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                        <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-danger" />
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">
                                     Assessment {action === 'void' ? 'Voided' : 'Updated'} Unsuccessfully
                                 </h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                                <p className="text-sm text-danger">{error}</p>
                                 {/TGS-?425/i.test(error) && (
-                                    <p className="text-sm text-red-800 dark:text-red-300">
+                                    <p className="text-sm text-danger">
                                         <strong>Submit one assessment for this course directly in SSG TPGateway</strong> — that fixes this automatically. Then retry.
                                     </p>
                                 )}
                             </div>
                         </div>
                     ) : apiResult?.skipped ? (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                        <div className="bg-warning-bg border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-warning" />
                                 <h4 className="font-semibold text-amber-900 dark:text-amber-200">Assessment update skipped — not sent to SSG</h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                <p className="text-sm text-amber-800 dark:text-amber-300">{apiResult.reason || 'The class or enrolment is cancelled.'}</p>
+                                <p className="text-sm text-warning">{apiResult.reason || 'The class or enrolment is cancelled.'}</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                        <div className="bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">
                                     Assessment {action === 'void' ? 'Voided' : 'Updated'} Successfully
                                 </h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                <p className="text-sm text-green-700 dark:text-green-300">
+                                <p className="text-sm text-success">
                                     <span className="font-medium">Reference:</span>{' '}
-                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                    <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                         {apiResult?.data?.assessment?.referenceNumber || referenceNumber}
                                     </span>
                                 </p>
                                 {apiResult?.meta?.updatedOn && (
-                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                    <p className="text-sm text-success">
                                         <span className="font-medium">Updated On:</span>{' '}
                                         {new Date(apiResult.meta.updatedOn).toLocaleString()}
                                     </p>
@@ -1226,9 +1226,9 @@ export const UpdateAssessmentView: React.FC = () => {
                     )}
 
                     {paymentWarning && (
-                        <div className="mt-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                        <div className="mt-3 bg-warning-bg border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-warning" />
                                 <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{paymentWarning}</p>
                             </div>
                         </div>
@@ -1236,10 +1236,10 @@ export const UpdateAssessmentView: React.FC = () => {
 
                     {/* Raw Response (collapsible) */}
                     <details className="mt-4">
-                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                        <summary className="text-sm text-muted cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                             View Raw Response
                         </summary>
-                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                        <pre className="mt-2 text-xs bg-surface-elevated p-3 rounded overflow-auto max-h-60">
                             {JSON.stringify(apiResult, null, 2)}
                         </pre>
                     </details>
@@ -1256,7 +1256,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
     const [fillingSkillCodes, setFillingSkillCodes] = useState(false);
     const pasteRef = useRef<HTMLTextAreaElement>(null);
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     // Parse on paste, then clear the textarea
     const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -1333,8 +1333,8 @@ export const BulkUpdateAssessmentView: React.FC = () => {
 
             {/* Paste Data Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Paste Data from All Course Runs</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Paste Data from All Course Runs</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Copy rows from the FMS Google Sheet &quot;All Course Runs&quot; tab and paste below. Rows are parsed instantly and the paste box clears. You can paste multiple times to add more rows.
                 </p>
 
@@ -1348,7 +1348,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
 
                 <div className="flex items-center gap-3 mt-3">
                     {fillingSkillCodes && (
-                        <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
+                        <span className="text-sm text-on-surface-secondary flex items-center gap-1.5">
                             <BrailleSpinner /> Pulling skill codes from SSG…
                         </span>
                     )}
@@ -1357,7 +1357,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                             <Button onClick={handleClear} variant="outline">
                                 Clear All ({rows.length})
                             </Button>
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                            <span className="text-sm text-muted">
                                 {rows.length} row{rows.length !== 1 ? 's' : ''} loaded
                             </span>
                         </>
@@ -1367,13 +1367,13 @@ export const BulkUpdateAssessmentView: React.FC = () => {
 
             {/* Errors */}
             {parseError && (
-                <Card className="p-4 mb-6 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700">
-                    <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{parseError}</pre>
+                <Card className="p-4 mb-6 border-red-300 bg-danger-bg dark:border-red-700">
+                    <pre className="text-sm text-danger whitespace-pre-wrap">{parseError}</pre>
                 </Card>
             )}
 
             {mappingMsg && (
-                <p className="text-xs text-blue-600 dark:text-blue-400 mb-4 -mt-2">{mappingMsg}</p>
+                <p className="text-xs text-primary mb-4 -mt-2">{mappingMsg}</p>
             )}
 
             <BulkAssessmentEditor rows={rows} setRows={setRows} />
@@ -1393,7 +1393,7 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
 
     const UPDATE_FEES_API = '/api/enrolment/update-fees';
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const collectionStatusOptions = [
         'Pending Payment',
@@ -1465,14 +1465,14 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
             <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Enrolment Fees</h2>
 
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Fee Collection Details</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Fee Collection Details</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Update the fee collection status for an enrolment. All fields are required.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                             Enrolment Reference Number *
                         </label>
                         <input
@@ -1484,7 +1484,7 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                             Collection Status *
                         </label>
                         <select
@@ -1498,7 +1498,7 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                             Training Partner UEN *
                         </label>
                         <input
@@ -1510,7 +1510,7 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                             Training Partner Code *
                         </label>
                         <input
@@ -1533,7 +1533,7 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
                     </button>
                     <button
                         onClick={handleClear}
-                        className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-white px-6 py-2 rounded-md font-medium transition-colors"
+                        className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-on-surface-secondary px-6 py-2 rounded-md font-medium transition-colors"
                     >
                         Clear
                     </button>
@@ -1543,37 +1543,37 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
             {isSubmitting && (
                 <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-300">Updating enrolment fees...</span>
+                    <span className="ml-3 text-on-surface-secondary">Updating enrolment fees...</span>
                 </div>
             )}
 
             {!isSubmitting && error && (
                 <Card className="p-6 mb-6">
-                    <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                    <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            <Icon name={IconName.X} className="w-5 h-5 text-danger" />
                             <h4 className="font-semibold text-red-900 dark:text-red-200">Failed to Update Enrolment Fees</h4>
                         </div>
-                        <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                        <p className="text-sm text-danger pl-7">{error}</p>
                     </div>
                 </Card>
             )}
 
             {!isSubmitting && result && !error && (
                 <Card className="p-6 mb-6">
-                    <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                    <div className="bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                             <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Fees Updated Successfully</h4>
                         </div>
                         <div className="pl-7 space-y-1">
-                            <p className="text-sm text-green-700 dark:text-green-300">
+                            <p className="text-sm text-success">
                                 <span className="font-medium">Reference:</span>{' '}
-                                <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                     {enrolmentReferenceNumber}
                                 </span>
                             </p>
-                            <p className="text-sm text-green-700 dark:text-green-300">
+                            <p className="text-sm text-success">
                                 <span className="font-medium">New Collection Status:</span>{' '}
                                 <span className="font-semibold">{collectionStatus}</span>
                             </p>
@@ -1585,10 +1585,10 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
             {result && (
                 <Card className="p-4">
                     <details>
-                        <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <summary className="cursor-pointer text-sm font-medium text-on-surface-secondary">
                             View Raw Response
                         </summary>
-                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                        <pre className="mt-2 text-xs bg-surface-elevated p-3 rounded overflow-auto max-h-60">
                             {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
@@ -1641,7 +1641,7 @@ export const ViewAssessmentsView: React.FC = () => {
             <h2 className="text-3xl font-bold mb-6">View Assessments from TPG</h2>
             <Card className="p-6 mb-6">
                 <div>
-                    <label htmlFor="class-select-view-assessment" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="class-select-view-assessment" className="block text-sm font-bold text-on-surface-secondary mb-1">
                         Select a Class to Retrieve Assessment Status
                     </label>
                     <select
@@ -1662,7 +1662,7 @@ export const ViewAssessmentsView: React.FC = () => {
                         )}
                     </select>
                     {courses.length === 0 && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
+                        <p className="text-sm text-muted mt-2">No classes found. Please create classes first.</p>
                     )}
                 </div>
             </Card>
@@ -1671,7 +1671,7 @@ export const ViewAssessmentsView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Retrieving data from TPG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Retrieving data from TPG...</p>
                     </div>
                 </div>
             )}
@@ -1680,26 +1680,26 @@ export const ViewAssessmentsView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b">
                         <h3 className="text-xl font-bold">Assessment Status for {courses.find(c => c.id === selectedCourseId)?.title}</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Showing official results retrieved from TPG.</p>
+                        <p className="text-muted mt-1">Showing official results retrieved from TPG.</p>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-default">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner Name</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assessment Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Learner Name</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Assessment Status</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-default">
                                 {results.map((result, index) => (
-                                    <tr key={index} className="hover:bg-gray-50">
+                                    <tr key={index} className="hover:bg-surface-hover">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="font-medium text-gray-900 dark:text-white">{result.learnerName}</div>
+                                            <div className="font-medium text-on-surface">{result.learnerName}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900 dark:text-white">{result.courseTitle}</div>
-                                            <div className="text-sm text-gray-500 dark:text-gray-400">{result.courseRunId}</div>
+                                            <div className="text-sm text-on-surface">{result.courseTitle}</div>
+                                            <div className="text-sm text-muted">{result.courseRunId}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(result.assessmentStatus)}`}>
@@ -1780,7 +1780,7 @@ export const ApplyNewClaimView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="class-select-claim" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label htmlFor="class-select-claim" className="block text-sm font-bold text-on-surface-secondary mb-1">
                             1. Select a Class
                         </label>
                         <select
@@ -1805,14 +1805,14 @@ export const ApplyNewClaimView: React.FC = () => {
                             )}
                         </select>
                         {courses.length === 0 && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
+                            <p className="text-sm text-muted mt-2">No classes found. Please create classes first.</p>
                         )}
                     </div>
 
                     {selectedCourse && (
                         <div>
-                            <h3 className="text-lg font-bold text-gray-800 mb-2">2. Select Eligible Learners for Claim Submission</h3>
-                            <p className="text-sm text-gray-500 mb-4">
+                            <h3 className="text-lg font-bold text-on-surface mb-2">2. Select Eligible Learners for Claim Submission</h3>
+                            <p className="text-sm text-muted mb-4">
                                 Only learners with successful grant status are eligible for claim submission.
                             </p>
                         </div>
@@ -1823,28 +1823,28 @@ export const ApplyNewClaimView: React.FC = () => {
             {selectedCourse && (
                 <Card className="p-0">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-default">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                         <input
                                             type="checkbox"
                                             onChange={handleSelectAll}
                                             checked={eligibleLearners.length > 0 && selectedLearners.size === eligibleLearners.length}
                                         />
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grant Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Claim Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Learner</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Email</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Grant Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Claim Status</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-default">
                                 {selectedCourse.learners && selectedCourse.learners.length > 0 ? (
                                     selectedCourse.learners.map((learner: any) => {
                                         const isEligible = learner.grantStatus === 'Success';
                                         return (
-                                            <tr key={learner.email} className={`${!isEligible ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}>
+                                            <tr key={learner.email} className={`${!isEligible ? 'bg-gray-50 opacity-60' : 'hover:bg-surface-hover'}`}>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     {isEligible && (
                                                         <input
@@ -1855,10 +1855,10 @@ export const ApplyNewClaimView: React.FC = () => {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
+                                                    <div className="font-medium text-on-surface">{learner.name || 'N/A'}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
+                                                    <div className="text-sm text-on-surface">{learner.email || 'N/A'}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(learner.grantStatus || 'Pending')}`}>
@@ -1875,7 +1875,7 @@ export const ApplyNewClaimView: React.FC = () => {
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                        <td colSpan={5} className="px-6 py-12 text-center text-muted">
                                             No learners enrolled in this class yet.
                                         </td>
                                     </tr>
@@ -1888,7 +1888,7 @@ export const ApplyNewClaimView: React.FC = () => {
 
             {selectedCourse && (
                 <div className="mt-6 flex justify-end items-center gap-4">
-                    {submissionStatus && <p className="text-green-600 font-semibold">{submissionStatus}</p>}
+                    {submissionStatus && <p className="text-success font-semibold">{submissionStatus}</p>}
                     <Button onClick={handleSubmit} disabled={isSubmitting || selectedLearners.size === 0}>
                         {isSubmitting ? (
                             <div className="flex items-center">
@@ -1922,7 +1922,7 @@ export const ViewClaimStatusView: React.FC = () => {
             <h2 className="text-3xl font-bold mb-6">View Claim Status</h2>
             <Card className="p-6 mb-6">
                 <div>
-                    <label htmlFor="class-select-claim-status" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="class-select-claim-status" className="block text-sm font-bold text-on-surface-secondary mb-1">
                         Select a Class to View Claim Statuses
                     </label>
                     <select
@@ -1943,7 +1943,7 @@ export const ViewClaimStatusView: React.FC = () => {
                         )}
                     </select>
                     {courses.length === 0 && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
+                        <p className="text-sm text-muted mt-2">No classes found. Please create classes first.</p>
                     )}
                 </div>
             </Card>
@@ -1952,29 +1952,29 @@ export const ViewClaimStatusView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b">
                         <h3 className="text-xl font-bold">Claim Status for {selectedCourse.title}</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Showing all enrolled learners and their claim application status.</p>
+                        <p className="text-muted mt-1">Showing all enrolled learners and their claim application status.</p>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-default">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner Name</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grant Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Claim Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Claim ID</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Learner Name</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Email</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Grant Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Claim Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Claim ID</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Last Updated</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-default">
                                 {selectedCourse.learners && selectedCourse.learners.length > 0 ? (
                                     selectedCourse.learners.map((learner: any) => (
-                                        <tr key={learner.email} className="hover:bg-gray-50">
+                                        <tr key={learner.email} className="hover:bg-surface-hover">
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
+                                                <div className="font-medium text-on-surface">{learner.name || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
+                                                <div className="text-sm text-on-surface">{learner.email || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(learner.grantStatus || 'Pending')}`}>
@@ -1986,17 +1986,17 @@ export const ViewClaimStatusView: React.FC = () => {
                                                     {learner.claimStatus || 'Pending'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {learner.claimId || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                 N/A
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                        <td colSpan={6} className="px-6 py-12 text-center text-muted">
                                             No learners enrolled in this class yet.
                                         </td>
                                     </tr>
@@ -2246,14 +2246,14 @@ export const UploadCourseRunsView: React.FC = () => {
         <Card className="p-6">
             <div className="text-center mb-4">
                 <h3 className="text-xl font-bold dark:text-white">Upload Course Runs</h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">Submit your course run details in bulk by uploading an Excel file.</p>
+                <p className="text-muted mt-1">Submit your course run details in bulk by uploading an Excel file.</p>
             </div>
 
             <div
                 onDragOver={(e) => handleDragEvents(e, true)}
                 onDragLeave={(e) => handleDragEvents(e, false)}
                 onDrop={handleDrop}
-                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400'}`}
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-info-bg' : 'border-strong hover:border-blue-500 dark:hover:border-blue-400'}`}
             >
                 <input
                     type="file"
@@ -2263,11 +2263,11 @@ export const UploadCourseRunsView: React.FC = () => {
                     onChange={(e) => handleFileChange(e.target.files?.[0])}
                 />
                 <label htmlFor="file-upload" className="cursor-pointer">
-                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500" />
-                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+                    <p className="mt-2 font-semibold text-on-surface">
                         {file ? file.name : 'Drag & drop your file here, or click to browse'}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-muted mt-1">
                         XLSX or XLS file format
                     </p>
                 </label>
@@ -2306,31 +2306,31 @@ export const UploadCourseRunsView: React.FC = () => {
         <Card>
             <div className="p-6 border-b dark:border-gray-700">
                 <h3 className="text-xl font-bold dark:text-white">Submission Results</h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">The following results were returned from SSG.</p>
+                <p className="text-muted mt-1">The following results were returned from SSG.</p>
             </div>
             <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
+                <table className="min-w-full divide-y divide-default">
+                    <thead className="bg-surface-elevated">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Reference</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">End Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Details</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Reference</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Start Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">End Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Details</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                    <tbody className="bg-surface divide-y divide-default">
                         {submissionResult?.map((result, index) => (
-                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
-                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">{result.courseRef}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">{result.startDate}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">{result.endDate}</td>
+                            <tr key={index} className="hover:bg-surface-hover">
+                                <td className="px-6 py-4 whitespace-nowrap font-medium text-on-surface">{result.courseRef}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">{result.startDate}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">{result.endDate}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(result.status)}`}>
                                         {result.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                     {result.status === 'Success' ? `Course Run ID: ${result.courseRunId}` : result.error}
                                 </td>
                             </tr>
@@ -2352,11 +2352,11 @@ export const UploadCourseRunsView: React.FC = () => {
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
                         {progress ? (
-                            <p className="mt-4 text-gray-600 dark:text-gray-300">
+                            <p className="mt-4 text-on-surface-secondary">
                                 Submitting to SSG… {progress.current} / {progress.total}
                             </p>
                         ) : (
-                            <p className="mt-4 text-gray-600 dark:text-gray-300">Parsing file…</p>
+                            <p className="mt-4 text-on-surface-secondary">Parsing file…</p>
                         )}
                     </div>
                 </div>
@@ -2413,11 +2413,11 @@ export const SearchGrantView: React.FC = () => {
             case 'Failed':
                 return 'bg-red-100 text-red-800 border-red-200';
             default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
+                return 'bg-gray-100 text-on-surface border-default';
         }
     };
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const getLearnerName = (grants: any[]) => {
         const candidates = grants.flatMap((grant: any) => [
@@ -2485,10 +2485,10 @@ export const SearchGrantView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Grant Search Parameters</h3>
+                    <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Grant Search Parameters</h3>
 
                     <div className="mb-4">
-                        <label htmlFor="course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label htmlFor="course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                             Course Run ID
                         </label>
                         <input
@@ -2523,7 +2523,7 @@ export const SearchGrantView: React.FC = () => {
                     </div>
 
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                        <p className="text-danger text-sm mt-3">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -2533,7 +2533,7 @@ export const SearchGrantView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching grant details from SSG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching grant details from SSG...</p>
                     </div>
                 </div>
             )}
@@ -2543,7 +2543,7 @@ export const SearchGrantView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Grant Search Results</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Course Run ID: {courseRunId}</p>
+                        <p className="text-muted mt-1">Course Run ID: {courseRunId}</p>
                     </div>
                     <div className="p-6">
                         {Array.isArray(grantsData.data) && grantsData.data.length > 0 ? (() => {
@@ -2562,60 +2562,60 @@ export const SearchGrantView: React.FC = () => {
                             return (
                                 <div className="space-y-3">
                                     {/* Summary */}
-                                    <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 text-sm">
+                                    <div className="flex items-center bg-info-bg px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 text-sm">
                                         <span className="font-bold text-blue-900 dark:text-blue-300 mr-3">
                                             {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} &nbsp;·&nbsp; {grantsData.meta?.totalRecords ?? grantsData.data.length} Grant{(grantsData.meta?.totalRecords ?? grantsData.data.length) !== 1 ? 's' : ''}
                                         </span>
-                                        <span className="text-blue-700 dark:text-blue-400">Course Run: <span className="font-mono">{courseRunId}</span></span>
+                                        <span className="text-primary">Course Run: <span className="font-mono">{courseRunId}</span></span>
                                     </div>
 
                                     {/* Desktop table */}
-                                    <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
-                                            <thead className="bg-gray-50 dark:bg-gray-700">
+                                    <div className="hidden md:block overflow-x-auto rounded-lg border border-default">
+                                        <table className="min-w-full divide-y divide-default text-xs">
+                                            <thead className="bg-surface-elevated">
                                                 <tr>
-                                                    <th colSpan={2} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
-                                                    <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-blue-700 dark:text-blue-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">Baseline (BL)</th>
-                                                    <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
-                                                    <th className="px-3 py-2 text-center text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20">Total</th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center text-xs font-semibold text-on-surface-secondary border-r border-default uppercase tracking-wider">Enrolment</th>
+                                                    <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-primary border-r border-default uppercase tracking-wider bg-info-bg">Baseline (BL)</th>
+                                                    <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-default uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
+                                                    <th className="px-3 py-2 text-center text-xs font-semibold text-success uppercase tracking-wider bg-success-bg">Total</th>
                                                 </tr>
                                                 <tr>
-                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Enrolment ID</th>
-                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Name</th>
-                                                    <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant Status</th>
-                                                    <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant ID (BL)</th>
-                                                    <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-900/20">Amount (BL)</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-muted whitespace-nowrap">Enrolment ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-muted whitespace-nowrap border-r border-default">Name</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-primary whitespace-nowrap bg-info-bg">Grant Status</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-primary whitespace-nowrap bg-info-bg">Grant ID (BL)</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-primary whitespace-nowrap border-r border-default bg-info-bg">Amount (BL)</th>
                                                     <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Grant Status</th>
                                                     <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Grant ID</th>
                                                     <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Scheme Code</th>
-                                                    <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20">Amount</th>
-                                                    <th className="px-3 py-2 text-left font-medium text-green-700 dark:text-green-400 whitespace-nowrap bg-green-50 dark:bg-green-900/20">TG Amount</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap border-r border-default bg-purple-50 dark:bg-purple-900/20">Amount</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-success whitespace-nowrap bg-success-bg">TG Amount</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            <tbody className="bg-surface divide-y divide-default">
                                                 {pagedRows.map(([enrolmentId, grants]) => {
                                                     const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
                                                     const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
                                                     const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
                                                     const learnerName = getLearnerName(grants);
                                                     return (
-                                                        <tr key={enrolmentId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                            <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap">{enrolmentId}</td>
-                                                            <td className="px-3 py-3 text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 max-w-[180px] truncate" title={learnerName}>{learnerName}</td>
+                                                        <tr key={enrolmentId} className="hover:bg-surface-hover">
+                                                            <td className="px-3 py-3 font-mono text-on-surface whitespace-nowrap">{enrolmentId}</td>
+                                                            <td className="px-3 py-3 text-on-surface whitespace-nowrap border-r border-default max-w-[180px] truncate" title={learnerName}>{learnerName}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">
-                                                                {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-gray-400">—</span>}
+                                                                {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-muted">—</span>}
                                                             </td>
-                                                            <td className="px-3 py-3 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">{bl?.referenceNumber || '—'}</td>
-                                                            <td className="px-3 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10">{bl ? `$${(bl.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
+                                                            <td className="px-3 py-3 font-mono text-on-surface-secondary whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">{bl?.referenceNumber || '—'}</td>
+                                                            <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap border-r border-default bg-blue-50/30 dark:bg-blue-900/10">{bl ? `$${(bl.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">
-                                                                {mces ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span> : <span className="text-gray-400">—</span>}
+                                                                {mces ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span> : <span className="text-muted">—</span>}
                                                             </td>
-                                                            <td className="px-3 py-3 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">{mces?.referenceNumber || '—'}</td>
+                                                            <td className="px-3 py-3 font-mono text-on-surface-secondary whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">{mces?.referenceNumber || '—'}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">
                                                                 {mces ? <span className="font-mono text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">{mces.fundingScheme?.code}</span> : '—'}
                                                             </td>
-                                                            <td className="px-3 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 bg-purple-50/30 dark:bg-purple-900/10">{mces ? `$${(mces.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
-                                                            <td className="px-3 py-3 font-bold text-green-700 dark:text-green-400 whitespace-nowrap bg-green-50/30 dark:bg-green-900/10">${totalTG.toFixed(2)}</td>
+                                                            <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap border-r border-default bg-purple-50/30 dark:bg-purple-900/10">{mces ? `$${(mces.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
+                                                            <td className="px-3 py-3 font-bold text-success whitespace-nowrap bg-green-50/30 dark:bg-green-900/10">${totalTG.toFixed(2)}</td>
                                                         </tr>
                                                     );
                                                 })}
@@ -2631,38 +2631,38 @@ export const SearchGrantView: React.FC = () => {
                                             const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
                                             const learnerName = getLearnerName(grants);
                                             return (
-                                                <div key={enrolmentId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                                <div key={enrolmentId} className="border border-default rounded-lg overflow-hidden">
                                                     {/* Enrolment header */}
-                                                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2">
+                                                    <div className="bg-surface-elevated px-4 py-2">
                                                         <div className="flex items-center justify-between gap-3">
-                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Enrolment ID</span>
-                                                            <span className="font-mono text-sm font-bold text-gray-800 dark:text-white text-right">{enrolmentId}</span>
+                                                            <span className="text-xs font-semibold text-muted uppercase">Enrolment ID</span>
+                                                            <span className="font-mono text-sm font-bold text-on-surface text-right">{enrolmentId}</span>
                                                         </div>
                                                         <div className="flex items-center justify-between gap-3 mt-1">
-                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</span>
-                                                            <span className="text-sm font-medium text-gray-800 dark:text-white text-right truncate">{learnerName}</span>
+                                                            <span className="text-xs font-semibold text-muted uppercase">Name</span>
+                                                            <span className="text-sm font-medium text-on-surface text-right truncate">{learnerName}</span>
                                                         </div>
                                                     </div>
-                                                    <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                    <div className="divide-y divide-default">
                                                         {/* BL section */}
                                                         <div className="bg-blue-50/50 dark:bg-blue-900/10 px-4 py-3">
-                                                            <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase mb-2">Baseline (BL)</p>
+                                                            <p className="text-xs font-bold text-primary uppercase mb-2">Baseline (BL)</p>
                                                             {bl ? (
                                                                 <div className="grid grid-cols-2 gap-2 text-sm">
                                                                     <div>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                                                                        <p className="text-xs text-muted">Status</p>
                                                                         <span className={`inline-flex mt-0.5 px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Amount</p>
-                                                                        <p className="font-semibold text-gray-800 dark:text-gray-200">${(bl.grantAmount?.estimated ?? 0).toFixed(2)}</p>
+                                                                        <p className="text-xs text-muted">Amount</p>
+                                                                        <p className="font-semibold text-on-surface">${(bl.grantAmount?.estimated ?? 0).toFixed(2)}</p>
                                                                     </div>
                                                                     <div className="col-span-2">
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Grant ID</p>
-                                                                        <p className="font-mono text-xs text-gray-700 dark:text-gray-300">{bl.referenceNumber}</p>
+                                                                        <p className="text-xs text-muted">Grant ID</p>
+                                                                        <p className="font-mono text-xs text-on-surface-secondary">{bl.referenceNumber}</p>
                                                                     </div>
                                                                 </div>
-                                                            ) : <p className="text-sm text-gray-400">—</p>}
+                                                            ) : <p className="text-sm text-muted">—</p>}
                                                         </div>
                                                         {/* MCES section */}
                                                         <div className="bg-purple-50/50 dark:bg-purple-900/10 px-4 py-3">
@@ -2670,28 +2670,28 @@ export const SearchGrantView: React.FC = () => {
                                                             {mces ? (
                                                                 <div className="grid grid-cols-2 gap-2 text-sm">
                                                                     <div>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                                                                        <p className="text-xs text-muted">Status</p>
                                                                         <span className={`inline-flex mt-0.5 px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Scheme Code</p>
+                                                                        <p className="text-xs text-muted">Scheme Code</p>
                                                                         <span className="inline-flex mt-0.5 font-mono text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">{mces.fundingScheme?.code}</span>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Amount</p>
-                                                                        <p className="font-semibold text-gray-800 dark:text-gray-200">${(mces.grantAmount?.estimated ?? 0).toFixed(2)}</p>
+                                                                        <p className="text-xs text-muted">Amount</p>
+                                                                        <p className="font-semibold text-on-surface">${(mces.grantAmount?.estimated ?? 0).toFixed(2)}</p>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Grant ID</p>
-                                                                        <p className="font-mono text-xs text-gray-700 dark:text-gray-300">{mces.referenceNumber}</p>
+                                                                        <p className="text-xs text-muted">Grant ID</p>
+                                                                        <p className="font-mono text-xs text-on-surface-secondary">{mces.referenceNumber}</p>
                                                                     </div>
                                                                 </div>
-                                                            ) : <p className="text-sm text-gray-400">—</p>}
+                                                            ) : <p className="text-sm text-muted">—</p>}
                                                         </div>
                                                         {/* Total */}
                                                         <div className="bg-green-50/50 dark:bg-green-900/10 px-4 py-3 flex items-center justify-between">
-                                                            <span className="text-xs font-bold text-green-700 dark:text-green-400 uppercase">Total TG Amount</span>
-                                                            <span className="text-base font-bold text-green-700 dark:text-green-400">${totalTG.toFixed(2)}</span>
+                                                            <span className="text-xs font-bold text-success uppercase">Total TG Amount</span>
+                                                            <span className="text-base font-bold text-success">${totalTG.toFixed(2)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2702,19 +2702,19 @@ export const SearchGrantView: React.FC = () => {
                                     {/* Pagination */}
                                     {totalPages > 1 && (
                                         <div className="flex items-center justify-between pt-2">
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            <p className="text-xs text-muted">
                                                 Showing {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, rows.length)} of {rows.length} enrolments
                                             </p>
                                             <div className="flex items-center gap-1">
                                                 <button
                                                     onClick={() => setCurrentPage(0)}
                                                     disabled={currentPage === 0}
-                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                    className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                                                 >«</button>
                                                 <button
                                                     onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
                                                     disabled={currentPage === 0}
-                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                    className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                                                 >‹</button>
                                                 {Array.from({ length: totalPages }, (_, i) => i).filter(i =>
                                                     i === 0 || i === totalPages - 1 || Math.abs(i - currentPage) <= 1
@@ -2724,24 +2724,24 @@ export const SearchGrantView: React.FC = () => {
                                                     return acc;
                                                 }, []).map((item, idx) =>
                                                     item === '…' ? (
-                                                        <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400">…</span>
+                                                        <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted">…</span>
                                                     ) : (
                                                         <button
                                                             key={item}
                                                             onClick={() => setCurrentPage(item as number)}
-                                                            className={`px-2.5 py-1 text-xs rounded border ${currentPage === item ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+                                                            className={`px-2.5 py-1 text-xs rounded border ${currentPage === item ? 'bg-blue-600 text-white border-blue-600' : 'border-strong hover:bg-surface-hover dark:text-gray-300'}`}
                                                         >{(item as number) + 1}</button>
                                                     )
                                                 )}
                                                 <button
                                                     onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
                                                     disabled={currentPage === totalPages - 1}
-                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                    className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                                                 >›</button>
                                                 <button
                                                     onClick={() => setCurrentPage(totalPages - 1)}
                                                     disabled={currentPage === totalPages - 1}
-                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                    className="px-2 py-1 text-xs rounded border border-strong disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover dark:text-gray-300"
                                                 >»</button>
                                             </div>
                                         </div>
@@ -2749,20 +2749,20 @@ export const SearchGrantView: React.FC = () => {
                                 </div>
                             );
                         })() : (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                            <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Found</h4>
-                                <p className="text-yellow-700 dark:text-yellow-400">
+                                <h4 className="text-lg font-bold text-warning mb-2">No Records Found</h4>
+                                <p className="text-warning">
                                     No grant records were returned for this Course Run ID.
                                 </p>
                             </div>
                         )}
 
-                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                        <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                            <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
+                            <pre className="mt-3 text-sm text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600">
                                 {JSON.stringify(grantsData, null, 2)}
                             </pre>
                         </details>
@@ -2785,8 +2785,8 @@ export const SearchGrantView: React.FC = () => {
             {/* Empty State */}
             {!grantsData && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter details to search</p>
                         <p className="text-sm mt-2">Provide Course Run ID to fetch grant details</p>
                     </div>
@@ -2806,7 +2806,7 @@ export const SearchEnrolmentView: React.FC = () => {
 
     const SEARCH_ENROLMENT_API = '/api/enrolment/search';
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const getEnrolmentStatusColor = (status: string) => {
         switch (status) {
@@ -2820,7 +2820,7 @@ export const SearchEnrolmentView: React.FC = () => {
             case 'Rejected':
                 return 'bg-red-100 text-red-800 border-red-200';
             default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
+                return 'bg-gray-100 text-on-surface border-default';
         }
     };
 
@@ -2906,11 +2906,11 @@ export const SearchEnrolmentView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Search Parameters</h3>
+                    <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Enrolment Search Parameters</h3>
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                 Course Run ID
                             </label>
                             <input
@@ -2944,7 +2944,7 @@ export const SearchEnrolmentView: React.FC = () => {
                     </div>
 
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                        <p className="text-danger text-sm mt-3">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -2954,7 +2954,7 @@ export const SearchEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching enrolment details from SSG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching enrolment details from SSG...</p>
                     </div>
                 </div>
             )}
@@ -2964,39 +2964,39 @@ export const SearchEnrolmentView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Enrolment Search Results</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-muted mt-1">
                             Course Run ID: {courseRunId}
                         </p>
                     </div>
                     <div className="p-6">
                         {Array.isArray(parsedData) && parsedData.length > 0 ? (
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                                <div className="flex justify-between items-center bg-info-bg p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                                     <div>
                                         <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {parsedData.length}</h4>
-                                        <p className="text-sm text-blue-700 dark:text-blue-400">Course: {parsedData[0]?.enrolment?.course?.title || 'N/A'}</p>
+                                        <p className="text-sm text-primary">Course: {parsedData[0]?.enrolment?.course?.title || 'N/A'}</p>
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead className="bg-gray-50 dark:bg-gray-700">
+                                <div className="overflow-x-auto border border-default rounded-lg shadow-sm">
+                                    <table className="min-w-full divide-y divide-default">
+                                        <thead className="bg-surface-elevated">
                                             <tr>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Run ID</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">End Date</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Enrolment Ref</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trainee Name</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">NRIC</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sponsorship</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Employer</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Payment</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Enrolment Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Run ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Start Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">End Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Enrolment Ref</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Trainee Name</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">NRIC</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Email</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Sponsorship</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Employer</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Payment</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Enrolment Date</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tbody className="bg-surface divide-y divide-default">
                                             {parsedData.map((item: any, index: number) => {
                                                 const enrolment = item.enrolment || {};
                                                 const course = enrolment.course || {};
@@ -3004,32 +3004,32 @@ export const SearchEnrolmentView: React.FC = () => {
                                                 const trainee = enrolment.trainee || {};
                                                 const employer = trainee.employer || {};
                                                 return (
-                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                                    <tr key={index} className="hover:bg-surface-hover">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">
                                                             {courseRun.id || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {courseRun.startDate || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {courseRun.endDate || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-on-surface">
                                                             {enrolment.referenceNumber || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                             {trainee.fullName || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {trainee.id || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {trainee.email?.full || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {trainee.sponsorshipType || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {employer.name || '-'}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -3042,7 +3042,7 @@ export const SearchEnrolmentView: React.FC = () => {
                                                                 {trainee.fees?.collectionStatus || 'N/A'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                                             {trainee.enrolmentDate || 'N/A'}
                                                         </td>
                                                     </tr>
@@ -3053,20 +3053,20 @@ export const SearchEnrolmentView: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                            <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Found</h4>
-                                <p className="text-yellow-700 dark:text-yellow-400">
+                                <h4 className="text-lg font-bold text-warning mb-2">No Records Found</h4>
+                                <p className="text-warning">
                                     No enrolment records were returned for this Course Run ID.
                                 </p>
                             </div>
                         )}
 
-                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                        <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                            <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
+                            <pre className="mt-3 text-sm text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600">
                                 {JSON.stringify(webhookResponse, null, 2)}
                             </pre>
                         </details>
@@ -3090,8 +3090,8 @@ export const SearchEnrolmentView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter Course Run ID to search</p>
                         <p className="text-sm mt-2">Provide a Course Run ID to fetch enrolment details from SSG</p>
                     </div>
@@ -3110,7 +3110,7 @@ export const ViewEnrolmentView: React.FC = () => {
 
     const VIEW_ENROLMENT_API = '/api/enrolment/view';
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const getEnrolmentStatusColor = (status: string) => {
         switch (status) {
@@ -3124,7 +3124,7 @@ export const ViewEnrolmentView: React.FC = () => {
             case 'Rejected':
                 return 'bg-red-100 text-red-800 border-red-200';
             default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
+                return 'bg-gray-100 text-on-surface border-default';
         }
     };
 
@@ -3179,9 +3179,9 @@ export const ViewEnrolmentView: React.FC = () => {
         return (
             <div className="space-y-6">
                 {/* Enrolment Summary */}
-                <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                <div className="bg-info-bg p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                     <h4 className="font-bold text-blue-900 dark:text-blue-300 text-lg">Enrolment: {enrolment.referenceNumber || enrolmentId}</h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    <p className="text-sm text-primary mt-1">
                         Status: <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getEnrolmentStatusColor(enrolment.status || 'Pending')}`}>
                             {enrolment.status || 'Pending'}
                         </span>
@@ -3190,67 +3190,67 @@ export const ViewEnrolmentView: React.FC = () => {
 
                 {/* Course Information */}
                 <Card className="p-4">
-                    <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Course Information</h5>
+                    <h5 className="font-bold text-on-surface mb-3">Course Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Course Title:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{course.title || 'N/A'}</p>
+                            <span className="text-muted">Course Title:</span>
+                            <p className="font-medium text-on-surface">{course.title || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Course Reference:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{course.referenceNumber || 'N/A'}</p>
+                            <span className="text-muted">Course Reference:</span>
+                            <p className="font-medium text-on-surface">{course.referenceNumber || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Course Run ID:</span>
-                            <p className="font-medium text-blue-600 dark:text-blue-400">{courseRun.id || 'N/A'}</p>
+                            <span className="text-muted">Course Run ID:</span>
+                            <p className="font-medium text-primary">{courseRun.id || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Start Date:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{courseRun.startDate || 'N/A'}</p>
+                            <span className="text-muted">Start Date:</span>
+                            <p className="font-medium text-on-surface">{courseRun.startDate || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">End Date:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{courseRun.endDate || 'N/A'}</p>
+                            <span className="text-muted">End Date:</span>
+                            <p className="font-medium text-on-surface">{courseRun.endDate || 'N/A'}</p>
                         </div>
                     </div>
                 </Card>
 
                 {/* Trainee Information */}
                 <Card className="p-4">
-                    <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Trainee Information</h5>
+                    <h5 className="font-bold text-on-surface mb-3">Trainee Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Full Name:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{trainee.fullName || 'N/A'}</p>
+                            <span className="text-muted">Full Name:</span>
+                            <p className="font-medium text-on-surface">{trainee.fullName || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">NRIC:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{trainee.id || 'N/A'}</p>
+                            <span className="text-muted">NRIC:</span>
+                            <p className="font-medium text-on-surface">{trainee.id || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Date of Birth:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{trainee.dateOfBirth || 'N/A'}</p>
+                            <span className="text-muted">Date of Birth:</span>
+                            <p className="font-medium text-on-surface">{trainee.dateOfBirth || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Email:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{trainee.email?.full || 'N/A'}</p>
+                            <span className="text-muted">Email:</span>
+                            <p className="font-medium text-on-surface">{trainee.email?.full || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Contact Number:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">
+                            <span className="text-muted">Contact Number:</span>
+                            <p className="font-medium text-on-surface">
                                 {trainee.contactNumber ? `${trainee.contactNumber.countryCode || ''} ${trainee.contactNumber.phoneNumber || ''}`.trim() || 'N/A' : 'N/A'}
                             </p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Sponsorship Type:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{trainee.sponsorshipType || 'N/A'}</p>
+                            <span className="text-muted">Sponsorship Type:</span>
+                            <p className="font-medium text-on-surface">{trainee.sponsorshipType || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Enrolment Date:</span>
-                            <p className="font-medium text-gray-900 dark:text-white">{trainee.enrolmentDate || 'N/A'}</p>
+                            <span className="text-muted">Enrolment Date:</span>
+                            <p className="font-medium text-on-surface">{trainee.enrolmentDate || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500 dark:text-gray-400">Payment Status:</span>
+                            <span className="text-muted">Payment Status:</span>
                             <p className="font-medium">
                                 <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getEnrolmentStatusColor(trainee.fees?.collectionStatus || 'Pending')}`}>
                                     {trainee.fees?.collectionStatus || 'N/A'}
@@ -3263,29 +3263,29 @@ export const ViewEnrolmentView: React.FC = () => {
                 {/* Employer Information (if applicable) */}
                 {employer.name && (
                     <Card className="p-4">
-                        <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Employer Information</h5>
+                        <h5 className="font-bold text-on-surface mb-3">Employer Information</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div>
-                                <span className="text-gray-500 dark:text-gray-400">Company Name:</span>
-                                <p className="font-medium text-gray-900 dark:text-white">{employer.name || 'N/A'}</p>
+                                <span className="text-muted">Company Name:</span>
+                                <p className="font-medium text-on-surface">{employer.name || 'N/A'}</p>
                             </div>
                             <div>
-                                <span className="text-gray-500 dark:text-gray-400">UEN:</span>
-                                <p className="font-medium text-gray-900 dark:text-white">{employer.uen || 'N/A'}</p>
+                                <span className="text-muted">UEN:</span>
+                                <p className="font-medium text-on-surface">{employer.uen || 'N/A'}</p>
                             </div>
                             {employer.contact && (
                                 <>
                                     <div>
-                                        <span className="text-gray-500 dark:text-gray-400">Contact Person:</span>
-                                        <p className="font-medium text-gray-900 dark:text-white">{employer.contact.fullName || 'N/A'}</p>
+                                        <span className="text-muted">Contact Person:</span>
+                                        <p className="font-medium text-on-surface">{employer.contact.fullName || 'N/A'}</p>
                                     </div>
                                     <div>
-                                        <span className="text-gray-500 dark:text-gray-400">Contact Email:</span>
-                                        <p className="font-medium text-gray-900 dark:text-white">{employer.contact.email?.full || 'N/A'}</p>
+                                        <span className="text-muted">Contact Email:</span>
+                                        <p className="font-medium text-on-surface">{employer.contact.email?.full || 'N/A'}</p>
                                     </div>
                                     <div>
-                                        <span className="text-gray-500 dark:text-gray-400">Contact Phone:</span>
-                                        <p className="font-medium text-gray-900 dark:text-white">
+                                        <span className="text-muted">Contact Phone:</span>
+                                        <p className="font-medium text-on-surface">
                                             {employer.contact.contactNumber ? `${employer.contact.contactNumber.countryCode || ''} ${employer.contact.contactNumber.phoneNumber || ''}`.trim() || 'N/A' : 'N/A'}
                                         </p>
                                     </div>
@@ -3298,19 +3298,19 @@ export const ViewEnrolmentView: React.FC = () => {
                 {/* Training Partner Information */}
                 {trainingPartner.name && (
                     <Card className="p-4">
-                        <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Training Partner</h5>
+                        <h5 className="font-bold text-on-surface mb-3">Training Partner</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div>
-                                <span className="text-gray-500 dark:text-gray-400">Name:</span>
-                                <p className="font-medium text-gray-900 dark:text-white">{trainingPartner.name || 'N/A'}</p>
+                                <span className="text-muted">Name:</span>
+                                <p className="font-medium text-on-surface">{trainingPartner.name || 'N/A'}</p>
                             </div>
                             <div>
-                                <span className="text-gray-500 dark:text-gray-400">UEN:</span>
-                                <p className="font-medium text-gray-900 dark:text-white">{trainingPartner.uen || 'N/A'}</p>
+                                <span className="text-muted">UEN:</span>
+                                <p className="font-medium text-on-surface">{trainingPartner.uen || 'N/A'}</p>
                             </div>
                             <div>
-                                <span className="text-gray-500 dark:text-gray-400">Code:</span>
-                                <p className="font-medium text-gray-900 dark:text-white">{trainingPartner.code || 'N/A'}</p>
+                                <span className="text-muted">Code:</span>
+                                <p className="font-medium text-on-surface">{trainingPartner.code || 'N/A'}</p>
                             </div>
                         </div>
                     </Card>
@@ -3326,11 +3326,11 @@ export const ViewEnrolmentView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Lookup</h3>
+                    <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Enrolment Lookup</h3>
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                 Enrolment ID
                             </label>
                             <input
@@ -3364,7 +3364,7 @@ export const ViewEnrolmentView: React.FC = () => {
                     </div>
 
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                        <p className="text-danger text-sm mt-3">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -3374,7 +3374,7 @@ export const ViewEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching enrolment details from SSG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching enrolment details from SSG...</p>
                     </div>
                 </div>
             )}
@@ -3384,7 +3384,7 @@ export const ViewEnrolmentView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Enrolment Details</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-muted mt-1">
                             Enrolment ID: {enrolmentId}
                         </p>
                     </div>
@@ -3393,11 +3393,11 @@ export const ViewEnrolmentView: React.FC = () => {
                             <>
                                 {renderEnrolmentDetails()}
 
-                                <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                                    <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                                <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                                    <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                         View Raw JSON Response
                                     </summary>
-                                    <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
+                                    <pre className="mt-3 text-sm text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600">
                                         {JSON.stringify(webhookResponse, null, 2)}
                                     </pre>
                                 </details>
@@ -3416,10 +3416,10 @@ export const ViewEnrolmentView: React.FC = () => {
                                 </div>
                             </>
                         ) : (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                            <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Data Found</h4>
-                                <p className="text-yellow-700 dark:text-yellow-400">
+                                <h4 className="text-lg font-bold text-warning mb-2">No Data Found</h4>
+                                <p className="text-warning">
                                     No enrolment record was found for this Enrolment ID.
                                 </p>
                             </div>
@@ -3431,8 +3431,8 @@ export const ViewEnrolmentView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter Enrolment ID to view details</p>
                         <p className="text-sm mt-2">Provide an Enrolment ID (e.g. ENR-2601-094504) to fetch details from SSG</p>
                     </div>
@@ -3460,7 +3460,7 @@ export const SearchCourseRunsView: React.FC = () => {
     }, [currentPage, displayPage]);
     const DISPLAY_PAGE_SIZE = 10;
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const fetchCourseRuns = async (code: string, page: number) => {
         setIsSearching(true);
@@ -3557,7 +3557,7 @@ export const SearchCourseRunsView: React.FC = () => {
             case 'A': return 'bg-green-100 text-green-800 border-green-200';
             case 'L': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
             case 'F': return 'bg-red-100 text-red-800 border-red-200';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+            default: return 'bg-gray-100 text-on-surface border-default';
         }
     };
 
@@ -3574,48 +3574,48 @@ export const SearchCourseRunsView: React.FC = () => {
 
             return (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <div className="flex justify-between items-center bg-info-bg p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                         <div>
                             <h4 className="font-bold text-blue-900 dark:text-blue-300">Course Runs: {courseRuns.length} results</h4>
-                            <p className="text-sm text-blue-700 dark:text-blue-400">Course Reference: {courseRef}</p>
+                            <p className="text-sm text-primary">Course Reference: {courseRef}</p>
                         </div>
-                        <p className="text-sm text-blue-700 dark:text-blue-400">
+                        <p className="text-sm text-primary">
                             Showing {displayPage * DISPLAY_PAGE_SIZE + 1}–{Math.min((displayPage + 1) * DISPLAY_PAGE_SIZE, courseRuns.length)} of {courseRuns.length}
                         </p>
                     </div>
 
-                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700">
+                    <div className="overflow-x-auto border border-default rounded-lg shadow-sm">
+                        <table className="min-w-full divide-y divide-default">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Run ID</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Start Date</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course End Date</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Registration Start Date</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Registration End Date</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">QR Code Link</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Mode</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Venue</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trainer</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Vacancy</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Run ID</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Start Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course End Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Registration Start Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Registration End Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">QR Code Link</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Mode</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Venue</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Trainer</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Vacancy</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {pagedRuns.map((run: any, index: number) => (
-                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                    <tr key={index} className="hover:bg-surface-hover">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">
                                             {run.id || 'N/A'}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                             {formatDate(run.courseDates?.start)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                             {formatDate(run.courseDates?.end)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                             {formatDate(run.registrationDates?.opening)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                             {formatDate(run.registrationDates?.closing)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -3624,22 +3624,22 @@ export const SearchCourseRunsView: React.FC = () => {
                                                     href={run.qrCodeLink}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                                    className="text-primary hover:underline flex items-center"
                                                 >
                                                     <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
                                                     View
                                                 </a>
                                             ) : (
-                                                <span className="text-gray-400 dark:text-gray-500">N/A</span>
+                                                <span className="text-muted">N/A</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted">
                                             {getModeLabel(run.modeOfTraining)}
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 min-w-[300px]" title={formatVenue(run.venue)}>
+                                        <td className="px-6 py-4 text-sm text-muted min-w-[300px]" title={formatVenue(run.venue)}>
                                             {formatVenue(run.venue)}
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 min-w-[150px]">
+                                        <td className="px-6 py-4 text-sm text-muted min-w-[150px]">
                                             {formatTrainers(run.linkCourseRunTrainer)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -3659,7 +3659,7 @@ export const SearchCourseRunsView: React.FC = () => {
                             <button
                                 onClick={() => setDisplayPage(p => Math.max(0, p - 1))}
                                 disabled={displayPage === 0}
-                                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                className="px-3 py-1.5 text-sm border border-strong rounded-md bg-surface text-on-surface-secondary disabled:opacity-40 hover:bg-surface-hover"
                             >
                                 Previous
                             </button>
@@ -3670,7 +3670,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                     className={`px-3 py-1.5 text-sm border rounded-md ${
                                         i === displayPage
                                             ? 'bg-blue-600 border-blue-600 text-white'
-                                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600'
+                                            : 'border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover'
                                     }`}
                                 >
                                     {i + 1}
@@ -3679,7 +3679,7 @@ export const SearchCourseRunsView: React.FC = () => {
                             <button
                                 onClick={() => setDisplayPage(p => Math.min(totalDisplayPages - 1, p + 1))}
                                 disabled={displayPage === totalDisplayPages - 1}
-                                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                className="px-3 py-1.5 text-sm border border-strong rounded-md bg-surface text-on-surface-secondary disabled:opacity-40 hover:bg-surface-hover"
                             >
                                 Next
                             </button>
@@ -3690,10 +3690,10 @@ export const SearchCourseRunsView: React.FC = () => {
         }
 
         return (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+            <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Course Runs Found</h4>
-                <p className="text-yellow-700 dark:text-yellow-400">
+                <h4 className="text-lg font-bold text-warning mb-2">No Course Runs Found</h4>
+                <p className="text-warning">
                     No course runs were found for this Course Code on page {currentPage}.
                 </p>
             </div>
@@ -3707,11 +3707,11 @@ export const SearchCourseRunsView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Search</h3>
+                    <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Search</h3>
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="search-course-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="search-course-code" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                 Course Code
                             </label>
                             <input
@@ -3745,7 +3745,7 @@ export const SearchCourseRunsView: React.FC = () => {
                     </div>
 
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                        <p className="text-danger text-sm mt-3">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -3755,7 +3755,7 @@ export const SearchCourseRunsView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching course runs from SSG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching course runs from SSG...</p>
                     </div>
                 </div>
             )}
@@ -3766,17 +3766,17 @@ export const SearchCourseRunsView: React.FC = () => {
                     <div className="p-6 border-b dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
                         <div>
                             <h3 className="text-xl font-bold dark:text-white">Course Run Results</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mt-1">Course Code: {courseCode}</p>
+                            <p className="text-muted mt-1">Course Code: {courseCode}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <label htmlFor="page-select" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            <label htmlFor="page-select" className="text-sm font-medium text-on-surface-secondary whitespace-nowrap">
                                 Page:
                             </label>
                             <select
                                 id="page-select"
                                 value={currentPage}
                                 onChange={(e) => handlePageChange(Number(e.target.value))}
-                                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-3 py-1.5 text-sm border border-strong rounded-md bg-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {Array.from({ length: 10 }, (_, i) => (
                                     <option key={i} value={i}>Page {i}</option>
@@ -3787,11 +3787,11 @@ export const SearchCourseRunsView: React.FC = () => {
                     <div className="p-6">
                         {renderCourseRuns()}
 
-                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                        <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                            <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
+                            <pre className="mt-3 text-sm text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600">
                                 {JSON.stringify(courseRunsData, null, 2)}
                             </pre>
                         </details>
@@ -3816,8 +3816,8 @@ export const SearchCourseRunsView: React.FC = () => {
             {/* Empty State */}
             {!courseRunsData && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter Course Code to search</p>
                         <p className="text-sm mt-2">Provide a Course Code to fetch all associated course runs from SSG</p>
                     </div>
@@ -3841,7 +3841,7 @@ export const ViewCourseRunView: React.FC = () => {
     const [localError, setLocalError] = useState<string | null>(null);
 
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     // Format YYYYMMDD integer to readable date
     const formatDate = (dateInt: number | string | undefined): string => {
@@ -3886,10 +3886,10 @@ export const ViewCourseRunView: React.FC = () => {
     // Get vacancy badge color
     const getVacancyColor = (code: string): string => {
         switch (code) {
-            case 'A': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
-            case 'L': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700';
-            case 'F': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700';
+            case 'A': return 'bg-success-bg text-success border-green-200 dark:border-green-700';
+            case 'L': return 'bg-warning-bg text-warning border-yellow-200 dark:border-yellow-700';
+            case 'F': return 'bg-danger-bg text-danger border-red-200 dark:border-red-700';
+            default: return 'bg-surface-elevated text-gray-800 border-default dark:text-gray-300';
         }
     };
 
@@ -3963,77 +3963,77 @@ export const ViewCourseRunView: React.FC = () => {
             <Card className="p-0 overflow-hidden mt-6 mb-6">
                 <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
-                        <thead className="bg-gray-50 dark:bg-gray-800">
+                        <thead className="bg-surface-elevated">
                             <tr>
                                 <th colSpan={2} className="px-6 py-3 text-left border-b dark:border-gray-700">
-                                    <div className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Local Details</div>
-                                    <div className="text-[11px] font-normal normal-case text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <div className="text-xs font-bold text-on-surface-secondary uppercase tracking-wider">Local Details</div>
+                                    <div className="text-[11px] font-normal normal-case text-muted mt-0.5">
                                         From local <code className="px-1 bg-gray-200 dark:bg-gray-700 rounded">course_run</code> — may differ from SSG if sync is stale.
                                     </div>
                                 </th>
                             </tr>
                         </thead>
                 {localLoading ? (
-                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-gray-500 dark:text-gray-400">Loading local details…</td></tr></tbody>
+                    <tbody className="bg-surface"><tr><td colSpan={2} className="p-6 text-sm text-muted">Loading local details…</td></tr></tbody>
                 ) : localError ? (
-                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-red-600 dark:text-red-400">Failed to load local details: {localError}</td></tr></tbody>
+                    <tbody className="bg-surface"><tr><td colSpan={2} className="p-6 text-sm text-danger">Failed to load local details: {localError}</td></tr></tbody>
                 ) : !localDetails ? (
-                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-gray-500 dark:text-gray-400 italic">No local record found for this Course Run ID.</td></tr></tbody>
+                    <tbody className="bg-surface"><tr><td colSpan={2} className="p-6 text-sm text-muted italic">No local record found for this Course Run ID.</td></tr></tbody>
                 ) : (
-                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300 w-1/3">Class Status</td>
+                        <tbody className="bg-surface divide-y divide-default">
+                            <tr className="hover:bg-surface-hover">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary w-1/3">Class Status</td>
                                 <td className="px-6 py-4 text-sm">
                                     {(() => {
                                         const status = localDetails.classStatus;
                                         if (!status) {
-                                            return <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700">N/A</span>;
+                                            return <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-surface-elevated text-on-surface-secondary border border-default">N/A</span>;
                                         }
                                         const lower = String(status).toLowerCase();
-                                        let cls = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
-                                        if (lower === 'cancelled') cls = 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
-                                        else if (lower === 'pending') cls = 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700';
-                                        else if (lower === 'confirmed') cls = 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700';
+                                        let cls = 'bg-surface-elevated text-on-surface-secondary border-default';
+                                        if (lower === 'cancelled') cls = 'bg-danger-bg text-danger border-red-200 dark:border-red-700';
+                                        else if (lower === 'pending') cls = 'bg-warning-bg text-warning border-amber-200 dark:border-amber-700';
+                                        else if (lower === 'confirmed') cls = 'bg-success-bg text-success border-emerald-200 dark:border-emerald-700';
                                         return <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${cls}`}>{status}</span>;
                                     })()}
                                 </td>
                             </tr>
-                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">Local Trainer</td>
-                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            <tr className="hover:bg-surface-hover">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">Local Trainer</td>
+                                <td className="px-6 py-4 text-sm text-on-surface">
                                     {localDetails.assignedTrainerName ? (
                                         <>
                                             <span className="font-medium">{localDetails.assignedTrainerName}</span>
                                             {localDetails.assignedTrainerEmail && (
-                                                <span className="text-gray-500 dark:text-gray-400 ml-2">({localDetails.assignedTrainerEmail})</span>
+                                                <span className="text-muted ml-2">({localDetails.assignedTrainerEmail})</span>
                                             )}
                                         </>
                                     ) : (
-                                        <span className="text-gray-400 italic">None assigned</span>
+                                        <span className="text-muted italic">None assigned</span>
                                     )}
                                 </td>
                             </tr>
-                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">TPG Trainer (Local)</td>
-                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            <tr className="hover:bg-surface-hover">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">TPG Trainer (Local)</td>
+                                <td className="px-6 py-4 text-sm text-on-surface">
                                     {localDetails.tpgAssignedTrainerName ? (
                                         <>
                                             <span className="font-medium">{localDetails.tpgAssignedTrainerName}</span>
                                             {localDetails.tpgAssignedTrainerEmail && (
-                                                <span className="text-gray-500 dark:text-gray-400 ml-2">({localDetails.tpgAssignedTrainerEmail})</span>
+                                                <span className="text-muted ml-2">({localDetails.tpgAssignedTrainerEmail})</span>
                                             )}
                                         </>
                                     ) : (
-                                        <span className="text-gray-400 italic">None assigned</span>
+                                        <span className="text-muted italic">None assigned</span>
                                     )}
                                 </td>
                             </tr>
-                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">Digital Attendance ID</td>
-                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            <tr className="hover:bg-surface-hover">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">Digital Attendance ID</td>
+                                <td className="px-6 py-4 text-sm text-on-surface">
                                     {localDetails.digitalAttendanceId
-                                        ? <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">{localDetails.digitalAttendanceId}</code>
-                                        : <span className="text-gray-400 italic">Not set</span>}
+                                        ? <code className="px-1.5 py-0.5 bg-surface-elevated rounded text-xs">{localDetails.digitalAttendanceId}</code>
+                                        : <span className="text-muted italic">Not set</span>}
                                 </td>
                             </tr>
                         </tbody>
@@ -4071,12 +4071,12 @@ export const ViewCourseRunView: React.FC = () => {
         return (
             <div className="space-y-6">
                 {/* Course Run Summary */}
-                <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                <div className="bg-info-bg p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                     <h4 className="font-bold text-blue-900 dark:text-blue-300 text-lg">{courseData.title || 'N/A'}</h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    <p className="text-sm text-primary mt-1">
                         Reference Number: <span className="font-semibold">{courseData.referenceNumber || 'N/A'}</span>
                     </p>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    <p className="text-sm text-primary mt-1">
                         Vacancy: <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getVacancyColor(run.courseVacancy?.code || '')}`}>
                             {run.courseVacancy?.description || 'N/A'}
                         </span>
@@ -4087,125 +4087,125 @@ export const ViewCourseRunView: React.FC = () => {
                 <Card className="p-0 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Field
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Value
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            <tbody className="bg-surface divide-y divide-default">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Run ID
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.id || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Start Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {formatDate(run.courseStartDate)}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course End Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {formatDate(run.courseEndDate)}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Mode of Training
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {getModeLabel(run.modeOfTraining)}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Venue
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {formatVenue(run.venue)}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Registration Opening Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {formatDate(run.registrationOpeningDate)}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Registration Closing Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {formatDate(run.registrationClosingDate)}
                                     </td>
                                 </tr>
-                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                {/* <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Intake Size
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.intakeSize || 0}
                                     </td>
                                 </tr> */}
-                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                {/* <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Registered Users
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.registeredUserCount || 0}
                                     </td>
                                 </tr> */}
-                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                {/* <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Threshold
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.threshold || 0}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Vacancy
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         <span className={`inline-flex px-2 py-1 text-sm font-semibold rounded-full border ${getVacancyColor(run.courseVacancy?.code || '')}`}>
                                             {run.courseVacancy?.description || 'N/A'} ({run.courseVacancy?.code || 'N/A'})
                                         </span>
                                     </td>
                                 </tr> */}
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Admin Email
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.courseAdminEmail || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Attendance Taken
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.attendanceTaken ? 'Yes' : 'No'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         QR Code Link
                                     </td>
                                     <td className="px-6 py-4 text-sm">
@@ -4214,37 +4214,37 @@ export const ViewCourseRunView: React.FC = () => {
                                                 href={run.qrCodeLink}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                                className="text-primary hover:underline flex items-center"
                                             >
                                                 <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
                                                 {run.qrCodeLink}
                                             </a>
                                         ) : (
-                                            <span className="text-gray-500 dark:text-gray-400">N/A</span>
+                                            <span className="text-muted">N/A</span>
                                         )}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Organization UEN
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.organizationKey || 'N/A'}
                                     </td>
                                 </tr>
-                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                {/* <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Schedule Info Type
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.scheduleInfoType?.description || 'N/A'} ({run.scheduleInfoType?.code || 'N/A'})
                                     </td>
                                 </tr> */}
-                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                {/* <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Schedule Info
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {run.scheduleInfo || 'N/A'}
                                     </td>
                                 </tr> */}
@@ -4256,25 +4256,25 @@ export const ViewCourseRunView: React.FC = () => {
                 {/* Trainer Section */}
                 {run.linkCourseRunTrainer && run.linkCourseRunTrainer.length > 0 && (
                     <Card className="p-6">
-                        <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-4">Assigned Trainer (TPG)</h4>
+                        <h4 className="text-base font-bold text-on-surface mb-4">Assigned Trainer (TPG)</h4>
                         <div className="space-y-3">
                             {run.linkCourseRunTrainer.map((link: any, idx: number) => {
                                 const t = link.trainer;
                                 if (!t) return null;
                                 return (
-                                    <div key={t.id ?? idx} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                                    <div key={t.id ?? idx} className="p-4 border border-default rounded-lg">
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div>
-                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Name</p>
-                                                <p className="text-sm font-medium text-gray-900 dark:text-white">{t.name ?? '—'}</p>
+                                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Name</p>
+                                                <p className="text-sm font-medium text-on-surface">{t.name ?? '—'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">ID Number</p>
-                                                <p className="text-sm font-mono text-gray-900 dark:text-white">{t.idNumber ?? '—'}</p>
+                                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">ID Number</p>
+                                                <p className="text-sm font-mono text-on-surface">{t.idNumber ?? '—'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Email</p>
-                                                <p className="text-sm text-gray-900 dark:text-white">{t.email ?? '—'}</p>
+                                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Email</p>
+                                                <p className="text-sm text-on-surface">{t.email ?? '—'}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -4294,11 +4294,11 @@ export const ViewCourseRunView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Lookup</h3>
+                    <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Lookup</h3>
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="view-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="view-course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                 Course Run ID
                             </label>
                             <input
@@ -4332,7 +4332,7 @@ export const ViewCourseRunView: React.FC = () => {
                     </div>
 
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                        <p className="text-danger text-sm mt-3">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -4342,7 +4342,7 @@ export const ViewCourseRunView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching course run details from SSG...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching course run details from SSG...</p>
                     </div>
                 </div>
             )}
@@ -4352,7 +4352,7 @@ export const ViewCourseRunView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Course Run Details</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-muted mt-1">
                             Course Run ID: {courseRunId}
                         </p>
                     </div>
@@ -4361,20 +4361,20 @@ export const ViewCourseRunView: React.FC = () => {
                             <>
                                 {renderCourseRunDetails()}
 
-                                <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                                    <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                                <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                                    <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                         ▼ View Raw JSON Response
                                     </summary>
-                                    <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
+                                    <pre className="mt-3 text-xs text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600 font-mono">
                                         {JSON.stringify(webhookResponse, null, 2)}
                                     </pre>
                                 </details>
 
-                                <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                                    <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                                <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                                    <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                         ▼ View Parsed Data
                                     </summary>
-                                    <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
+                                    <pre className="mt-3 text-xs text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600 font-mono">
                                         {JSON.stringify(parsedData, null, 2)}
                                     </pre>
                                 </details>
@@ -4404,10 +4404,10 @@ export const ViewCourseRunView: React.FC = () => {
                                 </div>
                             </>
                         ) : (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                            <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Data Found</h4>
-                                <p className="text-yellow-700 dark:text-yellow-400">
+                                <h4 className="text-lg font-bold text-warning mb-2">No Data Found</h4>
+                                <p className="text-warning">
                                     No course run record was found for this Course Run ID.
                                 </p>
                             </div>
@@ -4422,8 +4422,8 @@ export const ViewCourseRunView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter Course Run ID to view details</p>
                         <p className="text-sm mt-2">Provide a Course Run ID (e.g. 1234567) to fetch details from SSG</p>
                     </div>
@@ -4447,7 +4447,7 @@ export const CancelEnrolmentView: React.FC = () => {
     const VIEW_ENROLMENT_API = '/api/enrolment/view';
     const CANCEL_ENROLMENT_API = '/api/enrolment/cancel';
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const handleLookup = async () => {
         setIsLookingUp(true);
@@ -4541,15 +4541,15 @@ export const CancelEnrolmentView: React.FC = () => {
 
             {/* Input Form Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Enrolment Details</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Only the Enrolment ID is required. The Course Run ID is auto-resolved from SSG; provide it explicitly to skip the lookup.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="cancel-enrolment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Enrolment ID <span className="text-red-500">*</span>
+                        <label htmlFor="cancel-enrolment-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Enrolment ID <span className="text-danger">*</span>
                         </label>
                         <input
                             id="cancel-enrolment-id"
@@ -4562,8 +4562,8 @@ export const CancelEnrolmentView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="cancel-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-gray-400 font-normal">(optional)</span>
+                        <label htmlFor="cancel-course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-muted font-normal">(optional)</span>
                         </label>
                         <input
                             id="cancel-course-run-id"
@@ -4602,7 +4602,7 @@ export const CancelEnrolmentView: React.FC = () => {
                 </div>
 
                 {error && !result && !preview && (
-                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                    <p className="text-danger text-sm mt-3">{error}</p>
                 )}
             </Card>
 
@@ -4610,41 +4610,41 @@ export const CancelEnrolmentView: React.FC = () => {
             {preview && !result && (
                 <Card className="p-6 mb-6 border-l-4 border-yellow-500">
                     <div className="flex items-center gap-2 mb-4">
-                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Confirm Cancellation</h3>
+                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-warning" />
+                        <h3 className="text-lg font-bold text-on-surface-secondary">Confirm Cancellation</h3>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    <p className="text-sm text-on-surface-secondary mb-4">
                         Please review the enrolment details below before proceeding. This action cannot be undone.
                     </p>
 
                     <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-5 text-sm">
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Learner Name</dt>
-                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewLearnerName}</dd>
+                            <dt className="font-medium text-muted">Learner Name</dt>
+                            <dd className="mt-0.5 text-on-surface">{previewLearnerName}</dd>
                         </div>
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Enrolment ID</dt>
-                            <dd className="mt-0.5 font-mono text-gray-900 dark:text-gray-100">{preview?.referenceNumber ?? enrolmentId.trim()}</dd>
+                            <dt className="font-medium text-muted">Enrolment ID</dt>
+                            <dd className="mt-0.5 font-mono text-on-surface">{preview?.referenceNumber ?? enrolmentId.trim()}</dd>
                         </div>
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Course Run ID</dt>
-                            <dd className="mt-0.5 font-mono text-gray-900 dark:text-gray-100">{previewCourseRunId}</dd>
+                            <dt className="font-medium text-muted">Course Run ID</dt>
+                            <dd className="mt-0.5 font-mono text-on-surface">{previewCourseRunId}</dd>
                         </div>
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Course Title</dt>
-                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewCourseTitle}</dd>
+                            <dt className="font-medium text-muted">Course Title</dt>
+                            <dd className="mt-0.5 text-on-surface">{previewCourseTitle}</dd>
                         </div>
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Start Date</dt>
-                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewStartDate}</dd>
+                            <dt className="font-medium text-muted">Start Date</dt>
+                            <dd className="mt-0.5 text-on-surface">{previewStartDate}</dd>
                         </div>
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">End Date</dt>
-                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewEndDate}</dd>
+                            <dt className="font-medium text-muted">End Date</dt>
+                            <dd className="mt-0.5 text-on-surface">{previewEndDate}</dd>
                         </div>
                         <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Current Status</dt>
-                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewStatus}</dd>
+                            <dt className="font-medium text-muted">Current Status</dt>
+                            <dd className="mt-0.5 text-on-surface">{previewStatus}</dd>
                         </div>
                     </dl>
 
@@ -4666,7 +4666,7 @@ export const CancelEnrolmentView: React.FC = () => {
                             Go Back
                         </Button>
                         {error && (
-                            <span className="text-red-500 text-sm">{error}</span>
+                            <span className="text-danger text-sm">{error}</span>
                         )}
                     </div>
                 </Card>
@@ -4677,7 +4677,7 @@ export const CancelEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Processing cancellation...</p>
+                        <p className="mt-4 text-on-surface-secondary">Processing cancellation...</p>
                     </div>
                 </div>
             )}
@@ -4686,35 +4686,35 @@ export const CancelEnrolmentView: React.FC = () => {
             {!isSubmitting && result && (
                 <Card className="p-6">
                     {error ? (
-                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                        <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-danger" />
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">Cancellation Failed</h4>
                             </div>
-                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                            <p className="text-sm text-danger pl-7">{error}</p>
                         </div>
                     ) : (
-                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                        <div className="bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Cancelled Successfully</h4>
                             </div>
                             <div className="pl-7 space-y-1">
                                 {(result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber) && (
-                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                    <p className="text-sm text-success">
                                         <span className="font-medium">Enrolment ID:</span>{' '}
-                                        <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                        <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                             {result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber}
                                         </span>
                                     </p>
                                 )}
                                 {(result?.enrolment?.status ?? result?.data?.enrolment?.status) && (
-                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                    <p className="text-sm text-success">
                                         <span className="font-medium">Status:</span> {result?.enrolment?.status ?? result?.data?.enrolment?.status}
                                     </p>
                                 )}
                                 {qbOutcome && qbOutcome.warnings.length === 0 && (
-                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                    <p className="text-sm text-success">
                                         <span className="font-medium">QuickBooks:</span>{' '}
                                         {qbOutcome.deleted ? 'invoices for this enrolment deleted' : 'no invoices to delete'}
                                     </p>
@@ -4724,11 +4724,11 @@ export const CancelEnrolmentView: React.FC = () => {
                     )}
 
                     {!error && qbOutcome && qbOutcome.warnings.length > 0 && (
-                        <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                        <div className="mt-4 bg-warning-bg border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
                             <h4 className="font-semibold text-amber-900 dark:text-amber-200 mb-2">
                                 QuickBooks: some invoices were not deleted — please check
                             </h4>
-                            <ul className="list-disc pl-5 space-y-1 text-sm text-amber-800 dark:text-amber-300">
+                            <ul className="list-disc pl-5 space-y-1 text-sm text-warning">
                                 {qbOutcome.warnings.map((w, i) => <li key={i} className="break-words">{w}</li>)}
                             </ul>
                         </div>
@@ -4736,10 +4736,10 @@ export const CancelEnrolmentView: React.FC = () => {
 
                     {/* Raw Response (collapsible) */}
                     <details className="mt-4">
-                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                        <summary className="text-sm text-muted cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                             View Raw Response
                         </summary>
-                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                        <pre className="mt-2 text-xs bg-surface-elevated p-3 rounded overflow-auto max-h-60">
                             {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
@@ -4758,7 +4758,7 @@ export const UpdateEnrolmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const UPDATE_ENROLMENT_API = '/api/enrolment/update';
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
@@ -4804,22 +4804,22 @@ export const UpdateEnrolmentView: React.FC = () => {
             <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Enrolment</h2>
 
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Enrolment Details</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Enter the Enrolment ID and the new Course Run ID to update the enrolment on SSG.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Enrolment ID <span className="text-red-500">*</span>
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Enrolment ID <span className="text-danger">*</span>
                         </label>
                         <input type="text" value={enrolmentId} onChange={(e) => setEnrolmentId(e.target.value)}
                             placeholder="e.g. ENR-2602-014784" className={inputClasses} disabled={isSubmitting} />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-danger">*</span>
                         </label>
                         <input type="text" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}
                             placeholder="e.g. 1225151" className={inputClasses} disabled={isSubmitting} />
@@ -4841,7 +4841,7 @@ export const UpdateEnrolmentView: React.FC = () => {
                 </div>
 
                 {error && !result && (
-                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                    <p className="text-danger text-sm mt-3">{error}</p>
                 )}
             </Card>
 
@@ -4849,7 +4849,7 @@ export const UpdateEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Processing update...</p>
+                        <p className="mt-4 text-on-surface-secondary">Processing update...</p>
                     </div>
                 </div>
             )}
@@ -4857,30 +4857,30 @@ export const UpdateEnrolmentView: React.FC = () => {
             {!isSubmitting && result && (
                 <Card className="p-6">
                     {error ? (
-                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                        <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-danger" />
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">Update Failed</h4>
                             </div>
-                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                            <p className="text-sm text-danger pl-7">{error}</p>
                         </div>
                     ) : (
-                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                        <div className="bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Updated Successfully</h4>
                             </div>
                             <div className="pl-7 space-y-1">
                                 {(result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber) && (
-                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                    <p className="text-sm text-success">
                                         <span className="font-medium">Reference:</span>{' '}
-                                        <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                        <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                             {result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber}
                                         </span>
                                     </p>
                                 )}
                                 {(result?.enrolment?.status ?? result?.data?.enrolment?.status) && (
-                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                    <p className="text-sm text-success">
                                         <span className="font-medium">Status:</span> {result?.enrolment?.status ?? result?.data?.enrolment?.status}
                                     </p>
                                 )}
@@ -4888,10 +4888,10 @@ export const UpdateEnrolmentView: React.FC = () => {
                         </div>
                     )}
                     <details className="mt-4">
-                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                        <summary className="text-sm text-muted cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                             View Raw Response
                         </summary>
-                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                        <pre className="mt-2 text-xs bg-surface-elevated p-3 rounded overflow-auto max-h-60">
                             {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
@@ -4910,7 +4910,7 @@ export const DeleteCourseRunView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const handleSubmit = async () => {
         setShowConfirm(false);
@@ -4961,15 +4961,15 @@ export const DeleteCourseRunView: React.FC = () => {
 
             {/* Input Form Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Details</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Details</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Both Course Reference Number and Course Run ID are required to delete a course run.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="delete-course-ref" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Reference Number <span className="text-red-500">*</span>
+                        <label htmlFor="delete-course-ref" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Reference Number <span className="text-danger">*</span>
                         </label>
                         <input
                             id="delete-course-ref"
@@ -4982,8 +4982,8 @@ export const DeleteCourseRunView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="delete-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                        <label htmlFor="delete-course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-danger">*</span>
                         </label>
                         <input
                             id="delete-course-run-id"
@@ -5017,7 +5017,7 @@ export const DeleteCourseRunView: React.FC = () => {
                         </Button>
                     ) : (
                         <div className="flex items-center gap-3">
-                            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                            <span className="text-sm text-danger font-medium">
                                 Are you sure you want to delete this course run?
                             </span>
                             <Button onClick={handleSubmit}>
@@ -5034,7 +5034,7 @@ export const DeleteCourseRunView: React.FC = () => {
                 </div>
 
                 {error && !result && (
-                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                    <p className="text-danger text-sm mt-3">{error}</p>
                 )}
             </Card>
 
@@ -5043,7 +5043,7 @@ export const DeleteCourseRunView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Processing deletion...</p>
+                        <p className="mt-4 text-on-surface-secondary">Processing deletion...</p>
                     </div>
                 </div>
             )}
@@ -5052,29 +5052,29 @@ export const DeleteCourseRunView: React.FC = () => {
             {!isSubmitting && result && (
                 <Card className="p-6">
                     {error ? (
-                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                        <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <Icon name={IconName.X} className="w-5 h-5 text-danger" />
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">Fail To Delete Course Run</h4>
                             </div>
-                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                            <p className="text-sm text-danger pl-7">{error}</p>
                         </div>
                     ) : (
-                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                        <div className="bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
                             <div className="flex items-center gap-2 mb-2">
-                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">Course Run Deleted Successfully</h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                <p className="text-sm text-green-700 dark:text-green-300">
+                                <p className="text-sm text-success">
                                     <span className="font-medium">Course Reference:</span>{' '}
-                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                    <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                         {courseReferenceNumber}
                                     </span>
                                 </p>
-                                <p className="text-sm text-green-700 dark:text-green-300">
+                                <p className="text-sm text-success">
                                     <span className="font-medium">Course Run ID:</span>{' '}
-                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                    <span className="font-mono bg-success-bg px-2 py-0.5 rounded">
                                         {courseRunId}
                                     </span>
                                 </p>
@@ -5084,10 +5084,10 @@ export const DeleteCourseRunView: React.FC = () => {
 
                     {/* Raw Response (collapsible) */}
                     <details className="mt-4">
-                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                        <summary className="text-sm text-muted cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                             View Raw Response
                         </summary>
-                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                        <pre className="mt-2 text-xs bg-surface-elevated p-3 rounded overflow-auto max-h-60">
                             {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
@@ -5318,10 +5318,10 @@ export const CourseSessionsView: React.FC = () => {
 
             {/* Lookup */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Lookup</h3>
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Lookup</h3>
                 <div className="flex gap-3 items-end">
                     <div className="flex-1">
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
                             * Course Run ID
                         </label>
                         <input
@@ -5347,14 +5347,14 @@ export const CourseSessionsView: React.FC = () => {
                 </div>
 
                 {courseTitle && !isSearching && (
-                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-300">
+                    <div className="mt-3 p-3 bg-success-bg border border-green-200 dark:border-green-700 rounded-lg text-sm text-success">
                         ✓ <strong>{courseTitle}</strong> — {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
                         {activeSessions.length < sessions.length && ` (${activeSessions.length} active)`}
                     </div>
                 )}
 
                 {syncResult && !isSearching && (
-                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-xs text-blue-800 dark:text-blue-300">
+                    <div className="mt-2 p-2 bg-info-bg border border-blue-200 dark:border-blue-700 rounded text-xs text-info">
                         Synced to local DB: {syncResult.inserted} inserted, {syncResult.updated} updated
                         {syncResult.softDeleted > 0 && `, ${syncResult.softDeleted} soft-deleted`}
                     </div>
@@ -5365,12 +5365,12 @@ export const CourseSessionsView: React.FC = () => {
             {searchError && !isSearching && (
                 <Card className="p-6 mb-6 border-red-200 dark:border-red-700">
                     <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-                            <Icon name={IconName.Close} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-danger-bg flex items-center justify-center">
+                            <Icon name={IconName.Close} className="w-5 h-5 text-danger" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Failed to Retrieve Sessions</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{searchError}</p>
+                            <h3 className="text-lg font-bold text-danger">Failed to Retrieve Sessions</h3>
+                            <p className="text-sm text-on-surface-secondary mt-1">{searchError}</p>
                         </div>
                     </div>
                 </Card>
@@ -5378,55 +5378,55 @@ export const CourseSessionsView: React.FC = () => {
 
             {/* Delete result banner */}
             {deleteResults && (
-                <div className={`mb-4 p-4 rounded-lg border text-sm flex items-start gap-3 ${deleteResults.failed === 0 ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700' : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700'}`}>
-                    <span className={deleteResults.failed === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                <div className={`mb-4 p-4 rounded-lg border text-sm flex items-start gap-3 ${deleteResults.failed === 0 ? 'bg-success-bg border-green-200 dark:border-green-700' : 'bg-danger-bg border-red-200 dark:border-red-700'}`}>
+                    <span className={deleteResults.failed === 0 ? 'text-success' : 'text-danger'}>
                         {deleteResults.failed === 0 ? '✓' : '✗'}
                     </span>
-                    <span className={deleteResults.failed === 0 ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}>
+                    <span className={deleteResults.failed === 0 ? 'text-success' : 'text-danger'}>
                         {deleteResults.message}
                     </span>
-                    <button onClick={() => setDeleteResults(null)} className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
+                    <button onClick={() => setDeleteResults(null)} className="ml-auto text-muted hover:text-gray-600 dark:hover:text-gray-300">✕</button>
                 </div>
             )}
 
             {/* Course run info summary */}
             {runInfo && !isSearching && !searchError && (
                 <Card className="p-5 mb-6">
-                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Course Run Details</h3>
+                    <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Course Run Details</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Course Reference</p>
-                            <p className="font-mono font-medium text-gray-900 dark:text-white">{runInfo.courseData?.referenceNumber || '—'}</p>
+                            <p className="text-xs text-muted">Course Reference</p>
+                            <p className="font-mono font-medium text-on-surface">{runInfo.courseData?.referenceNumber || '—'}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Mode of Training</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{modeOfTrainingLabel(runInfo.run?.modeOfTraining)}</p>
+                            <p className="text-xs text-muted">Mode of Training</p>
+                            <p className="font-medium text-on-surface">{modeOfTrainingLabel(runInfo.run?.modeOfTraining)}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Course Start</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{formatDate(String(runInfo.run?.courseStartDate || ''))}</p>
+                            <p className="text-xs text-muted">Course Start</p>
+                            <p className="font-medium text-on-surface">{formatDate(String(runInfo.run?.courseStartDate || ''))}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Course End</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{formatDate(String(runInfo.run?.courseEndDate || ''))}</p>
+                            <p className="text-xs text-muted">Course End</p>
+                            <p className="font-medium text-on-surface">{formatDate(String(runInfo.run?.courseEndDate || ''))}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Venue</p>
-                            <p className="font-medium text-gray-900 dark:text-white">
+                            <p className="text-xs text-muted">Venue</p>
+                            <p className="font-medium text-on-surface">
                                 {[runInfo.run?.venue?.floor && `Floor ${runInfo.run.venue.floor}`, runInfo.run?.venue?.unit && `#${runInfo.run.venue.unit}`, runInfo.run?.venue?.building].filter(Boolean).join(' · ') || '—'}
                             </p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Vacancy</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{runInfo.run?.courseVacancy?.description || '—'}</p>
+                            <p className="text-xs text-muted">Vacancy</p>
+                            <p className="font-medium text-on-surface">{runInfo.run?.courseVacancy?.description || '—'}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Admin Email</p>
-                            <p className="font-medium text-gray-900 dark:text-white truncate">{runInfo.run?.courseAdminEmail || '—'}</p>
+                            <p className="text-xs text-muted">Admin Email</p>
+                            <p className="font-medium text-on-surface truncate">{runInfo.run?.courseAdminEmail || '—'}</p>
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Registered</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{runInfo.run?.registeredUserCount ?? '—'}</p>
+                            <p className="text-xs text-muted">Registered</p>
+                            <p className="font-medium text-on-surface">{runInfo.run?.registeredUserCount ?? '—'}</p>
                         </div>
                     </div>
                 </Card>
@@ -5435,8 +5435,8 @@ export const CourseSessionsView: React.FC = () => {
             {/* No sessions state */}
             {sessions.length === 0 && courseTitle && !isSearching && !searchError && (
                 <Card className="p-6 mb-6">
-                    <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                        <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">No Sessions Found</p>
+                    <div className="text-center py-6 text-muted">
+                        <p className="font-medium text-on-surface-secondary mb-1">No Sessions Found</p>
                         <p className="text-sm">No sessions have been registered for this course run in SSG yet.</p>
                     </div>
                 </Card>
@@ -5446,8 +5446,8 @@ export const CourseSessionsView: React.FC = () => {
             {sessions.length > 0 && !isSearching && (
                 <Card className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Sessions</h3>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                        <h3 className="text-lg font-bold text-on-surface-secondary">Sessions</h3>
+                        <span className="text-sm text-muted">
                             {sessions.length} total · {activeSessions.length} active
                         </span>
                     </div>
@@ -5455,39 +5455,39 @@ export const CourseSessionsView: React.FC = () => {
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm">
                             <thead>
-                                <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Session ID</th>
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Date</th>
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Time</th>
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Mode</th>
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Attendance</th>
-                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Status</th>
-                                    <th className="pb-3 font-semibold text-gray-600 dark:text-gray-300">Action</th>
+                                <tr className="border-b border-default text-left">
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">#</th>
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Session ID</th>
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Date</th>
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Time</th>
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Mode</th>
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Attendance</th>
+                                    <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Status</th>
+                                    <th className="pb-3 font-semibold text-on-surface-secondary">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {sessions.map((session: any, idx: number) => (
                                     <tr
                                         key={session.id}
-                                        className={`border-b border-gray-100 dark:border-gray-800 align-top ${session.deleted ? 'opacity-40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                                        className={`border-b border-default align-top ${session.deleted ? 'opacity-40' : 'hover:bg-surface-hover'}`}
                                     >
-                                        <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
-                                        <td className="py-3 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{session.id}</td>
-                                        <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
+                                        <td className="py-3 pr-4 text-muted">{idx + 1}</td>
+                                        <td className="py-3 pr-4 font-mono text-xs text-on-surface-secondary">{session.id}</td>
+                                        <td className="py-3 pr-4 text-on-surface whitespace-nowrap">
                                             {formatDate(session.startDate)}
                                             {session.startDate !== session.endDate && (
-                                                <span className="text-gray-500"> – {formatDate(session.endDate)}</span>
+                                                <span className="text-muted"> – {formatDate(session.endDate)}</span>
                                             )}
                                         </td>
-                                        <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
+                                        <td className="py-3 pr-4 text-on-surface whitespace-nowrap">
                                             {session.startTime} – {session.endTime}
                                         </td>
-                                        <td className="py-3 pr-4 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                        <td className="py-3 pr-4 text-on-surface-secondary whitespace-nowrap">
                                             {modeOfTrainingLabel(session.modeOfTraining)}
                                         </td>
                                         <td className="py-3 pr-4">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.attendanceTaken ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.attendanceTaken ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-on-surface-secondary border-default'}`}>
                                                 {session.attendanceTaken ? 'Taken' : 'Not Taken'}
                                             </span>
                                         </td>
@@ -5501,7 +5501,7 @@ export const CourseSessionsView: React.FC = () => {
                                                 <button
                                                     onClick={() => handleDeleteOne(session)}
                                                     disabled={isDeleting}
-                                                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900/20 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/40"
+                                                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-danger-bg text-danger border border-red-200 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-700 dark:hover:bg-red-900/40"
                                                 >
                                                     {deletingSessionId === session.id ? (
                                                         <div className="flex items-center gap-1">
@@ -5520,8 +5520,8 @@ export const CourseSessionsView: React.FC = () => {
 
                     {/* Delete All */}
                     {activeSessions.length > 0 && (
-                        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <div className="mt-6 pt-4 border-t border-default flex items-center justify-between">
+                            <p className="text-sm text-muted">
                                 {activeSessions.length} active session{activeSessions.length !== 1 ? 's' : ''} will be deleted
                             </p>
                             <button
@@ -5686,12 +5686,12 @@ export const CourseSessionAttendanceView: React.FC = () => {
 
             {/* Search Parameters Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Search Parameters</h3>
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Search Parameters</h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Company UEN <span className="text-red-500">*</span>
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Company UEN <span className="text-danger">*</span>
                         </label>
                         <input
                             type="text"
@@ -5703,8 +5703,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Code <span className="text-red-500">*</span>
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Code <span className="text-danger">*</span>
                         </label>
                         <input
                             type="text"
@@ -5716,8 +5716,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Session ID <span className="text-red-500">*</span>
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Session ID <span className="text-danger">*</span>
                         </label>
                         <input
                             type="text"
@@ -5729,8 +5729,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-danger">*</span>
                         </label>
                         <input
                             type="text"
@@ -5747,7 +5747,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
                     <Button
                         onClick={handleClear}
                         disabled={isSearching}
-                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                        className="bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover"
                     >
                         Clear
                     </Button>
@@ -5770,7 +5770,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
                 </div>
 
                 {searchError && (
-                    <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    <p className="text-danger text-sm mt-3">{searchError}</p>
                 )}
             </Card>
 
@@ -5779,7 +5779,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching attendance data...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching attendance data...</p>
                     </div>
                 </div>
             )}
@@ -5788,12 +5788,12 @@ export const CourseSessionAttendanceView: React.FC = () => {
             {notFound && !parsedData && !isSearching && (
                 <Card className="p-6 border-red-200 dark:border-red-700">
                     <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-                            <Icon name={IconName.Close} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-danger-bg flex items-center justify-center">
+                            <Icon name={IconName.Close} className="w-5 h-5 text-danger" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Attendance Not Found</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            <h3 className="text-lg font-bold text-danger">Attendance Not Found</h3>
+                            <p className="text-sm text-on-surface-secondary mt-1">
                                 No course session attendance record could be found for the provided details.
                             </p>
                         </div>
@@ -5807,31 +5807,31 @@ export const CourseSessionAttendanceView: React.FC = () => {
                     {/* Course Run Info */}
                     {courseRun && (
                     <Card className="p-6">
-                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Details</h3>
+                        <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Details</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                             <div>
-                                <span className="font-medium text-gray-500 dark:text-gray-400">Title</span>
-                                <p className="text-gray-900 dark:text-white font-semibold mt-0.5">{courseRun.title}</p>
+                                <span className="font-medium text-muted">Title</span>
+                                <p className="text-on-surface font-semibold mt-0.5">{courseRun.title}</p>
                             </div>
                             <div>
-                                <span className="font-medium text-gray-500 dark:text-gray-400">Reference Number</span>
-                                <p className="text-gray-900 dark:text-white font-mono mt-0.5">{courseRun.referenceNumber}</p>
+                                <span className="font-medium text-muted">Reference Number</span>
+                                <p className="text-on-surface font-mono mt-0.5">{courseRun.referenceNumber}</p>
                             </div>
                             <div>
-                                <span className="font-medium text-gray-500 dark:text-gray-400">Course Run ID</span>
-                                <p className="text-gray-900 dark:text-white font-mono mt-0.5">{courseRun.id}</p>
+                                <span className="font-medium text-muted">Course Run ID</span>
+                                <p className="text-on-surface font-mono mt-0.5">{courseRun.id}</p>
                             </div>
                             <div>
-                                <span className="font-medium text-gray-500 dark:text-gray-400">Mode of Training</span>
-                                <p className="text-gray-900 dark:text-white mt-0.5">{modeOfTrainingLabel(courseRun.modeOfTraining)}</p>
+                                <span className="font-medium text-muted">Mode of Training</span>
+                                <p className="text-on-surface mt-0.5">{modeOfTrainingLabel(courseRun.modeOfTraining)}</p>
                             </div>
                             <div>
-                                <span className="font-medium text-gray-500 dark:text-gray-400">Course Start Date</span>
-                                <p className="text-gray-900 dark:text-white mt-0.5">{formatDate(courseRun.courseDates?.start)}</p>
+                                <span className="font-medium text-muted">Course Start Date</span>
+                                <p className="text-on-surface mt-0.5">{formatDate(courseRun.courseDates?.start)}</p>
                             </div>
                             <div>
-                                <span className="font-medium text-gray-500 dark:text-gray-400">Course End Date</span>
-                                <p className="text-gray-900 dark:text-white mt-0.5">{formatDate(courseRun.courseDates?.end)}</p>
+                                <span className="font-medium text-muted">Course End Date</span>
+                                <p className="text-on-surface mt-0.5">{formatDate(courseRun.courseDates?.end)}</p>
                             </div>
                         </div>
                     </Card>
@@ -5840,31 +5840,31 @@ export const CourseSessionAttendanceView: React.FC = () => {
                     {/* Session Info */}
                     {session && (
                         <Card className="p-6">
-                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Session Details</h3>
+                            <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Session Details</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4">
                                 <div>
-                                    <span className="font-medium text-gray-500 dark:text-gray-400">Session ID</span>
-                                    <p className="text-gray-900 dark:text-white font-mono mt-0.5">{session.id}</p>
+                                    <span className="font-medium text-muted">Session ID</span>
+                                    <p className="text-on-surface font-mono mt-0.5">{session.id}</p>
                                 </div>
                                 <div>
-                                    <span className="font-medium text-gray-500 dark:text-gray-400">Date</span>
-                                    <p className="text-gray-900 dark:text-white mt-0.5">
+                                    <span className="font-medium text-muted">Date</span>
+                                    <p className="text-on-surface mt-0.5">
                                         {formatDate(session.startDate)}{session.startDate !== session.endDate ? ` – ${formatDate(session.endDate)}` : ''}
                                     </p>
                                 </div>
                                 <div>
-                                    <span className="font-medium text-gray-500 dark:text-gray-400">Time</span>
-                                    <p className="text-gray-900 dark:text-white mt-0.5">{session.startTime} – {session.endTime}</p>
+                                    <span className="font-medium text-muted">Time</span>
+                                    <p className="text-on-surface mt-0.5">{session.startTime} – {session.endTime}</p>
                                 </div>
                                 <div>
-                                    <span className="font-medium text-gray-500 dark:text-gray-400">Mode of Training</span>
-                                    <p className="text-gray-900 dark:text-white mt-0.5">{modeOfTrainingLabel(session.modeOfTraining)}</p>
+                                    <span className="font-medium text-muted">Mode of Training</span>
+                                    <p className="text-on-surface mt-0.5">{modeOfTrainingLabel(session.modeOfTraining)}</p>
                                 </div>
                             </div>
                             {session.venue && (
-                                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-sm">
-                                    <p className="font-medium text-gray-600 dark:text-gray-300 mb-1">Venue</p>
-                                    <p className="text-gray-900 dark:text-white">
+                                <div className="bg-surface-elevated rounded-lg p-4 text-sm">
+                                    <p className="font-medium text-on-surface-secondary mb-1">Venue</p>
+                                    <p className="text-on-surface">
                                         {[
                                             session.venue.building,
                                             session.venue.block && `Blk ${session.venue.block}`,
@@ -5873,11 +5873,11 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                             session.venue.room && session.venue.room !== '-' && session.venue.room,
                                         ].filter(Boolean).join(', ')}
                                     </p>
-                                    <p className="text-gray-600 dark:text-gray-400">
+                                    <p className="text-on-surface-secondary">
                                         {[session.venue.street, session.venue.postalCode && `S(${session.venue.postalCode})`].filter(Boolean).join(', ')}
                                     </p>
                                     {session.venue.wheelChairAccess && (
-                                        <p className="text-green-600 dark:text-green-400 text-xs mt-1">Wheelchair accessible</p>
+                                        <p className="text-success text-xs mt-1">Wheelchair accessible</p>
                                     )}
                                 </div>
                             )}
@@ -5887,16 +5887,16 @@ export const CourseSessionAttendanceView: React.FC = () => {
                     {/* Attendance Table */}
                     <Card className="p-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">
+                            <h3 className="text-lg font-bold text-on-surface-secondary">
                                 Attendance Records
                             </h3>
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                            <span className="text-sm text-muted">
                                 Total: {attendance.length} ({trainees.length} trainee{trainees.length !== 1 ? 's' : ''}, {trainers.length} trainer{trainers.length !== 1 ? 's' : ''})
                             </span>
                         </div>
 
                         {attendance.length === 0 ? (
-                            <div className="text-center py-10 text-gray-500 dark:text-gray-400">
+                            <div className="text-center py-10 text-muted">
                                 <p className="font-medium">No attendance records yet.</p>
                                 <p className="text-sm mt-1">Attendance will appear here once participants have checked in.</p>
                             </div>
@@ -5904,16 +5904,16 @@ export const CourseSessionAttendanceView: React.FC = () => {
                             <div className="overflow-x-auto">
                                 <table className="min-w-full text-sm">
                                     <thead>
-                                        <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Name</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">NRIC</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Email</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Phone</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Type</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Status</th>
-                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Entry Mode</th>
-                                            <th className="pb-3 font-semibold text-gray-600 dark:text-gray-300">TRAQOM</th>
+                                        <tr className="border-b border-default text-left">
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">#</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Name</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">NRIC</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Email</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Phone</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Type</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Status</th>
+                                            <th className="pb-3 pr-4 font-semibold text-on-surface-secondary">Entry Mode</th>
+                                            <th className="pb-3 font-semibold text-on-surface-secondary">TRAQOM</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -5926,13 +5926,13 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                             return (
                                             <tr
                                                 key={record.id}
-                                                className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                                                className="border-b border-default hover:bg-surface-hover"
                                             >
-                                                <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
-                                                <td className="py-3 pr-4 font-medium text-gray-900 dark:text-white">{record.trainee?.name ?? '—'}</td>
-                                                <td className="py-3 pr-4 font-mono text-gray-700 dark:text-gray-300">{record.nric}</td>
-                                                <td className="py-3 pr-4 text-gray-700 dark:text-gray-300">{email}</td>
-                                                <td className="py-3 pr-4 text-gray-700 dark:text-gray-300">{phone}</td>
+                                                <td className="py-3 pr-4 text-muted">{idx + 1}</td>
+                                                <td className="py-3 pr-4 font-medium text-on-surface">{record.trainee?.name ?? '—'}</td>
+                                                <td className="py-3 pr-4 font-mono text-on-surface-secondary">{record.nric}</td>
+                                                <td className="py-3 pr-4 text-on-surface-secondary">{email}</td>
+                                                <td className="py-3 pr-4 text-on-surface-secondary">{phone}</td>
                                                 <td className="py-3 pr-4">
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${record.trainee?.attendeeType === 'Trainer'
                                                         ? 'bg-purple-100 text-purple-800 border-purple-200'
@@ -5946,8 +5946,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                                         {record.status}
                                                     </span>
                                                 </td>
-                                                <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{record.entryMode}</td>
-                                                <td className="py-3 text-gray-600 dark:text-gray-400 text-xs">{record.sentToTraqom}</td>
+                                                <td className="py-3 pr-4 text-on-surface-secondary">{record.entryMode}</td>
+                                                <td className="py-3 text-on-surface-secondary text-xs">{record.sentToTraqom}</td>
                                             </tr>
                                             );
                                         })}

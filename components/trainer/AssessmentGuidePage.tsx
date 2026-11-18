@@ -99,20 +99,20 @@ const STEPS: Step[] = [
 
 const actorColors = {
   trainer: {
-    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    bg: 'bg-info-bg',
     border: 'border-blue-200 dark:border-blue-800',
-    badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/40',
-    iconText: 'text-blue-600 dark:text-blue-400',
+    badge: 'bg-info-bg text-primary',
+    iconBg: 'bg-info-bg',
+    iconText: 'text-primary',
     connector: 'border-blue-300 dark:border-blue-700',
     number: 'bg-blue-600 dark:bg-blue-500',
   },
   learner: {
-    bg: 'bg-green-50 dark:bg-green-900/20',
+    bg: 'bg-success-bg',
     border: 'border-green-200 dark:border-green-800',
-    badge: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
-    iconBg: 'bg-green-100 dark:bg-green-900/40',
-    iconText: 'text-green-600 dark:text-green-400',
+    badge: 'bg-success-bg text-success',
+    iconBg: 'bg-success-bg',
+    iconText: 'text-success',
     connector: 'border-green-300 dark:border-green-700',
     number: 'bg-green-600 dark:bg-green-500',
   },
@@ -132,12 +132,12 @@ const actorLabels = { trainer: 'Trainer', learner: 'Learner', system: 'System' }
 const AssessmentGuidePage: React.FC = () => {
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
-        <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+      <div className="border-b border-default pb-5">
+        <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
           <Icon name={IconName.BookOpen} className="w-7 h-7" />
           Assessment Guide
         </h3>
-        <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 max-w-4xl text-sm text-muted">
           Step-by-step visual guide on how assessments are conducted in the LMS.
         </p>
       </div>
@@ -147,7 +147,7 @@ const AssessmentGuidePage: React.FC = () => {
         {(['trainer', 'learner', 'system'] as const).map((actor) => (
           <div key={actor} className="flex items-center gap-2">
             <span className={`inline-block w-3 h-3 rounded-full ${actorColors[actor].number}`} />
-            <span className="text-sm text-gray-600 dark:text-gray-400">{actorLabels[actor]}</span>
+            <span className="text-sm text-on-surface-secondary">{actorLabels[actor]}</span>
           </div>
         ))}
       </div>
@@ -178,19 +178,19 @@ const AssessmentGuidePage: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{step.title}</h4>
+                      <h4 className="text-sm font-semibold text-on-surface">{step.title}</h4>
                       <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${colors.badge}`}>
                         {actorLabels[step.actor]}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{step.description}</p>
+                    <p className="mt-1 text-sm text-on-surface-secondary">{step.description}</p>
                   </div>
                 </div>
 
                 {/* Arrow indicator for flow direction */}
                 {!isLast && (
                   <div className="flex justify-center mt-2">
-                    <Icon name={IconName.ChevronDown} className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    <Icon name={IconName.ChevronDown} className="w-4 h-4 text-muted" />
                   </div>
                 )}
               </div>

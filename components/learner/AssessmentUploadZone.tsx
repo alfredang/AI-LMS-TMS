@@ -59,16 +59,16 @@ export const runAssessmentUpload = async (
 };
 
 export const UploadSuccessAlert: React.FC<{ fileNames: string[]; onDismiss?: () => void }> = ({ fileNames, onDismiss }) => (
-    <div role="status" className="flex items-start gap-3 p-3 rounded-lg border border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/30">
-        <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+    <div role="status" className="flex items-start gap-3 p-3 rounded-lg border border-green-300 bg-success-bg dark:border-green-700">
+        <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-green-800 dark:text-green-200">
+            <p className="text-sm font-semibold text-success">
                 {fileNames.length > 1 ? `${fileNames.length} files uploaded successfully` : 'File uploaded successfully'}
             </p>
-            <p className="text-xs text-green-700 dark:text-green-300 break-words">{fileNames.join(', ')}</p>
+            <p className="text-xs text-success break-words">{fileNames.join(', ')}</p>
         </div>
         {onDismiss && (
-            <button type="button" onClick={onDismiss} aria-label="Dismiss" className="text-green-700 hover:text-green-900 dark:text-green-300 dark:hover:text-green-100">
+            <button type="button" onClick={onDismiss} aria-label="Dismiss" className="text-success hover:text-green-900 dark:hover:text-green-100">
                 <Icon name={IconName.X} className="w-4 h-4" />
             </button>
         )}
@@ -124,26 +124,26 @@ export const AssessmentUploadZone: React.FC<AssessmentUploadZoneProps> = ({ inpu
 
     return (
         <div className="space-y-3">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
+            <p className="text-sm font-medium text-on-surface-secondary">{label}</p>
 
             {isUploading ? (
-                <div className="p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20" aria-live="polite">
+                <div className="p-4 rounded-lg border border-blue-200 bg-info-bg dark:border-blue-800" aria-live="polite">
                     <div className="flex items-center gap-3">
                         <Spinner size="sm" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                            <p className="text-sm font-medium text-primary">
                                 {state.total > 1 ? `Uploading file ${state.current} of ${state.total}…` : 'Uploading your file…'}
                             </p>
-                            <p className="text-xs text-blue-600 dark:text-blue-400 truncate">{state.fileName}</p>
+                            <p className="text-xs text-primary truncate">{state.fileName}</p>
                         </div>
                     </div>
-                    <div className="mt-3 h-1.5 w-full rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden">
+                    <div className="mt-3 h-1.5 w-full rounded-full bg-info-bg overflow-hidden">
                         <div
                             className="h-full bg-blue-600 transition-all duration-300"
                             style={{ width: `${Math.round(((state.current - 0.5) / state.total) * 100)}%` }}
                         />
                     </div>
-                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">Please keep this page open until the upload finishes.</p>
+                    <p className="mt-2 text-xs text-primary">Please keep this page open until the upload finishes.</p>
                 </div>
             ) : (
                 <div
@@ -158,11 +158,11 @@ export const AssessmentUploadZone: React.FC<AssessmentUploadZoneProps> = ({ inpu
                     onDrop={(e) => { e.preventDefault(); setIsDragging(false); accept(Array.from(e.dataTransfer.files || [])); }}
                     className={`flex flex-col items-center justify-center gap-2 p-5 rounded-lg border-2 border-dashed cursor-pointer text-center transition-colors outline-none focus:ring-2 focus:ring-blue-500
                         ${isDragging
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-gray-700'}`}
+                            ? 'border-blue-500 bg-info-bg'
+                            : 'border-strong bg-surface hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-gray-700'}`}
                 >
-                    <Icon name={IconName.Upload} className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <Icon name={IconName.Upload} className="w-8 h-8 text-primary" />
+                    <span className="text-sm text-on-surface-secondary">
                         {isDragging
                             ? 'Drop to upload'
                             : <>Drag {multiple ? 'files' : 'a file'} here{!isTouch && ', or click and paste (Ctrl/Cmd+V)'}</>}
@@ -176,14 +176,14 @@ export const AssessmentUploadZone: React.FC<AssessmentUploadZoneProps> = ({ inpu
                             <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-blue-600 text-blue-700 dark:text-blue-300 text-sm font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-blue-600 text-primary text-sm font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/30"
                             >
                                 <Icon name={IconName.Video} className="w-4 h-4" />
                                 Take photo
                             </button>
                         )}
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-muted">
                         Uploads start automatically. Max {MAX_ASSESSMENT_FILE_MB} MB per file.
                     </span>
                     <input
@@ -212,11 +212,11 @@ export const AssessmentUploadZone: React.FC<AssessmentUploadZoneProps> = ({ inpu
             {state?.status === 'success' && <UploadSuccessAlert fileNames={state.fileNames} onDismiss={onDismiss} />}
 
             {state?.status === 'error' && (
-                <div role="alert" className="flex items-start gap-3 p-3 rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/30">
-                    <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <div role="alert" className="flex items-start gap-3 p-3 rounded-lg border border-red-300 bg-danger-bg dark:border-red-700">
+                    <Icon name={IconName.Warning} className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-red-800 dark:text-red-200">Upload failed</p>
-                        <p className="text-xs text-red-700 dark:text-red-300 break-words">{state.message}</p>
+                        <p className="text-sm font-semibold text-danger">Upload failed</p>
+                        <p className="text-xs text-danger break-words">{state.message}</p>
                         {state.failedFiles && state.failedFiles.length > 0 && (
                             <button
                                 type="button"
@@ -229,7 +229,7 @@ export const AssessmentUploadZone: React.FC<AssessmentUploadZoneProps> = ({ inpu
                         )}
                     </div>
                     {onDismiss && (
-                        <button type="button" onClick={onDismiss} aria-label="Dismiss" className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100">
+                        <button type="button" onClick={onDismiss} aria-label="Dismiss" className="text-danger hover:text-red-900 dark:hover:text-red-100">
                             <Icon name={IconName.X} className="w-4 h-4" />
                         </button>
                     )}

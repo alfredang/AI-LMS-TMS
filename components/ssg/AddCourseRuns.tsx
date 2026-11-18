@@ -366,13 +366,13 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
           {/* Global Settings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                 Include Expired Courses *
               </label>
               <select 
                 value={includeExpired}
                 onChange={(e) => setIncludeExpired(e.target.value as OptionalSelector)}
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-strong rounded-md"
               >
                 {optionalSelectorOptions.map(option => (
                   <option key={option.value} value={option.value}>
@@ -383,21 +383,21 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                 Course Reference Number *
               </label>
               <input
                 type="text"
                 value={courseReferenceNumber}
                 onChange={(e) => setCourseReferenceNumber(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-strong rounded-md"
               />
             </div>
           </div>
 
           {/* Number of Runs */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
               Number of Course Runs *
             </label>
             <input
@@ -406,7 +406,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
               max="10"
               value={numRuns}
               onChange={(e) => handleNumRunsChange(parseInt(e.target.value) || 1)}
-              className="w-full p-2 border border-gray-300 rounded-md"
+              className="w-full p-2 border border-strong rounded-md"
             />
           </div>
 
@@ -414,7 +414,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
           {runs.map((run, runIndex) => (
             <Card key={runIndex} className="border-l-4 border-l-blue-500">
               <div
-                className="cursor-pointer hover:bg-gray-50"
+                className="cursor-pointer hover:bg-surface-hover"
                 onClick={() => toggleRunExpansion(runIndex)}
               >
                 <CardHeader>
@@ -432,25 +432,25 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                   {/* Registration Dates */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Opening Registration Date *
                       </label>
                       <input
                         type="date"
                         value={run.openingRegistrationDate}
                         onChange={(e) => updateRun(runIndex, 'openingRegistrationDate', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Closing Registration Date *
                       </label>
                       <input
                         type="date"
                         value={run.closingRegistrationDate}
                         onChange={(e) => updateRun(runIndex, 'closingRegistrationDate', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                   </div>
@@ -458,25 +458,25 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                   {/* Course Dates */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Course Start Date *
                       </label>
                       <input
                         type="date"
                         value={run.courseStartDate}
                         onChange={(e) => updateRun(runIndex, 'courseStartDate', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Course End Date *
                       </label>
                       <input
                         type="date"
                         value={run.courseEndDate}
                         onChange={(e) => updateRun(runIndex, 'courseEndDate', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                   </div>
@@ -484,86 +484,86 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                   {/* Schedule Info */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Schedule Info Type Code *
                       </label>
                       <input
                         type="text"
                         value={run.scheduleInfoTypeCode}
                         onChange={(e) => updateRun(runIndex, 'scheduleInfoTypeCode', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Schedule Info Type Description *
                       </label>
                       <input
                         type="text"
                         value={run.scheduleInfoTypeDescription}
                         onChange={(e) => updateRun(runIndex, 'scheduleInfoTypeDescription', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Schedule Info *
                       </label>
                       <input
                         type="text"
                         value={run.scheduleInfo}
                         onChange={(e) => updateRun(runIndex, 'scheduleInfo', e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-strong rounded-md"
                       />
                     </div>
                   </div>
 
                   {/* Venue Info (Required) */}
                   <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Venue Information (Required)</h4>
+                    <h4 className="text-lg font-medium text-on-surface mb-3">Venue Information (Required)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                           Floor *
                         </label>
                         <input
                           type="text"
                           value={run.floor}
                           onChange={(e) => updateRun(runIndex, 'floor', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
+                          className="w-full p-2 border border-strong rounded-md"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                           Unit *
                         </label>
                         <input
                           type="text"
                           value={run.unit}
                           onChange={(e) => updateRun(runIndex, 'unit', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
+                          className="w-full p-2 border border-strong rounded-md"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                           Postal Code *
                         </label>
                         <input
                           type="text"
                           value={run.postalCode}
                           onChange={(e) => updateRun(runIndex, 'postalCode', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
+                          className="w-full p-2 border border-strong rounded-md"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                           Room *
                         </label>
                         <input
                           type="text"
                           value={run.room}
                           onChange={(e) => updateRun(runIndex, 'room', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
+                          className="w-full p-2 border border-strong rounded-md"
                         />
                       </div>
                     </div>
@@ -571,7 +571,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                   {/* Venue Info (Optional) */}
                   <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Venue Information (Optional)</h4>
+                    <h4 className="text-lg font-medium text-on-surface mb-3">Venue Information (Optional)</h4>
                     <div className="space-y-3">
                       {/* Block */}
                       <div className="flex items-center space-x-3">
@@ -579,15 +579,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'block')}
                           onChange={(e) => updateOptionalField(runIndex, 'block', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Block</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Block</label>
                         {isOptionalFieldEnabled(runIndex, 'block') && (
                           <input
                             type="text"
                             value={run.block || ''}
                             onChange={(e) => updateRun(runIndex, 'block', e.target.value)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           />
                         )}
                       </div>
@@ -598,15 +598,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'street')}
                           onChange={(e) => updateOptionalField(runIndex, 'street', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Street</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Street</label>
                         {isOptionalFieldEnabled(runIndex, 'street') && (
                           <input
                             type="text"
                             value={run.street || ''}
                             onChange={(e) => updateRun(runIndex, 'street', e.target.value)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           />
                         )}
                       </div>
@@ -617,15 +617,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'building')}
                           onChange={(e) => updateOptionalField(runIndex, 'building', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Building</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Building</label>
                         {isOptionalFieldEnabled(runIndex, 'building') && (
                           <input
                             type="text"
                             value={run.building || ''}
                             onChange={(e) => updateRun(runIndex, 'building', e.target.value)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           />
                         )}
                       </div>
@@ -636,14 +636,14 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'wheelChairAccess')}
                           onChange={(e) => updateOptionalField(runIndex, 'wheelChairAccess', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Wheelchair Access</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Wheelchair Access</label>
                         {isOptionalFieldEnabled(runIndex, 'wheelChairAccess') && (
                           <select
                             value={run.wheelChairAccess || 'N'}
                             onChange={(e) => updateRun(runIndex, 'wheelChairAccess', e.target.value)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           >
                             {optionalSelectorOptions.map(option => (
                               <option key={option.value} value={option.value}>
@@ -658,7 +658,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                   {/* Course Intake Details (Optional) */}
                   <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Course Intake Details (Optional)</h4>
+                    <h4 className="text-lg font-medium text-on-surface mb-3">Course Intake Details (Optional)</h4>
                     <div className="space-y-3">
                       {/* Intake Size */}
                       <div className="flex items-center space-x-3">
@@ -666,16 +666,16 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'intakeSize')}
                           onChange={(e) => updateOptionalField(runIndex, 'intakeSize', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Intake Size</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Intake Size</label>
                         {isOptionalFieldEnabled(runIndex, 'intakeSize') && (
                           <input
                             type="number"
                             min="1"
                             value={run.intakeSize || ''}
                             onChange={(e) => updateRun(runIndex, 'intakeSize', parseInt(e.target.value) || undefined)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           />
                         )}
                       </div>
@@ -686,16 +686,16 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'threshold')}
                           onChange={(e) => updateOptionalField(runIndex, 'threshold', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Threshold</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Threshold</label>
                         {isOptionalFieldEnabled(runIndex, 'threshold') && (
                           <input
                             type="number"
                             min="1"
                             value={run.threshold || ''}
                             onChange={(e) => updateRun(runIndex, 'threshold', parseInt(e.target.value) || undefined)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           />
                         )}
                       </div>
@@ -706,16 +706,16 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'registeredUserCount')}
                           onChange={(e) => updateOptionalField(runIndex, 'registeredUserCount', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Registered User Count</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Registered User Count</label>
                         {isOptionalFieldEnabled(runIndex, 'registeredUserCount') && (
                           <input
                             type="number"
                             min="0"
                             value={run.registeredUserCount || ''}
                             onChange={(e) => updateRun(runIndex, 'registeredUserCount', parseInt(e.target.value) || undefined)}
-                            className="flex-1 p-2 border border-gray-300 rounded-md"
+                            className="flex-1 p-2 border border-strong rounded-md"
                           />
                         )}
                       </div>
@@ -724,16 +724,16 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                   {/* Course Admin Details */}
                   <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Course Admin Details</h4>
+                    <h4 className="text-lg font-medium text-on-surface mb-3">Course Admin Details</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                           Mode of Training *
                         </label>
                         <select
                           value={run.modeOfTraining}
                           onChange={(e) => updateRun(runIndex, 'modeOfTraining', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
+                          className="w-full p-2 border border-strong rounded-md"
                         >
                           {modeOfTrainingOptions.map(option => (
                             <option key={option.value} value={option.value}>
@@ -743,7 +743,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                           Course Admin Email *
                         </label>
                         <input
@@ -751,11 +751,11 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           value={run.courseAdminEmail}
                           onChange={(e) => updateRun(runIndex, 'courseAdminEmail', e.target.value)}
                           className={`w-full p-2 border rounded-md ${
-                            isValidEmail(run.courseAdminEmail) ? 'border-gray-300' : 'border-red-300 bg-red-50'
+                            isValidEmail(run.courseAdminEmail) ? 'border-strong' : 'border-red-300 bg-red-50'
                           }`}
                         />
                         {!isValidEmail(run.courseAdminEmail) && (
-                          <p className="text-red-600 text-sm mt-1">Please enter a valid email address</p>
+                          <p className="text-danger text-sm mt-1">Please enter a valid email address</p>
                         )}
                       </div>
                     </div>
@@ -763,13 +763,13 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                   {/* Course Vacancy */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                       Course Vacancy *
                     </label>
                     <select
                       value={run.courseVacancy}
                       onChange={(e) => updateRun(runIndex, 'courseVacancy', e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-md"
+                      className="w-full p-2 border border-strong rounded-md"
                     >
                       {vacancyOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -781,39 +781,39 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                   {/* File Details (Optional) */}
                   <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">File Details (Optional)</h4>
+                    <h4 className="text-lg font-medium text-on-surface mb-3">File Details (Optional)</h4>
                     <div className="space-y-3">
                       <div className="flex items-center space-x-3">
                         <input
                           type="checkbox"
                           checked={isOptionalFieldEnabled(runIndex, 'fileName')}
                           onChange={(e) => updateOptionalField(runIndex, 'fileName', e.target.checked)}
-                          className="h-4 w-4 text-blue-600"
+                          className="h-4 w-4 text-primary"
                         />
-                        <label className="text-sm font-medium text-gray-700">Include File</label>
+                        <label className="text-sm font-medium text-on-surface-secondary">Include File</label>
                       </div>
                       
                       {isOptionalFieldEnabled(runIndex, 'fileName') && (
                         <div className="grid grid-cols-1 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                               File Name
                             </label>
                             <input
                               type="text"
                               value={run.fileName || ''}
                               onChange={(e) => updateRun(runIndex, 'fileName', e.target.value)}
-                              className="w-full p-2 border border-gray-300 rounded-md"
+                              className="w-full p-2 border border-strong rounded-md"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                               File Content (Base64)
                             </label>
                             <textarea
                               value={run.fileContent || ''}
                               onChange={(e) => updateRun(runIndex, 'fileContent', e.target.value)}
-                              className="w-full p-2 border border-gray-300 rounded-md h-24"
+                              className="w-full p-2 border border-strong rounded-md h-24"
                             />
                           </div>
                         </div>
@@ -824,11 +824,11 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                   {/* Sessions */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-lg font-medium text-gray-900">Sessions</h4>
+                      <h4 className="text-lg font-medium text-on-surface">Sessions</h4>
                       <Button
                         type="button"
                         onClick={() => addSession(runIndex)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-sm"
+                        className="bg-green-700 hover:bg-green-800 text-white px-3 py-1 text-sm"
                       >
                         Add Session
                       </Button>
@@ -865,7 +865,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                   Mode of Training *
                                 </label>
                                 <select
@@ -885,7 +885,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                       updateSession(runIndex, sessionIndex, 'endTime', '23:59');
                                     }
                                   }}
-                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  className="w-full p-2 border border-strong rounded-md"
                                 >
                                   {modeOfTrainingOptions.map(option => (
                                     <option key={option.value} value={option.value}>
@@ -895,7 +895,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                   Start Date *
                                 </label>
                                 <input
@@ -909,11 +909,11 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                       updateSession(runIndex, sessionIndex, 'endDate', e.target.value);
                                     }
                                   }}
-                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  className="w-full p-2 border border-strong rounded-md"
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                   End Date {isAsyncOrOnTheJob ? '(Auto-set)' : ''}
                                 </label>
                                 <input
@@ -923,8 +923,8 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                   disabled={isAsyncOrOnTheJob}
                                   className={`w-full p-2 border rounded-md ${
                                     isAsyncOrOnTheJob 
-                                      ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed' 
-                                      : 'border-gray-300'
+                                      ? 'border-default bg-gray-100 text-muted cursor-not-allowed' 
+                                      : 'border-strong'
                                   }`}
                                 />
                               </div>
@@ -932,7 +932,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                   Start Time {isAsyncOrOnTheJob ? '(Auto-set to 12:00 AM)' : ''}
                                 </label>
                                 <input
@@ -942,13 +942,13 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                   disabled={isAsyncOrOnTheJob}
                                   className={`w-full p-2 border rounded-md ${
                                     isAsyncOrOnTheJob 
-                                      ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed' 
-                                      : 'border-gray-300'
+                                      ? 'border-default bg-gray-100 text-muted cursor-not-allowed' 
+                                      : 'border-strong'
                                   }`}
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                   End Time {isAsyncOrOnTheJob ? '(Auto-set to 11:59 PM)' : ''}
                                 </label>
                                 <input
@@ -958,8 +958,8 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                   disabled={isAsyncOrOnTheJob}
                                   className={`w-full p-2 border rounded-md ${
                                     isAsyncOrOnTheJob 
-                                      ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed' 
-                                      : 'border-gray-300'
+                                      ? 'border-default bg-gray-100 text-muted cursor-not-allowed' 
+                                      : 'border-strong'
                                   }`}
                                 />
                               </div>
@@ -976,7 +976,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                             {/* Session Venue */}
                             <div>
-                              <h5 className="text-md font-medium text-gray-800 mb-2">Session Venue</h5>
+                              <h5 className="text-md font-medium text-on-surface mb-2">Session Venue</h5>
                               
                               {/* Optional venue fields */}
                               <div className="space-y-3 mb-4">
@@ -992,15 +992,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                         updateSession(runIndex, sessionIndex, 'block', '');
                                       }
                                     }}
-                                    className="h-4 w-4 text-blue-600"
+                                    className="h-4 w-4 text-primary"
                                   />
-                                  <label className="text-sm font-medium text-gray-700">Specify Venue Block?</label>
+                                  <label className="text-sm font-medium text-on-surface-secondary">Specify Venue Block?</label>
                                   {session.block !== undefined && session.block !== '' && (
                                     <input
                                       type="text"
                                       value={session.block}
                                       onChange={(e) => updateSession(runIndex, sessionIndex, 'block', e.target.value)}
-                                      className="flex-1 p-2 border border-gray-300 rounded-md"
+                                      className="flex-1 p-2 border border-strong rounded-md"
                                       maxLength={10}
                                     />
                                   )}
@@ -1018,15 +1018,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                         updateSession(runIndex, sessionIndex, 'street', '');
                                       }
                                     }}
-                                    className="h-4 w-4 text-blue-600"
+                                    className="h-4 w-4 text-primary"
                                   />
-                                  <label className="text-sm font-medium text-gray-700">Specify Venue Street?</label>
+                                  <label className="text-sm font-medium text-on-surface-secondary">Specify Venue Street?</label>
                                   {session.street !== undefined && session.street !== '' && (
                                     <input
                                       type="text"
                                       value={session.street}
                                       onChange={(e) => updateSession(runIndex, sessionIndex, 'street', e.target.value)}
-                                      className="flex-1 p-2 border border-gray-300 rounded-md"
+                                      className="flex-1 p-2 border border-strong rounded-md"
                                       maxLength={32}
                                     />
                                   )}
@@ -1044,15 +1044,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                         updateSession(runIndex, sessionIndex, 'building', '');
                                       }
                                     }}
-                                    className="h-4 w-4 text-blue-600"
+                                    className="h-4 w-4 text-primary"
                                   />
-                                  <label className="text-sm font-medium text-gray-700">Specify Venue Building?</label>
+                                  <label className="text-sm font-medium text-on-surface-secondary">Specify Venue Building?</label>
                                   {session.building !== undefined && session.building !== '' && (
                                     <input
                                       type="text"
                                       value={session.building}
                                       onChange={(e) => updateSession(runIndex, sessionIndex, 'building', e.target.value)}
-                                      className="flex-1 p-2 border border-gray-300 rounded-md"
+                                      className="flex-1 p-2 border border-strong rounded-md"
                                       maxLength={66}
                                     />
                                   )}
@@ -1070,14 +1070,14 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                         updateSession(runIndex, sessionIndex, 'wheelChairAccess', undefined);
                                       }
                                     }}
-                                    className="h-4 w-4 text-blue-600"
+                                    className="h-4 w-4 text-primary"
                                   />
-                                  <label className="text-sm font-medium text-gray-700">Specify Wheelchair Access?</label>
+                                  <label className="text-sm font-medium text-on-surface-secondary">Specify Wheelchair Access?</label>
                                   {session.wheelChairAccess !== undefined && (
                                     <select
                                       value={session.wheelChairAccess}
                                       onChange={(e) => updateSession(runIndex, sessionIndex, 'wheelChairAccess', e.target.value as OptionalSelector)}
-                                      className="flex-1 p-2 border border-gray-300 rounded-md"
+                                      className="flex-1 p-2 border border-strong rounded-md"
                                     >
                                       <option value={OptionalSelector.YES}>Yes</option>
                                       <option value={OptionalSelector.NO}>No</option>
@@ -1097,21 +1097,21 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                         updateSession(runIndex, sessionIndex, 'primaryVenue', undefined);
                                       }
                                     }}
-                                    className="h-4 w-4 text-blue-600"
+                                    className="h-4 w-4 text-primary"
                                   />
-                                  <label className="text-sm font-medium text-gray-700">Specify Primary Venue?</label>
+                                  <label className="text-sm font-medium text-on-surface-secondary">Specify Primary Venue?</label>
                                   {session.primaryVenue !== undefined && (
                                     <select
                                       value={session.primaryVenue}
                                       onChange={(e) => updateSession(runIndex, sessionIndex, 'primaryVenue', e.target.value as OptionalSelector)}
-                                      className="flex-1 p-2 border border-gray-300 rounded-md"
+                                      className="flex-1 p-2 border border-strong rounded-md"
                                     >
                                       <option value={OptionalSelector.YES}>Yes</option>
                                       <option value={OptionalSelector.NO}>No</option>
                                     </select>
                                   )}
                                   {session.primaryVenue !== undefined && (
-                                    <div className="text-xs text-gray-500 ml-2">
+                                    <div className="text-xs text-muted ml-2">
                                       If Yes, API will pick venue info from course run
                                     </div>
                                   )}
@@ -1121,50 +1121,50 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                               {/* Required venue fields */}
                               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Floor *
                                   </label>
                                   <input
                                     type="text"
                                     value={session.floor}
                                     onChange={(e) => updateSession(runIndex, sessionIndex, 'floor', e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    className="w-full p-2 border border-strong rounded-md"
                                     maxLength={3}
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Unit *
                                   </label>
                                   <input
                                     type="text"
                                     value={session.unit}
                                     onChange={(e) => updateSession(runIndex, sessionIndex, 'unit', e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    className="w-full p-2 border border-strong rounded-md"
                                     maxLength={5}
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Postal Code *
                                   </label>
                                   <input
                                     type="text"
                                     value={session.postalCode}
                                     onChange={(e) => updateSession(runIndex, sessionIndex, 'postalCode', e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    className="w-full p-2 border border-strong rounded-md"
                                     maxLength={6}
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Room *
                                   </label>
                                   <input
                                     type="text"
                                     value={session.room}
                                     onChange={(e) => updateSession(runIndex, sessionIndex, 'room', e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    className="w-full p-2 border border-strong rounded-md"
                                     maxLength={255}
                                   />
                                 </div>
@@ -1179,7 +1179,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                   {/* Trainers */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-lg font-medium text-gray-900">Trainers</h4>
+                      <h4 className="text-lg font-medium text-on-surface">Trainers</h4>
                       <Button
                         type="button"
                         onClick={() => addTrainer(runIndex)}
@@ -1220,7 +1220,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                           <CardContent className="space-y-4">
                             {/* Trainer Type - Always shown first */}
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                 Trainer Type *
                               </label>
                               <select
@@ -1240,7 +1240,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                   updateTrainer(runIndex, trainerIndex, 'trainerIdType', '');
                                   updateTrainer(runIndex, trainerIndex, 'trainerIdNumber2', '');
                                 }}
-                                className="w-full p-2 border border-gray-300 rounded-md"
+                                className="w-full p-2 border border-strong rounded-md"
                               >
                                 <option value="">Select trainer type</option>
                                 {trainerTypeOptions.map(option => (
@@ -1256,18 +1256,18 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                               <>
                                 {/* Trainer ID - Always shown when type is selected */}
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Trainer ID Number *
                                   </label>
                                   <input
                                     type="text"
                                     value={trainer.trainerIdNumber || ''}
                                     onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerIdNumber', e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    className="w-full p-2 border border-strong rounded-md"
                                     maxLength={128}
                                   />
                                   {isExistingTrainer && (
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-muted mt-1">
                                       For existing trainers, only the ID is required
                                     </div>
                                   )}
@@ -1276,31 +1276,31 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                 {/* New Trainer Details - Only shown for Type 2 */}
                                 {!isExistingTrainer && (
                               <div className="space-y-4 border-t pt-4">
-                                <h5 className="text-md font-medium text-gray-800">New Trainer Details</h5>
+                                <h5 className="text-md font-medium text-on-surface">New Trainer Details</h5>
                                 
                                 {/* Required Basic Information */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                       Trainer Name *
                                     </label>
                                     <input
                                       type="text"
                                       value={trainer.trainerName || ''}
                                       onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerName', e.target.value)}
-                                      className="w-full p-2 border border-gray-300 rounded-md"
+                                      className="w-full p-2 border border-strong rounded-md"
                                       maxLength={66}
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                       Trainer Email *
                                     </label>
                                     <input
                                       type="email"
                                       value={trainer.trainerEmail || ''}
                                       onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerEmail', e.target.value)}
-                                      className="w-full p-2 border border-gray-300 rounded-md"
+                                      className="w-full p-2 border border-strong rounded-md"
                                       maxLength={320}
                                     />
                                   </div>
@@ -1308,7 +1308,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
 
                                 {/* Optional Fields */}
                                 <div className="space-y-3">
-                                  <h6 className="text-sm font-medium text-gray-700">Optional Information</h6>
+                                  <h6 className="text-sm font-medium text-on-surface-secondary">Optional Information</h6>
                                   
                                   {/* ID Type and Number */}
                                   <div className="flex items-center space-x-3">
@@ -1324,21 +1324,21 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerIdNumber2', '');
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify ID Type & Personal ID?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify ID Type & Personal ID?</label>
                                   </div>
                                   
                                   {trainer.trainerIdType !== undefined && trainer.trainerIdType !== '' && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-7">
                                       <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                           ID Type
                                         </label>
                                         <select
                                           value={trainer.trainerIdType}
                                           onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerIdType', e.target.value)}
-                                          className="w-full p-2 border border-gray-300 rounded-md"
+                                          className="w-full p-2 border border-strong rounded-md"
                                         >
                                           <option value={IdType.SINGAPORE_BLUE}>Singapore Blue IC</option>
                                           <option value={IdType.SINGAPORE_PINK}>Singapore Pink IC</option>
@@ -1347,14 +1347,14 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                         </select>
                                       </div>
                                       <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                           Personal ID Number
                                         </label>
                                         <input
                                           type="text"
                                           value={trainer.trainerIdNumber2 || ''}
                                           onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerIdNumber2', e.target.value)}
-                                          className="w-full p-2 border border-gray-300 rounded-md"
+                                          className="w-full p-2 border border-strong rounded-md"
                                           maxLength={50}
                                         />
                                       </div>
@@ -1373,15 +1373,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerContactNumber', '');
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify Contact Number?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify Contact Number?</label>
                                     {trainer.trainerContactNumber !== undefined && trainer.trainerContactNumber !== '' && (
                                       <input
                                         type="text"
                                         value={trainer.trainerContactNumber}
                                         onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerContactNumber', e.target.value)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-md"
+                                        className="flex-1 p-2 border border-strong rounded-md"
                                         maxLength={15}
                                       />
                                     )}
@@ -1399,15 +1399,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerExperiences', undefined);
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify Experience (years)?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify Experience (years)?</label>
                                     {trainer.trainerExperiences !== undefined && (
                                       <input
                                         type="number"
                                         value={trainer.trainerExperiences}
                                         onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerExperiences', parseInt(e.target.value) || 0)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-md"
+                                        className="flex-1 p-2 border border-strong rounded-md"
                                         min="0"
                                         max="99"
                                       />
@@ -1425,15 +1425,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerLinkedinURL', '');
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify LinkedIn URL?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify LinkedIn URL?</label>
                                     {trainer.trainerLinkedinURL !== undefined && trainer.trainerLinkedinURL !== '' && (
                                       <input
                                         type="url"
                                         value={trainer.trainerLinkedinURL}
                                         onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerLinkedinURL', e.target.value)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-md"
+                                        className="flex-1 p-2 border border-strong rounded-md"
                                         maxLength={255}
                                       />
                                     )}
@@ -1450,14 +1450,14 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerSalutationId', undefined);
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify Salutation?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify Salutation?</label>
                                     {trainer.trainerSalutationId !== undefined && (
                                       <select
                                         value={trainer.trainerSalutationId}
                                         onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerSalutationId', e.target.value as Salutations)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-md"
+                                        className="flex-1 p-2 border border-strong rounded-md"
                                       >
                                         <option value={Salutations.MR}>Mr</option>
                                         <option value={Salutations.MS}>Ms</option>
@@ -1480,15 +1480,15 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerPhotoName', '');
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify Photo Name?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify Photo Name?</label>
                                     {trainer.trainerPhotoName !== undefined && trainer.trainerPhotoName !== '' && (
                                       <input
                                         type="text"
                                         value={trainer.trainerPhotoName}
                                         onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerPhotoName', e.target.value)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-md"
+                                        className="flex-1 p-2 border border-strong rounded-md"
                                         maxLength={255}
                                       />
                                     )}
@@ -1505,14 +1505,14 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerPhotoContent', '');
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify Photo Content (Base64)?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify Photo Content (Base64)?</label>
                                     {trainer.trainerPhotoContent !== undefined && trainer.trainerPhotoContent !== '' && (
                                       <textarea
                                         value={trainer.trainerPhotoContent}
                                         onChange={(e) => updateTrainer(runIndex, trainerIndex, 'trainerPhotoContent', e.target.value)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-md"
+                                        className="flex-1 p-2 border border-strong rounded-md"
                                         rows={2}
                                       />
                                     )}
@@ -1537,9 +1537,9 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                           updateTrainer(runIndex, trainerIndex, 'trainerQualifications', []);
                                         }
                                       }}
-                                      className="h-4 w-4 text-blue-600"
+                                      className="h-4 w-4 text-primary"
                                     />
-                                    <label className="text-sm font-medium text-gray-700">Specify Qualifications?</label>
+                                    <label className="text-sm font-medium text-on-surface-secondary">Specify Qualifications?</label>
                                   </div>
 
                                   {trainer.trainerQualifications && trainer.trainerQualifications.length > 0 && (
@@ -1554,7 +1554,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                               updatedQuals[qualIndex].description = e.target.value;
                                               updateTrainer(runIndex, trainerIndex, 'trainerQualifications', updatedQuals);
                                             }}
-                                            className="p-2 border border-gray-300 rounded-md"
+                                            className="p-2 border border-strong rounded-md"
                                             maxLength={1000}
                                           />
                                           <input
@@ -1565,7 +1565,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                               updatedQuals[qualIndex].dateObtained = e.target.value;
                                               updateTrainer(runIndex, trainerIndex, 'trainerQualifications', updatedQuals);
                                             }}
-                                            className="p-2 border border-gray-300 rounded-md"
+                                            className="p-2 border border-strong rounded-md"
                                           />
                                         </div>
                                       ))}
@@ -1579,7 +1579,7 @@ export const AddCourseRuns: React.FC<AddCourseRunsProps> = ({ onSuccess, onError
                                             }];
                                             updateTrainer(runIndex, trainerIndex, 'trainerQualifications', updatedQuals);
                                           }}
-                                          className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs"
+                                          className="bg-green-700 hover:bg-green-800 text-white px-2 py-1 text-xs"
                                         >
                                           Add Qualification
                                         </Button>

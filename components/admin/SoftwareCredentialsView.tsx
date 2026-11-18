@@ -66,12 +66,12 @@ const FORM_FIELDS: Array<{ key: keyof FormState; label: string; multiline?: bool
 const hrefFor = (url: string) => (url.startsWith('http') ? url : `https://${url}`);
 const hasUrl = (url: string) => !!url && url.toLowerCase() !== 'na';
 
-const Empty: React.FC = () => <span className="text-gray-400">—</span>;
+const Empty: React.FC = () => <span className="text-muted">—</span>;
 
 const DetailRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <>
-    <dt className="text-gray-500 dark:text-gray-400">{label}</dt>
-    <dd className="text-gray-900 dark:text-white min-w-0">{children}</dd>
+    <dt className="text-muted">{label}</dt>
+    <dd className="text-on-surface min-w-0">{children}</dd>
   </>
 );
 
@@ -86,11 +86,11 @@ const SecretValue: React.FC<{
   <div className="flex items-center gap-2 min-w-0">
     <span className={`break-all ${mono ? 'font-mono' : ''}`}>{shown ? value : '••••••••'}</span>
     {onToggle && (
-      <button onClick={onToggle} title={shown ? 'Hide' : 'Show'} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+      <button onClick={onToggle} title={shown ? 'Hide' : 'Show'} className="text-muted hover:text-on-surface flex-shrink-0">
         <Icon name={shown ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
       </button>
     )}
-    <button onClick={() => onCopy(value)} title="Copy" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+    <button onClick={() => onCopy(value)} title="Copy" className="text-muted hover:text-on-surface flex-shrink-0">
       <CopyIcon className="w-4 h-4" />
     </button>
   </div>
@@ -195,8 +195,8 @@ const SoftwareCredentialsView: React.FC = () => {
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Software Credentials</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h2 className="text-xl font-semibold text-on-surface">Software Credentials</h2>
+            <p className="text-sm text-muted">
               Shared third-party logins for training operations. Admin-only.
             </p>
           </div>
@@ -206,7 +206,7 @@ const SoftwareCredentialsView: React.FC = () => {
               placeholder="Search license, software, login…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-md w-64"
+              className="px-3 py-2 text-sm border border-strong dark:bg-slate-700 dark:text-white rounded-md w-64"
             />
             <Button onClick={() => setEditing({ ...EMPTY_FORM })}>
               <Icon name={IconName.Add} className="w-4 h-4 mr-1" />
@@ -224,8 +224,8 @@ const SoftwareCredentialsView: React.FC = () => {
       <Card className="overflow-hidden">
         <div className="w-full overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50 dark:bg-slate-700">
-              <tr className="text-left text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <thead className="bg-surface-elevated">
+              <tr className="text-left text-[10px] uppercase tracking-wider text-muted">
                 <th className="px-2 py-1.5">License</th>
                 <th className="px-2 py-1.5">Software</th>
                 <th className="px-2 py-1.5">Login</th>
@@ -235,11 +235,11 @@ const SoftwareCredentialsView: React.FC = () => {
                 <th className="px-2 py-1.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-default">
               {loading ? (
-                <tr><td colSpan={7} className="px-2 py-4 text-center text-gray-500">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-2 py-4 text-center text-muted">Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-2 py-4 text-center text-gray-500">No credentials</td></tr>
+                <tr><td colSpan={7} className="px-2 py-4 text-center text-muted">No credentials</td></tr>
               ) : filtered.map(row => {
                 const shown = !!revealed[row.id];
                 return (
@@ -247,57 +247,57 @@ const SoftwareCredentialsView: React.FC = () => {
                     key={row.id}
                     onClick={() => openDetails(row)}
                     title="Click for details"
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
+                    className="cursor-pointer hover:bg-surface-hover"
                   >
-                    <td className="px-2 py-1 font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                    <td className="px-2 py-1 font-medium text-on-surface whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <span>{row.license}</span>
                         {row.recovery_code && (
-                          <span title="Recovery code saved" className="text-emerald-500 flex-shrink-0">
+                          <span title="Recovery code saved" className="text-success flex-shrink-0">
                             <Icon name={IconName.Shield} className="w-3 h-3" />
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-1 text-gray-600 dark:text-gray-300 max-w-[12rem] truncate" title={row.software}>{row.software}</td>
-                    <td className="px-2 py-1 text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                    <td className="px-2 py-1 text-on-surface-secondary max-w-[12rem] truncate" title={row.software}>{row.software}</td>
+                    <td className="px-2 py-1 text-on-surface-secondary whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <span className="truncate max-w-[14rem]" title={row.login}>{row.login}</span>
                         {row.login && (
-                          <button onClick={stop(() => copy(row.login))} title="Copy login" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+                          <button onClick={stop(() => copy(row.login))} title="Copy login" className="text-muted hover:text-on-surface flex-shrink-0">
                             <CopyIcon className="w-3 h-3" />
                           </button>
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-1 text-gray-700 dark:text-gray-200 font-mono">
+                    <td className="px-2 py-1 text-on-surface-secondary font-mono">
                       <div className="flex items-center gap-1">
                         <span className="truncate max-w-[7rem]" title={shown ? row.password : ''}>{shown ? row.password : '••••'}</span>
-                        <button onClick={stop(() => setRevealed(r => ({ ...r, [row.id]: !r[row.id] })))} title={shown ? 'Hide' : 'Show'} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+                        <button onClick={stop(() => setRevealed(r => ({ ...r, [row.id]: !r[row.id] })))} title={shown ? 'Hide' : 'Show'} className="text-muted hover:text-on-surface flex-shrink-0">
                           <Icon name={shown ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
                         </button>
                         {row.password && (
-                          <button onClick={stop(() => copy(row.password))} title="Copy password" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+                          <button onClick={stop(() => copy(row.password))} title="Copy password" className="text-muted hover:text-on-surface flex-shrink-0">
                             <CopyIcon className="w-3 h-3" />
                           </button>
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-1 text-gray-600 dark:text-gray-300 whitespace-nowrap">{row.licence_type}</td>
-                    <td className="px-2 py-1 text-blue-600 dark:text-blue-400 max-w-[14rem] truncate">
+                    <td className="px-2 py-1 text-on-surface-secondary whitespace-nowrap">{row.licence_type}</td>
+                    <td className="px-2 py-1 text-primary max-w-[14rem] truncate">
                       {hasUrl(row.url) ? (
                         <a href={hrefFor(row.url)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="hover:underline" title={row.url}>
                           {row.url}
                         </a>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-muted">—</span>
                       )}
                     </td>
                     <td className="px-2 py-1 text-right whitespace-nowrap">
-                      <button onClick={stop(() => setEditing(toForm(row)))} className="text-gray-500 hover:text-blue-600 mr-2" title="Edit">
+                      <button onClick={stop(() => setEditing(toForm(row)))} className="text-muted hover:text-blue-600 mr-2" title="Edit">
                         <Icon name={IconName.Create} className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={stop(() => remove(row.id))} className="text-gray-500 hover:text-red-600" title="Delete">
+                      <button onClick={stop(() => remove(row.id))} className="text-muted hover:text-red-600" title="Delete">
                         <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -307,20 +307,20 @@ const SoftwareCredentialsView: React.FC = () => {
             </tbody>
           </table>
         </div>
-        <div className="px-3 py-2 text-xs text-gray-500 border-t border-gray-100 dark:border-slate-700">
+        <div className="px-3 py-2 text-xs text-muted border-t border-default">
           {filtered.length} of {rows.length} credential{rows.length === 1 ? '' : 's'}
         </div>
       </Card>
 
       {viewing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setViewing(null)}>
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{viewing.license}</h3>
-                {viewing.login && <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{viewing.login}</p>}
+                <h3 className="text-lg font-semibold text-on-surface">{viewing.license}</h3>
+                {viewing.login && <p className="text-sm text-muted truncate">{viewing.login}</p>}
               </div>
-              <button onClick={() => setViewing(null)} title="Close" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+              <button onClick={() => setViewing(null)} title="Close" className="text-muted hover:text-on-surface">
                 <Icon name={IconName.Close} className="w-5 h-5" />
               </button>
             </div>
@@ -344,14 +344,14 @@ const SoftwareCredentialsView: React.FC = () => {
               <DetailRow label="Type">{viewing.licence_type || <Empty />}</DetailRow>
               <DetailRow label="URL">
                 {hasUrl(viewing.url) ? (
-                  <a href={hrefFor(viewing.url)} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline break-all">
+                  <a href={hrefFor(viewing.url)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
                     {viewing.url}
                   </a>
                 ) : <Empty />}
               </DetailRow>
             </dl>
 
-            <h4 className="mt-5 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Account recovery</h4>
+            <h4 className="mt-5 mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Account recovery</h4>
             <dl className="grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-2 text-sm">
               <DetailRow label="Two-step verification">{viewing.two_factor || <Empty />}</DetailRow>
               <DetailRow label="Recovery code">
@@ -364,7 +364,7 @@ const SoftwareCredentialsView: React.FC = () => {
                     onCopy={copy}
                   />
                 ) : (
-                  <button onClick={() => setEditing(toForm(viewing))} className="text-blue-600 dark:text-blue-400 hover:underline">
+                  <button onClick={() => setEditing(toForm(viewing))} className="text-primary hover:underline">
                     + Add recovery code
                   </button>
                 )}
@@ -375,7 +375,7 @@ const SoftwareCredentialsView: React.FC = () => {
             </dl>
 
             <div className="flex items-center justify-between gap-2 mt-6">
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted">
                 Updated {new Date(viewing.updated_at).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
               </span>
               <div className="flex gap-2">
@@ -392,24 +392,24 @@ const SoftwareCredentialsView: React.FC = () => {
 
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !saving && setEditing(null)}>
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+          <div className="bg-surface rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4 text-on-surface">
               {editing.id ? 'Edit Credential' : 'Add Credential'}
             </h3>
             <div className="space-y-3">
               {FORM_FIELDS.map(({ key, label, multiline, mono, section }) => {
-                const inputClass = `w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-md${mono ? ' font-mono' : ''}`;
+                const inputClass = `w-full px-3 py-2 text-sm border border-strong dark:bg-slate-700 dark:text-white rounded-md${mono ? ' font-mono' : ''}`;
                 const value = (editing[key] as string) || '';
                 const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
                   setEditing(prev => prev ? { ...prev, [key]: e.target.value } : prev);
                 return (
                   <div key={key as string}>
                     {section && (
-                      <h4 className="pt-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-slate-700">
+                      <h4 className="pt-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted border-t border-default">
                         {section}
                       </h4>
                     )}
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
+                    <label className="block text-xs font-medium text-on-surface-secondary mb-1">{label}</label>
                     {multiline ? (
                       <textarea rows={3} value={value} onChange={onChange} className={inputClass} />
                     ) : (

@@ -102,51 +102,51 @@ const NotifyComposer: React.FC<Props> = ({ courseRunId, changeType, summary, onC
     const n = new Set(prev); if (n.has(email)) n.delete(email); else n.add(email); return n;
   });
   const includedCount = recipients.length - excluded.size;
-  const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 text-sm dark:bg-gray-700 dark:text-white';
+  const inputCls = 'w-full border border-strong rounded-md px-2 py-1.5 text-sm dark:bg-gray-700 dark:text-white';
 
   if (loading) {
-    return <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2 py-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading recipients & preview…</div>;
+    return <div className="text-sm text-muted flex items-center gap-2 py-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading recipients & preview…</div>;
   }
 
   return (
     <div className="space-y-3">
-      {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
+      {error && <div className="text-sm text-danger">{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Editable email */}
         <div className="space-y-2">
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Subject</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">Subject</label>
             <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Message</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">Message</label>
             <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className={inputCls} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Note (optional)</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">Note (optional)</label>
             <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. trainer unavailable" className={inputCls} />
           </div>
 
           {/* Recipients */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Recipients ({includedCount}/{recipients.length})</label>
+              <label className="block text-xs font-medium text-on-surface-secondary">Recipients ({includedCount}/{recipients.length})</label>
               {recipients.length > 0 && (
                 <button type="button" onClick={() => setExcluded((prev) => prev.size === 0 ? new Set(recipients.map((r) => r.email)) : new Set())}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline">{excluded.size === 0 ? 'Deselect all' : 'Select all'}</button>
+                  className="text-xs text-primary hover:underline">{excluded.size === 0 ? 'Deselect all' : 'Select all'}</button>
               )}
             </div>
             {recipients.length === 0 ? (
-              <div className="text-xs text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-2 py-1.5">No confirmed learners or accepted trainers to notify.</div>
+              <div className="text-xs text-muted border border-dashed border-default rounded-md px-2 py-1.5">No confirmed learners or accepted trainers to notify.</div>
             ) : (
-              <div className="max-h-32 overflow-auto border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-100 dark:divide-gray-800">
+              <div className="max-h-32 overflow-auto border border-default rounded-md divide-y divide-default">
                 {recipients.map((r) => (
-                  <label key={r.email} className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                    <input type="checkbox" checked={!excluded.has(r.email)} onChange={() => toggle(r.email)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                    <span className="flex-1 min-w-0 truncate text-gray-800 dark:text-gray-200">{r.name}</span>
-                    <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${r.role === 'trainer' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'}`}>{r.role}</span>
-                    <span className="text-gray-500 dark:text-gray-400 truncate max-w-[40%]">{r.email}</span>
+                  <label key={r.email} className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-surface-hover">
+                    <input type="checkbox" checked={!excluded.has(r.email)} onChange={() => toggle(r.email)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
+                    <span className="flex-1 min-w-0 truncate text-on-surface">{r.name}</span>
+                    <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${r.role === 'trainer' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-info-bg text-primary'}`}>{r.role}</span>
+                    <span className="text-muted truncate max-w-[40%]">{r.email}</span>
                   </label>
                 ))}
               </div>
@@ -157,13 +157,13 @@ const NotifyComposer: React.FC<Props> = ({ courseRunId, changeType, summary, onC
         {/* Live preview */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Email preview</label>
-            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">{showPreview ? 'Hide' : 'Show'}</button>
+            <label className="block text-xs font-medium text-on-surface-secondary">Email preview</label>
+            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-xs text-primary hover:underline">{showPreview ? 'Hide' : 'Show'}</button>
           </div>
           {showPreview && (
             html ? (
-              <iframe title="Email preview" srcDoc={html} sandbox="" className="w-full h-72 border border-gray-200 dark:border-gray-700 rounded-md bg-white" />
-            ) : <div className="text-xs text-gray-400 h-72 flex items-center justify-center border border-dashed border-gray-200 dark:border-gray-700 rounded-md">Preview unavailable.</div>
+              <iframe title="Email preview" srcDoc={html} sandbox="" className="w-full h-72 border border-default rounded-md bg-white" />
+            ) : <div className="text-xs text-muted h-72 flex items-center justify-center border border-dashed border-default rounded-md">Preview unavailable.</div>
           )}
         </div>
       </div>

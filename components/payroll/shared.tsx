@@ -13,7 +13,7 @@ export const fmtCurrency = (n: number | string | null | undefined) => {
 
 // Native <option> elements ignore the parent's theme, so set an explicit
 // background/text so the open dropdown popup matches the dark UI (no grey).
-export const OPTION_CLASS = 'bg-white text-gray-900 dark:bg-slate-800 dark:text-white';
+export const OPTION_CLASS = 'bg-surface text-on-surface';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pending',
@@ -24,10 +24,10 @@ const STATUS_LABEL: Record<string, string> = {
 export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const cls =
     status === 'completed'
-      ? 'bg-green-100 text-green-700 ring-green-600/20 dark:bg-green-900/40 dark:text-green-300'
+      ? 'bg-success-bg text-success ring-green-600/20'
       : status === 'cancelled'
-      ? 'bg-gray-100 text-gray-600 ring-gray-500/20 dark:bg-slate-700 dark:text-gray-300'
-      : 'bg-amber-100 text-amber-700 ring-amber-600/20 dark:bg-amber-900/40 dark:text-amber-300';
+      ? 'bg-surface-elevated text-on-surface-secondary ring-gray-500/20'
+      : 'bg-warning-bg text-warning ring-amber-600/20';
   const dot =
     status === 'completed' ? 'bg-green-500' : status === 'cancelled' ? 'bg-gray-400' : 'bg-amber-500';
   return (
@@ -49,13 +49,13 @@ export const StatCard: React.FC<{
 }> = ({ label, value, sub, iconName, tone = 'blue' }) => {
   const tones = {
     amber: {
-      icon: 'bg-amber-100 text-amber-600 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400',
-      value: 'text-amber-700 dark:text-amber-300',
+      icon: 'bg-amber-100 text-warning ring-amber-500/20 dark:bg-amber-500/15',
+      value: 'text-warning',
       glow: 'from-amber-500/[0.10]',
     },
     green: {
-      icon: 'bg-green-100 text-green-600 ring-green-500/20 dark:bg-green-500/15 dark:text-green-400',
-      value: 'text-green-700 dark:text-green-300',
+      icon: 'bg-green-100 text-success ring-green-500/20 dark:bg-green-500/15',
+      value: 'text-success',
       glow: 'from-green-500/[0.10]',
     },
     blue: {
@@ -64,7 +64,7 @@ export const StatCard: React.FC<{
       glow: 'from-sky-500/[0.10]',
     },
     rose: {
-      icon: 'bg-rose-100 text-rose-600 ring-rose-500/20 dark:bg-rose-500/15 dark:text-rose-400',
+      icon: 'bg-rose-100 text-danger ring-rose-500/20 dark:bg-rose-500/15',
       value: 'text-rose-700 dark:text-rose-300',
       glow: 'from-rose-500/[0.10]',
     },
@@ -74,13 +74,13 @@ export const StatCard: React.FC<{
       glow: 'from-violet-500/[0.12]',
     },
     gray: {
-      icon: 'bg-gray-100 text-gray-500 ring-gray-400/20 dark:bg-slate-600/30 dark:text-gray-400',
-      value: 'text-gray-600 dark:text-gray-300',
+      icon: 'bg-gray-100 text-muted ring-gray-400/20 dark:bg-slate-600/30',
+      value: 'text-on-surface-secondary',
       glow: 'from-gray-500/[0.06]',
     },
   }[tone];
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-default bg-gradient-to-br ${tones.glow} to-transparent bg-white dark:bg-slate-800/80 p-4 shadow-sm transition-shadow hover:shadow-md`}>
+    <div className={`relative overflow-hidden rounded-xl border border-default bg-gradient-to-br ${tones.glow} to-transparent bg-surface p-4 shadow-sm transition-shadow hover:shadow-md`}>
       <div className="flex items-center gap-3">
         <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-inset ${tones.icon}`}>
           <Icon name={iconName} className="w-5 h-5" />
@@ -100,7 +100,7 @@ export const StatCard: React.FC<{
 // badge. Note amber is also the "pending" status color, so a pending non-WSQ
 // row reads amber-on-amber — kept per preference; swap the values here to
 // recolor every non-WSQ marker at once.
-export const NON_WSQ_ROW = 'bg-amber-50 dark:bg-amber-900/20';
+export const NON_WSQ_ROW = 'bg-warning-bg';
 export const NON_WSQ_ROW_HOVER = 'hover:bg-amber-100 dark:hover:bg-amber-900/30';
 export const NON_WSQ_ACCENT = 'border-amber-400 dark:border-amber-500/70';
 
@@ -108,7 +108,7 @@ export const NON_WSQ_ACCENT = 'border-amber-400 dark:border-amber-500/70';
 export const NonWsqTag: React.FC<{ children?: React.ReactNode; title?: string }> = ({ children, title }) => (
   <span
     title={title}
-    className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:bg-amber-900/40 dark:text-amber-300"
+    className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-warning-bg text-warning ring-1 ring-inset ring-amber-500/30"
   >
     {children ?? 'Non-WSQ'}
   </span>

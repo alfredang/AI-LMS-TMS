@@ -95,17 +95,17 @@ const SSGCourses: React.FC<SSGCoursesProps> = ({
         <CardContent className="space-y-3">
           <div>
             <label className="text-sm font-medium">API Endpoint:</label>
-            <p className="text-sm text-gray-600 break-all">{config.apiEndpoint || 'Not set'}</p>
+            <p className="text-sm text-on-surface-secondary break-all">{config.apiEndpoint || 'Not set'}</p>
           </div>
           <div>
             <label className="text-sm font-medium">Training Provider UEN:</label>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-on-surface-secondary">
               {provider ? `${provider.uen}` : 'Loading...'}
             </p>
           </div>
           <div>
             <label className="text-sm font-medium">Status:</label>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-on-surface-secondary">
               {config.availableProviders.length > 0 ? 'Ready for SSG operations' : 'Loading training provider...'}
             </p>
           </div>
@@ -128,7 +128,7 @@ const SSGCourses: React.FC<SSGCoursesProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold">SSG Courses API</h1>
-            <p className="text-gray-600 mt-2">
+            <p className="text-on-surface-secondary mt-2">
               The Courses API allows you to search, filter and compare different SkillsFuture Credit 
               eligible courses that have been published on the MySkillsFuture portal!
             </p>

@@ -95,7 +95,7 @@ const TrainingHoursPage: React.FC = () => {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-3xl font-bold dark:text-white">Training Hours</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-sm text-muted mt-1">
                         Cumulative training hours from completed courses.
                     </p>
                 </div>
@@ -111,21 +111,21 @@ const TrainingHoursPage: React.FC = () => {
             <Card className="p-4 mb-6">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">From</label>
                         <input
                             type="date"
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">To</label>
                         <input
                             type="date"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                         />
                     </div>
                     <Button onClick={fetchHours} disabled={loading} className="flex items-center gap-2">
@@ -142,20 +142,20 @@ const TrainingHoursPage: React.FC = () => {
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
                 <Card className="p-4 text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Completed Courses</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.totalCourses}</p>
+                    <p className="text-sm text-muted">Completed Courses</p>
+                    <p className="text-2xl font-bold text-on-surface">{summary.totalCourses}</p>
                 </Card>
                 <Card className="p-4 text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Training Hours</p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{summary.totalTrainingHours}</p>
+                    <p className="text-sm text-muted">Training Hours</p>
+                    <p className="text-2xl font-bold text-primary">{summary.totalTrainingHours}</p>
                 </Card>
                 <Card className="p-4 text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Assessment Hours</p>
+                    <p className="text-sm text-muted">Assessment Hours</p>
                     <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{summary.totalAssessmentHours}</p>
                 </Card>
                 <Card className="p-4 text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Hours</p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{summary.totalHours}</p>
+                    <p className="text-sm text-muted">Total Hours</p>
+                    <p className="text-2xl font-bold text-success">{summary.totalHours}</p>
                 </Card>
             </div>
 
@@ -164,13 +164,13 @@ const TrainingHoursPage: React.FC = () => {
                 <div className="flex justify-center py-16">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading training hours...</p>
+                        <p className="mt-4 text-on-surface-secondary">Loading training hours...</p>
                     </div>
                 </div>
             ) : courses.length === 0 ? (
                 <Card className="p-10">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Clock} className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Clock} className="w-12 h-12 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">No completed courses found</p>
                         <p className="text-sm mt-1">
                             {hasFetched
@@ -182,42 +182,42 @@ const TrainingHoursPage: React.FC = () => {
             ) : (
                 <Card className="overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <table className="min-w-full divide-y divide-default">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10">#</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Title</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Ref Code</th>
-                                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-20">Train Hrs</th>
-                                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-20">Assess Hrs</th>
-                                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-20">Total</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider w-10">#</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Title</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Ref Code</th>
+                                    <th className="px-3 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap w-20">Train Hrs</th>
+                                    <th className="px-3 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap w-20">Assess Hrs</th>
+                                    <th className="px-3 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap w-20">Total</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {courses.map((course, idx) => {
                                     const total = course.trainingHours + course.assessmentHours;
                                     return (
-                                        <tr key={`${course.id}-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400">{idx + 1}</td>
-                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{formatDate(course.startDate)}</td>
-                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{formatDate(course.endDate)}</td>
-                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{course.title}</td>
-                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 font-mono whitespace-nowrap">{course.courseCode || '—'}</td>
-                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 text-right">{course.trainingHours}</td>
-                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 text-right">{course.assessmentHours}</td>
-                                            <td className="px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">{total}</td>
+                                        <tr key={`${course.id}-${idx}`} className="hover:bg-surface-hover">
+                                            <td className="px-3 py-2.5 text-sm text-muted">{idx + 1}</td>
+                                            <td className="px-3 py-2.5 text-sm text-on-surface whitespace-nowrap">{formatDate(course.startDate)}</td>
+                                            <td className="px-3 py-2.5 text-sm text-on-surface whitespace-nowrap">{formatDate(course.endDate)}</td>
+                                            <td className="px-3 py-2.5 text-sm text-on-surface whitespace-nowrap">{course.title}</td>
+                                            <td className="px-3 py-2.5 text-sm text-on-surface font-mono whitespace-nowrap">{course.courseCode || '—'}</td>
+                                            <td className="px-3 py-2.5 text-sm text-on-surface text-right">{course.trainingHours}</td>
+                                            <td className="px-3 py-2.5 text-sm text-on-surface text-right">{course.assessmentHours}</td>
+                                            <td className="px-3 py-2.5 text-sm font-semibold text-on-surface text-right">{total}</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
-                            <tfoot className="bg-gray-50 dark:bg-gray-700/50">
+                            <tfoot className="bg-surface-elevated">
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-3 text-sm font-bold text-gray-900 dark:text-gray-100 text-right">Total ({summary.totalCourses} courses)</td>
-                                    <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 text-right">{summary.totalTrainingHours}</td>
+                                    <td colSpan={5} className="px-4 py-3 text-sm font-bold text-on-surface text-right">Total ({summary.totalCourses} courses)</td>
+                                    <td className="px-4 py-3 text-sm font-bold text-primary text-right">{summary.totalTrainingHours}</td>
                                     <td className="px-4 py-3 text-sm font-bold text-purple-600 dark:text-purple-400 text-right">{summary.totalAssessmentHours}</td>
-                                    <td className="px-4 py-3 text-sm font-bold text-green-600 dark:text-green-400 text-right">{summary.totalHours}</td>
+                                    <td className="px-4 py-3 text-sm font-bold text-success text-right">{summary.totalHours}</td>
                                 </tr>
                             </tfoot>
                         </table>

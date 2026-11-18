@@ -144,7 +144,7 @@ const CourseChangeControlView: React.FC = () => {
 
       {loading && <p className="text-sm text-on-surface-secondary">Loading change log…</p>}
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        <div className="rounded-lg border border-red-300 bg-danger-bg dark:border-red-800 px-4 py-3 text-sm text-danger">
           {error}
         </div>
       )}

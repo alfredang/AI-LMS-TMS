@@ -53,7 +53,7 @@ const StickyScrollbar: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
           zIndex: 9999,
           overflowX: 'auto',
           overflowY: 'hidden',
-          background: '#0f172a',
+          background: 'rgb(var(--c-surface-elevated))', // design-system token
         });
       } else {
         setStyle({ display: 'none' });
@@ -193,7 +193,7 @@ const StickyHeader: React.FC<{
       style={{
         ...style,
         display: visible ? 'block' : 'none',
-        background: '#1e293b',
+        background: 'rgb(var(--c-surface))', // design-system token
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
       }}
     />,
@@ -227,11 +227,11 @@ const getStatusColor = (status: string) => {
         case 'Fail':
         case 'Failed':
         case 'Cancelled':
-            return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
+            return 'bg-danger-bg text-danger';
         case 'Unconfirmed':
             return 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200';
         default:
-            return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+            return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
     }
 };
 
@@ -708,18 +708,18 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             const who = outcome.acceptedTrainer ? `: ${outcome.acceptedTrainer}` : '';
             badge = {
                 label: `Accepted${who}${when}`,
-                cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+                cls: 'bg-success-bg text-success',
                 title: outcome.acceptedAt ? `Trainer accepted on ${formatDate(outcome.acceptedAt)}` : 'Trainer assigned',
             };
         }
         else if (outcome.state === 'pending') {
             const d = daysSince(outcome.pendingSince);
             const since = d === null ? '' : ` · ${d}d`;
-            badge = { label: `Pending: ${outcome.pendingTrainer || 'trainer'}${since}`, cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', title: 'Awaiting this trainer’s response. Open Edit → Trainer Management for the full list.' };
+            badge = { label: `Pending: ${outcome.pendingTrainer || 'trainer'}${since}`, cls: 'bg-warning-bg text-warning', title: 'Awaiting this trainer’s response. Open Edit → Trainer Management for the full list.' };
         }
-        else if (outcome.state === 'exhausted') badge = { label: `All declined (${outcome.declinedCount}) — needs action`, cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: 'Every approved trainer with an account has declined. Add/reorder trainers or assign manually.' };
-        else if (outcome.state === 'open') badge = { label: 'Not yet invited', cls: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' };
-        else badge = { label: 'No approved trainers', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400', title: 'This course has no approved-trainer list configured.' };
+        else if (outcome.state === 'exhausted') badge = { label: `All declined (${outcome.declinedCount}) — needs action`, cls: 'bg-danger-bg text-danger', title: 'Every approved trainer with an account has declined. Add/reorder trainers or assign manually.' };
+        else if (outcome.state === 'open') badge = { label: 'Not yet invited', cls: 'bg-surface-elevated text-on-surface-secondary' };
+        else badge = { label: 'No approved trainers', cls: 'bg-surface-elevated text-muted', title: 'This course has no approved-trainer list configured.' };
 
         // Subtle triage tag on flagged rows. 'exhausted' is already conveyed by
         // the red "All declined" badge, so only tag no_lms / no_tpg.
@@ -727,10 +727,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         const hasTpgName = !!(classItem.assignedTrainerTpg || '').trim();
         const issueTag = issue === 'no_lms'
             ? (hasTpgName
-                ? { label: '⚠ Not in LMS · TPG set', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: `Trainer is on TPG (${classItem.assignedTrainerTpg}) but not assigned in the LMS — just assign them in Edit → Trainer Management to confirm + grant access.` }
-                : { label: '⚠ Not in LMS', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: 'No trainer assigned anywhere — class shows Pending and no trainer can access the run.' })
+                ? { label: '⚠ Not in LMS · TPG set', cls: 'bg-danger-bg text-danger', title: `Trainer is on TPG (${classItem.assignedTrainerTpg}) but not assigned in the LMS — just assign them in Edit → Trainer Management to confirm + grant access.` }
+                : { label: '⚠ Not in LMS', cls: 'bg-danger-bg text-danger', title: 'No trainer assigned anywhere — class shows Pending and no trainer can access the run.' })
             : issue === 'no_tpg'
-            ? { label: '⚠ Not in TPG', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', title: 'Assigned in the LMS but not pushed to TPG/SSG.' }
+            ? { label: '⚠ Not in TPG', cls: 'bg-warning-bg text-warning', title: 'Assigned in the LMS but not pushed to TPG/SSG.' }
             : null;
 
         if (!badge && !issueTag) return null;
@@ -799,10 +799,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const renderTrainerCell = (name: string, email?: string) => {
         if (!name) {
-            return <span className="text-gray-400 dark:text-gray-500 text-xs">N/A</span>;
+            return <span className="text-muted text-xs">N/A</span>;
         }
         return (
-            <span className="text-sm text-gray-900 dark:text-white" title={email || ''}>{name}</span>
+            <span className="text-sm text-on-surface" title={email || ''}>{name}</span>
         );
     };
 
@@ -973,28 +973,28 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {showTitle && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-6 mb-8">
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-blue-600">{stats.totalClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                        <p className="text-4xl font-bold text-primary">{stats.totalClasses}</p>
+                        <p className="text-on-surface-secondary mt-1">Upcoming Classes</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-green-600">{stats.totalConfirmedClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Confirmed Classes</p>
+                        <p className="text-4xl font-bold text-success">{stats.totalConfirmedClasses}</p>
+                        <p className="text-on-surface-secondary mt-1">Confirmed Classes</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-amber-500">{stats.totalPendingClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Pending Classes</p>
+                        <p className="text-4xl font-bold text-warning">{stats.totalPendingClasses}</p>
+                        <p className="text-on-surface-secondary mt-1">Pending Classes</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-emerald-500">{stats.totalAssignedLocalClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainer (Local)</p>
+                        <p className="text-4xl font-bold text-success">{stats.totalAssignedLocalClasses}</p>
+                        <p className="text-on-surface-secondary mt-1">Trainer (Local)</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-cyan-500">{stats.totalAssignedTpgClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainer (TPG)</p>
+                        <p className="text-4xl font-bold text-cyan-700 dark:text-cyan-300">{stats.totalAssignedTpgClasses}</p>
+                        <p className="text-on-surface-secondary mt-1">Trainer (TPG)</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-purple-600">{totalUnassignedTrainers}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unassigned Trainers</p>
+                        <p className="text-4xl font-bold text-purple-700 dark:text-purple-300">{totalUnassignedTrainers}</p>
+                        <p className="text-on-surface-secondary mt-1">Unassigned Trainers</p>
                     </Card>
                 </div>
             )}
@@ -1009,7 +1009,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                                 <div className="flex-1 relative">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="w-5 h-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                         </svg>
                                     </div>
@@ -1018,7 +1018,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         placeholder="Search title..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                                        className="w-full pl-10 pr-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                                     />
                                 </div>
                                 <div className="flex gap-2">
@@ -1041,52 +1041,52 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                             {/* Advanced Filters */}
                             {showAdvancedFilters && (
-                                <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg space-y-4">
+                                <div className="bg-surface-elevated p-4 rounded-lg space-y-4">
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {/* Course Title */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                                             <input
                                                 type="text"
                                                 placeholder="Enter course title..."
                                                 value={courseTitle}
                                                 onChange={(e) => setCourseTitle(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
 
                                         {/* Course Code */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Code</label>
                                             <input
                                                 type="text"
                                                 placeholder="Enter course code..."
                                                 value={courseCode}
                                                 onChange={(e) => setCourseCode(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
 
                                         {/* Course Run ID */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Run ID</label>
                                             <input
                                                 type="text"
                                                 placeholder="Enter run ID..."
                                                 value={courseRunId}
                                                 onChange={(e) => setCourseRunId(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
 
                                         {/* Trainer Dropdown */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer</label>
                                             <select
                                                 value={selectedTrainer}
                                                 onChange={(e) => setSelectedTrainer(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="">Select a trainer...</option>
                                                 {trainers.map((trainer, index) => (
@@ -1098,11 +1098,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Class Status</label>
                                             <select
                                                 value={selectedClassStatus}
                                                 onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="ActiveOnly">Active (Pending + Confirmed)</option>
                                                 <option value="all">All (incl. Cancelled)</option>
@@ -1114,11 +1114,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Class Type */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Class Type</label>
                                             <select
                                                 value={selectedClassType}
                                                 onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="Physical">Physical</option>
@@ -1130,11 +1130,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Course Type */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Type</label>
                                             <select
                                                 value={selectedCourseType}
                                                 onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="WSQ">WSQ</option>
@@ -1145,11 +1145,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Learner Filter */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learners</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Learners</label>
                                             <select
                                                 value={selectedLearnerFilter}
                                                 onChange={(e) => setSelectedLearnerFilter(e.target.value as 'all' | 'withLearners' | 'noLearners')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="withLearners">With Learners</option>
@@ -1159,11 +1159,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Trainer Assignment Filter */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Assignment</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer Assignment</label>
                                             <select
                                                 value={selectedTrainerAssignmentFilter}
                                                 onChange={(e) => setSelectedTrainerAssignmentFilter(e.target.value as 'all' | 'withTrainers' | 'noTrainers')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="withTrainers">With Trainers</option>
@@ -1174,7 +1174,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         {/* Trainer-invite triage toggle: runs needing attention
                                             (no trainer + approaching start, or invite list exhausted). */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Invites</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer Invites</label>
                                             <button
                                                 type="button"
                                                 onClick={() => setAttentionOnly(v => !v)}
@@ -1182,19 +1182,19 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     attentionOnly
                                                         ? 'bg-red-600 border-red-600 text-white hover:bg-red-700'
                                                         : stats.totalNeedsAttention > 0
-                                                            ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'
-                                                            : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'
+                                                            ? 'bg-danger-bg border-red-300 text-danger hover:bg-red-100 dark:border-red-700'
+                                                            : 'bg-surface border-strong text-on-surface-secondary hover:bg-surface-hover'
                                                 }`}
                                                 title={`Show only runs needing trainer attention: no LMS-assigned trainer + starting within ${atRiskDays} day(s), or the invite list is exhausted (all declined). TPG-only assignments are included because the trainer still can't access the run.`}
                                             >
                                                 <span aria-hidden>⚠</span>
                                                 <span>{attentionOnly ? 'Showing: Needs attention' : 'Needs attention'}</span>
                                                 {stats.totalNeedsAttention > 0 && (
-                                                    <span className={`ml-0.5 px-1.5 rounded-full text-xs font-bold ${attentionOnly ? 'bg-white text-red-700' : 'bg-red-600 text-white'}`}>{stats.totalNeedsAttention}</span>
+                                                    <span className={`ml-0.5 px-1.5 rounded-full text-xs font-bold ${attentionOnly ? 'bg-white text-danger' : 'bg-red-600 text-white'}`}>{stats.totalNeedsAttention}</span>
                                                 )}
                                             </button>
                                             <div className="flex items-center gap-1.5 mt-1.5">
-                                                <span className="text-xs text-gray-500 dark:text-gray-400">Approaching start within</span>
+                                                <span className="text-xs text-muted">Approaching start within</span>
                                                 <input
                                                     type="number"
                                                     min={1}
@@ -1204,20 +1204,20 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         const n = parseInt(e.target.value, 10);
                                                         setAtRiskDays(Number.isFinite(n) ? Math.min(Math.max(n, 1), 365) : 7);
                                                     }}
-                                                    className="w-14 px-1.5 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                    className="w-14 px-1.5 py-0.5 border border-strong rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                                                     title="Days-to-start window that counts as 'needs attention' when no trainer is assigned"
                                                 />
-                                                <span className="text-xs text-gray-500 dark:text-gray-400">days</span>
+                                                <span className="text-xs text-muted">days</span>
                                             </div>
                                         </div>
 
                                         {/* Upcoming Window Filter */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upcoming Window</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Upcoming Window</label>
                                             <select
                                                 value={selectedUpcomingWindow}
                                                 onChange={(e) => setSelectedUpcomingWindow(e.target.value as '30' | '60' | '90' | 'custom')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             >
                                                 <option value="30">Next 30 days</option>
                                                 <option value="60">Next 60 days</option>
@@ -1228,7 +1228,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {selectedUpcomingWindow === 'custom' && (
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Next Days</label>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Next Days</label>
                                                 <input
                                                     type="number"
                                                     min={1}
@@ -1236,34 +1236,34 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     placeholder="Enter days..."
                                                     value={customUpcomingWindowDays}
                                                     onChange={(e) => setCustomUpcomingWindowDays(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                                 />
                                             </div>
                                         )}
 
                                         {/* Start Date From */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Start Date (From)</label>
                                             <input
                                                 type="text"
                                                 placeholder="DD/MM/YYYY"
                                                 value={startDateFrom}
                                                 onChange={handleStartDateChange}
                                                 maxLength={10}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
 
                                         {/* End Date Until */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date (Until)</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">End Date (Until)</label>
                                             <input
                                                 type="text"
                                                 placeholder="DD/MM/YYYY"
                                                 value={endDateUntil}
                                                 onChange={handleEndDateChange}
                                                 maxLength={10}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:text-white"
                                             />
                                         </div>
                                     </div>
@@ -1275,7 +1275,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                 {/* Classes Table */}
                 {actionMessage && (
-                    <div className={`mb-4 p-3 rounded-md text-sm ${actionMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                    <div className={`mb-4 p-3 rounded-md text-sm ${actionMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
                         {actionMessage.text}
                     </div>
                 )}
@@ -1286,15 +1286,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         { type: 'exhausted' as const, label: 'List exhausted', count: stats.attentionExhausted },
                     ];
                     return (
-                    <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-700/60 dark:bg-red-900/20">
+                    <div className="mb-4 rounded-lg border border-red-300 bg-danger-bg px-4 py-3 dark:border-red-700/60">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="flex items-start gap-2.5">
                                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-sm font-bold" aria-hidden>⚠</span>
                                 <div>
-                                    <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                                    <p className="text-sm font-semibold text-danger">
                                         {stats.totalNeedsAttention} class{stats.totalNeedsAttention === 1 ? '' : 'es'} need trainer attention
                                     </p>
-                                    <p className="text-xs text-red-600 dark:text-red-300">
+                                    <p className="text-xs text-danger">
                                         No LMS trainer + starting within {atRiskDays} day{atRiskDays === 1 ? '' : 's'}, assigned in LMS but not pushed to TPG, or the invite list is exhausted (all declined).
                                     </p>
                                 </div>
@@ -1304,7 +1304,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 onClick={() => { setAttentionOnly(v => !v); setAttentionType('all'); }}
                                 className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
                                     attentionOnly
-                                        ? 'bg-white text-red-700 border border-red-300 hover:bg-red-50 dark:bg-gray-800 dark:text-red-300 dark:border-red-700'
+                                        ? 'bg-surface text-danger border border-red-300 hover:bg-red-50 dark:border-red-700'
                                         : 'bg-red-600 text-white hover:bg-red-700'
                                 }`}
                             >
@@ -1322,14 +1322,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         disabled={disabled}
                                         onClick={() => { setAttentionOnly(true); setAttentionType(active ? 'all' : ch.type); }}
                                         className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                                            disabled ? 'border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-600 cursor-default'
+                                            disabled ? 'border-default text-muted cursor-default'
                                             : active ? 'border-red-600 bg-red-600 text-white'
-                                            : 'border-red-300 bg-white text-red-700 hover:bg-red-100 dark:bg-gray-800 dark:border-red-700 dark:text-red-300'
+                                            : 'border-red-300 bg-surface text-danger hover:bg-red-100 dark:border-red-700'
                                         }`}
                                         title={disabled ? `No "${ch.label}" classes` : active ? 'Showing this type — click to show all attention types' : `Show only "${ch.label}" classes`}
                                     >
                                         <span>{ch.label}</span>
-                                        <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white text-red-700' : disabled ? 'bg-gray-100 text-gray-400 dark:bg-gray-700' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>{ch.count}</span>
+                                        <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white text-danger' : disabled ? 'bg-surface-elevated text-muted' : 'bg-danger-bg text-danger'}`}>{ch.count}</span>
                                     </button>
                                 );
                             })}
@@ -1338,7 +1338,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     );
                 })()}
                 {loading && upcomingClasses.length > 0 && (
-                    <div className="mb-3 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                    <div className="mb-3 inline-flex items-center rounded-md bg-info-bg px-3 py-1.5 text-xs font-medium text-primary">
                         <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700 dark:border-blue-700 dark:border-t-blue-200" />
                         Updating results...
                     </div>
@@ -1346,13 +1346,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 {loading && upcomingClasses.length === 0 ? (
                     <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-500 text-lg">Loading upcoming classes...</p>
+                        <p className="text-muted text-lg">Loading upcoming classes...</p>
                     </div>
                 ) : upcomingClasses.length === 0 ? (
                     <div className="text-center py-8">
-                        <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500 text-lg">No upcoming classes found</p>
-                        <p className="text-gray-400 text-sm mt-2">
+                        <Icon name={IconName.BookOpen} className="w-12 h-12 text-muted mx-auto mb-4" />
+                        <p className="text-muted text-lg">No upcoming classes found</p>
+                        <p className="text-muted text-sm mt-2">
                             {/* 'ActiveOnly' is the default — don't count it as a user-applied filter */}
                             {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || selectedUpcomingWindow !== '30' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
@@ -1363,55 +1363,55 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     <>
                         <div className="overflow-x-auto" ref={tableScrollRef}>
                           {includeOngoing ? (
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                            <table className="min-w-full divide-y divide-default">
+                                <thead className="bg-surface-elevated">
                                     <tr className="border-b dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Course Title</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap" title="Trainer matches Google Calendar attendee">Cal</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Run ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider text-center">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Learners</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap" title="Trainer matches Google Calendar attendee">Cal</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Attendance</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider"></th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <tbody className="bg-surface divide-y divide-default">
                                     {upcomingClasses.map((classItem, index) => {
                                         // Use API-derived status directly (considers junction table, legacy scalar, and TPG trainer).
                                         const status = classItem.classStatus;
                                         const classType = classItem.classType || 'Physical';
                                         return (
                                             <React.Fragment key={index}>
-                                            <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
-                                                    <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                                            <tr className="border-b dark:border-gray-700 hover:bg-surface-hover">
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">
+                                                    <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-info-bg border-blue-300 text-primary dark:border-blue-700' : 'bg-surface-elevated border-strong text-on-surface-secondary hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'}`}>
                                                         <svg className={`w-3.5 h-3.5 transition-transform ${expandedSessionsId.has(classItem.id) ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
                                                     </button>
                                                     {classItem.courseRunId}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                                <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-primary hover:underline">{classItem.courseTitle}</button></td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{classItem.courseCode}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-info-bg text-info' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-surface-elevated text-on-surface-secondary'}`}>{classType}</span>
                                                 </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{formatDate(classItem.startDate)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{formatDate(classItem.endDate)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>
                                                 </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-on-surface-secondary">{classItem.numOfTrainee}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">
                                                     {classItem.assignedTrainerTpg ? (
                                                         renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)
                                                     ) : classItem.tpgSyncStatus === 'no_nric' ? (
                                                         <span
-                                                            className="text-amber-500 text-xs cursor-pointer inline-flex items-center gap-1"
+                                                            className="text-warning text-xs cursor-pointer inline-flex items-center gap-1"
                                                             title="To find the trainer's NRIC: 1) Check Google Drive 2) Search TPG Trainer Management 3) Ask someone with access (e.g. Ms. Tan and Dr. Ang) 4) Contact the trainer directly, or collect it on class day if physical"
                                                             onClick={() => alert('To find the trainer\'s NRIC:\n\n1. Check Google Drive for their records\n2. Search TPG Trainer Management — their NRIC may be listed there\n3. Ask someone with access to their NRIC (e.g. Ms. Tan and Dr. Ang)\n4. Contact the trainer directly, or collect it on class day if physical')}
                                                         >
@@ -1432,11 +1432,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Reg Date Passed
                                                         </span>
                                                     ) : classItem.tpgSyncStatus === 'course_cancelled' ? (
-                                                        <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run cancelled on SSG.">
+                                                        <span className="text-muted text-xs inline-flex items-center gap-1" title="Course run cancelled on SSG.">
                                                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Cancelled (SSG)
                                                         </span>
                                                     ) : classItem.tpgSyncStatus === 'course_expired' ? (
-                                                        <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run expired/completed on SSG.">
+                                                        <span className="text-muted text-xs inline-flex items-center gap-1" title="Course run expired/completed on SSG.">
                                                             <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Expired (SSG)
                                                         </span>
                                                     ) : classItem.tpgSyncStatus === 'not_editable' ? (
@@ -1468,28 +1468,28 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         renderTrainerCell('', '')
                                                     )}
                                                 </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                                     {classItem.trainerInCalendar === true ? (
                                                         <span>
                                                             <span className="text-green-500" title="Trainer matches calendar">✓</span>
                                                             {classItem.calendarNameMismatch && (
-                                                                <span className="text-amber-500 ml-0.5" title="Course name might have changed (matched by course code)">⚠</span>
+                                                                <span className="text-warning ml-0.5" title="Course name might have changed (matched by course code)">⚠</span>
                                                             )}
                                                         </span>
                                                     ) : classItem.trainerInCalendar === false ? (
-                                                        <span className="text-red-500" title="Trainer not in calendar">✗</span>
+                                                        <span className="text-danger" title="Trainer not in calendar">✗</span>
                                                     ) : (
-                                                        <span className="text-gray-400" title="Not checked yet">—</span>
+                                                        <span className="text-muted" title="Not checked yet">—</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                                     {classItem.attendanceScore != null ? (
-                                                        <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                        <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-success' : classItem.attendanceScore >= 50 ? 'text-warning' : 'text-danger'}`}>
                                                             {classItem.attendanceScore}%
                                                         </span>
                                                     ) : (
-                                                        <span className="text-gray-400">—</span>
+                                                        <span className="text-muted">—</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
@@ -1504,10 +1504,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 </td>
                                             </tr>
                                             {expandedSessionsId.has(classItem.id) && (
-                                            <tr className="bg-gray-50 dark:bg-gray-900/40 border-b dark:border-gray-700">
+                                            <tr className="bg-surface-elevated border-b dark:border-gray-700">
                                                 <td colSpan={13} className="px-6 py-3">
                                                     {loadingSessions.has(classItem.id) ? (
-                                                        <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+                                                        <div className="text-sm text-muted">Loading sessions…</div>
                                                     ) : (
                                                         <ClassSessionsCard sessions={sessionsCache[classItem.id]?.sessions || []} calendarChecked={sessionsCache[classItem.id]?.calendarChecked} ssgError={sessionsCache[classItem.id]?.ssgError} />
                                                     )}
@@ -1520,7 +1520,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </tbody>
                             </table>
                           ) : (
-                            <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'auto' }}>
+                            <table className="w-full divide-y divide-default" style={{ tableLayout: 'auto' }}>
                                 <colgroup>
                                     <col style={{ minWidth: '80px', width: '5%' }} />
                                     <col style={{ minWidth: '300px', width: '25%' }} />
@@ -1537,38 +1537,38 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     <col style={{ minWidth: '120px', width: '9%' }} />
                                     <col style={{ minWidth: '40px', width: '3%' }} />
                                 </colgroup>
-                                <thead ref={theadRef} className="bg-gray-50 dark:bg-gray-700/50">
+                                <thead ref={theadRef} className="bg-surface-elevated">
                                     <tr className="border-b dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap" title="Trainer matches Google Calendar attendee">Cal</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Learners</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap" title="Trainer matches Google Calendar attendee">Cal</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider"></th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <tbody className="bg-surface divide-y divide-default">
                                     {upcomingClasses.map((classItem, index) => {
                                         const classType = classItem.classType || 'Physical';
                                         return (
                                         <React.Fragment key={index}>
-                                        <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
-                                                <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                                        <tr className="border-b dark:border-gray-700 hover:bg-surface-hover">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">
+                                                <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-info-bg border-blue-300 text-primary dark:border-blue-700' : 'bg-surface-elevated border-strong text-on-surface-secondary hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'}`}>
                                                     <svg className={`w-3.5 h-3.5 transition-transform ${expandedSessionsId.has(classItem.id) ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
                                                 </button>
                                                 {classItem.courseRunId}
                                             </td>
-                                            <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                            <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-primary hover:underline">{classItem.courseTitle}</button></td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
                                                 <select
                                                     value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : classItem.classStatus === 'Unconfirmed' ? 'Unconfirmed' : 'auto'}
@@ -1616,17 +1616,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 </select>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-info-bg text-info' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-surface-elevated text-on-surface-secondary'}`}>{classType}</span>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{formatDate(classItem.startDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{formatDate(classItem.endDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-on-surface-secondary">{classItem.numOfTrainee}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">
                                                 {classItem.assignedTrainerTpg ? (
                                                     renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)
                                                 ) : classItem.tpgSyncStatus === 'no_nric' ? (
                                                     <span
-                                                        className="text-amber-500 text-xs cursor-pointer inline-flex items-center gap-1"
+                                                        className="text-warning text-xs cursor-pointer inline-flex items-center gap-1"
                                                         title="To find the trainer's NRIC: 1) Check Google Drive 2) Search TPG Trainer Management 3) Ask someone with access (e.g. Ms. Tan and Dr. Ang) 4) Contact the trainer directly, or collect it on class day if physical"
                                                         onClick={() => alert('To find the trainer\'s NRIC:\n\n1. Check Google Drive for their records\n2. Search TPG Trainer Management — their NRIC may be listed there\n3. Ask someone with access to their NRIC (e.g. Ms. Tan and Dr. Ang)\n4. Contact the trainer directly, or collect it on class day if physical')}
                                                     >
@@ -1654,29 +1654,29 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     renderTrainerCell('', '')
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-on-surface-secondary">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                                 {classItem.trainerInCalendar === true ? (
                                                     <span>
                                                         <span className="text-green-500" title="Trainer matches calendar">✓</span>
                                                         {classItem.calendarNameMismatch && (
-                                                            <span className="text-amber-500 ml-0.5" title="Course name might have changed (matched by course code)">⚠</span>
+                                                            <span className="text-warning ml-0.5" title="Course name might have changed (matched by course code)">⚠</span>
                                                         )}
                                                     </span>
                                                 ) : classItem.trainerInCalendar === false ? (
-                                                    <span className="text-red-500" title="Trainer not in calendar">✗</span>
+                                                    <span className="text-danger" title="Trainer not in calendar">✗</span>
                                                 ) : (
-                                                    <span className="text-gray-400" title="Not checked yet">—</span>
+                                                    <span className="text-muted" title="Not checked yet">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
+                                            <td className="px-4 py-2 text-sm text-on-surface-secondary">
                                                 {classItem.nextAvailableTrainer ? (() => {
                                                     const courseTrainers = splitTrainerList(classItem.trainersList);
                                                     return (
                                                         <select
                                                             value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
                                                             onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
-                                                            className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            className="w-full min-w-[160px] border border-strong rounded-md px-2 py-1 text-xs bg-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         >
                                                             <option value="">-- Reassign Trainer --</option>
                                                             {courseTrainers.map(name => (
@@ -1685,10 +1685,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         </select>
                                                     );
                                                 })() : (
-                                                    <span className="text-gray-400 text-xs italic">—</span>
+                                                    <span className="text-muted text-xs italic">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 align-top text-sm text-gray-700 dark:text-gray-200">
+                                            <td className="px-4 py-2 align-top text-sm text-on-surface-secondary">
                                                 <div className="flex flex-col gap-1.5">
                                                     <Button
                                                         variant="secondary"
@@ -1722,10 +1722,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </td>
                                         </tr>
                                         {expandedSessionsId.has(classItem.id) && (
-                                        <tr className="bg-gray-50 dark:bg-gray-900/40 border-b dark:border-gray-700">
+                                        <tr className="bg-surface-elevated border-b dark:border-gray-700">
                                             <td colSpan={14} className="px-6 py-3">
                                                 {loadingSessions.has(classItem.id) ? (
-                                                    <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+                                                    <div className="text-sm text-muted">Loading sessions…</div>
                                                 ) : (
                                                     <ClassSessionsCard sessions={sessionsCache[classItem.id]?.sessions || []} calendarChecked={sessionsCache[classItem.id]?.calendarChecked} ssgError={sessionsCache[classItem.id]?.ssgError} />
                                                 )}
@@ -1743,7 +1743,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         {/* Pagination */}
                         {totalPages > 1 && (
                             <div className="flex justify-between items-center mt-6">
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                <p className="text-sm text-muted">
                                     Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, totalCount)} of {totalCount} classes
                                 </p>
                                 <div className="flex items-center gap-1">
@@ -1762,9 +1762,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         if (end < totalPages - 1) pages.push(totalPages - 1);
                                         return pages.map((p, idx) =>
                                             p < 0 ? (
-                                                <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                                                <span key={`ellipsis-${idx}`} className="px-1 text-muted">...</span>
                                             ) : (
-                                                <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{p + 1}</button>
+                                                <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-on-surface-secondary hover:bg-surface-hover'}`}>{p + 1}</button>
                                             )
                                         );
                                     })()}
@@ -1782,19 +1782,19 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {/* Bulk Invite Preview Modal */}
             {showBulkPreview && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col border dark:border-gray-700">
+                    <div className="bg-surface rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col border dark:border-gray-700">
                         <div className="p-4 border-b dark:border-gray-700">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preview: Bulk Trainer Invitations</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <h3 className="text-lg font-semibold text-on-surface">Preview: Bulk Trainer Invitations</h3>
+                                    <p className="text-sm text-muted mt-0.5">
                                         {bulkPreviewData.filter(p => p.canSend).length} sendable / {bulkPreviewData.length} total course runs with no local trainer
                                     </p>
                                 </div>
-                                <button onClick={() => setShowBulkPreview(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
+                                <button onClick={() => setShowBulkPreview(false)} className="text-muted hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
                             </div>
                             <div className="flex items-center gap-3">
-                                <label className="text-xs text-gray-500 dark:text-gray-400">From</label>
+                                <label className="text-xs text-muted">From</label>
                                 <input
                                     type="date"
                                     value={bulkDateFrom}
@@ -1819,9 +1819,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             .catch(() => {})
                                             .finally(() => setBulkPreviewLoading(false));
                                     }}
-                                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    className="px-2 py-1 text-sm border border-strong rounded bg-surface text-on-surface"
                                 />
-                                <label className="text-xs text-gray-500 dark:text-gray-400">To</label>
+                                <label className="text-xs text-muted">To</label>
                                 <input
                                     type="date"
                                     value={bulkDateTo}
@@ -1845,17 +1845,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             .catch(() => {})
                                             .finally(() => setBulkPreviewLoading(false));
                                     }}
-                                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    className="px-2 py-1 text-sm border border-strong rounded bg-surface text-on-surface"
                                 />
                             </div>
                         </div>
                         <div className="flex-1 overflow-auto p-4">
                             {bulkPreviewData.length === 0 ? (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">No eligible course runs found in the lookahead window.</p>
+                                <p className="text-sm text-muted">No eligible course runs found in the lookahead window.</p>
                             ) : (
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                        <tr className="text-left text-xs text-muted border-b dark:border-gray-700">
                                             <th className="pb-2 pr-2 w-8">
                                                 <input
                                                     type="checkbox"
@@ -1903,19 +1903,19 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 <td className="py-2 pr-2 whitespace-nowrap">{item.startDate ? new Date(item.startDate).toLocaleDateString('en-SG') : '—'}</td>
                                                 <td className="py-2 pr-2 text-center">
                                                     {item.confirmedEnrolments > 0 ? (
-                                                        <span className="text-gray-900 dark:text-white">{item.confirmedEnrolments}</span>
+                                                        <span className="text-on-surface">{item.confirmedEnrolments}</span>
                                                     ) : (
-                                                        <span className="text-xs text-amber-500" title="No confirmed enrolments">0</span>
+                                                        <span className="text-xs text-warning" title="No confirmed enrolments">0</span>
                                                     )}
                                                 </td>
                                                 <td className="py-2 pr-2">
                                                     {item.canSend ? (
-                                                        <span className="text-gray-900 dark:text-white">{item.nextTrainer}</span>
+                                                        <span className="text-on-surface">{item.nextTrainer}</span>
                                                     ) : (
-                                                        <span className="text-xs text-gray-400 italic">{item.reason}</span>
+                                                        <span className="text-xs text-muted italic">{item.reason}</span>
                                                     )}
                                                 </td>
-                                                <td className="py-2 text-xs text-gray-500 dark:text-gray-400">{item.nextEmail || '—'}</td>
+                                                <td className="py-2 text-xs text-muted">{item.nextEmail || '—'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1923,7 +1923,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             )}
                         </div>
                         <div className="p-4 border-t dark:border-gray-700 flex items-center justify-between">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                            <span className="text-sm text-muted">
                                 {bulkSelected.size} selected
                             </span>
                             <div className="flex items-center gap-2">
@@ -1968,19 +1968,19 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {/* Bulk TPG Assign Preview Modal */}
             {showTpgPreview && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col border dark:border-gray-700">
+                    <div className="bg-surface rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col border dark:border-gray-700">
                         <div className="p-4 border-b dark:border-gray-700">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preview: Assign Trainers to TPG</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <h3 className="text-lg font-semibold text-on-surface">Preview: Assign Trainers to TPG</h3>
+                                    <p className="text-sm text-muted mt-0.5">
                                         {tpgPreviewData.filter(p => p.canAssign).length} actionable / {tpgPreviewData.length} total course runs
                                     </p>
                                 </div>
-                                <button onClick={() => setShowTpgPreview(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
+                                <button onClick={() => setShowTpgPreview(false)} className="text-muted hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
                             </div>
                             <div className="flex items-center gap-3">
-                                <label className="text-xs text-gray-500 dark:text-gray-400">From</label>
+                                <label className="text-xs text-muted">From</label>
                                 <input type="date" value={tpgDateFrom} onChange={(e) => {
                                     setTpgDateFrom(e.target.value);
                                     setTpgPreviewLoading(true);
@@ -1997,8 +1997,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         })
                                         .catch(() => {})
                                         .finally(() => setTpgPreviewLoading(false));
-                                }} className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-                                <label className="text-xs text-gray-500 dark:text-gray-400">To</label>
+                                }} className="px-2 py-1 text-sm border border-strong rounded bg-surface text-on-surface" />
+                                <label className="text-xs text-muted">To</label>
                                 <input type="date" value={tpgDateTo} onChange={(e) => {
                                     setTpgDateTo(e.target.value);
                                     setTpgPreviewLoading(true);
@@ -2015,16 +2015,16 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         })
                                         .catch(() => {})
                                         .finally(() => setTpgPreviewLoading(false));
-                                }} className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                                }} className="px-2 py-1 text-sm border border-strong rounded bg-surface text-on-surface" />
                             </div>
                         </div>
                         <div className="flex-1 overflow-auto p-4">
                             {tpgPreviewData.length === 0 ? (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">No eligible course runs found.</p>
+                                <p className="text-sm text-muted">No eligible course runs found.</p>
                             ) : (
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                        <tr className="text-left text-xs text-muted border-b dark:border-gray-700">
                                             <th className="pb-2 pr-2 w-8">
                                                 <input type="checkbox"
                                                     checked={tpgSelected.size === tpgPreviewData.filter(p => p.canAssign).length && tpgSelected.size > 0}
@@ -2068,37 +2068,37 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     <td className="py-2 pr-2 whitespace-nowrap">{item.startDate ? new Date(item.startDate).toLocaleDateString('en-SG') : '—'}</td>
                                                     <td className="py-2 pr-2">
                                                         <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${
-                                                            item.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                                                            item.classStatus === 'Pending' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
-                                                            'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                                            item.classStatus === 'Confirmed' ? 'bg-success-bg text-success' :
+                                                            item.classStatus === 'Pending' ? 'bg-warning-bg text-warning' :
+                                                            'bg-surface-elevated text-muted'
                                                         }`}>{item.classStatus || '—'}</span>
                                                     </td>
                                                     <td className="py-2 pr-2">
                                                         {item.localTrainers?.length > 0 ? (
                                                             <div>
                                                                 {item.localTrainers.map((t: any, i: number) => (
-                                                                    <div key={i} className={`${i === 0 ? 'font-medium text-gray-900 dark:text-white' : 'text-xs text-gray-400'}`}>
+                                                                    <div key={i} className={`${i === 0 ? 'font-medium text-on-surface' : 'text-xs text-muted'}`}>
                                                                         {t.name}{i === 0 && item.localTrainers.length > 1 && ' (primary)'}
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         ) : (
-                                                            <span className="text-xs text-gray-400 italic">None</span>
+                                                            <span className="text-xs text-muted italic">None</span>
                                                         )}
                                                     </td>
                                                     <td className="py-2 pr-2 text-xs">
                                                         {item.tpgTrainerName ? (
-                                                            <span className="text-gray-700 dark:text-gray-300">{item.tpgTrainerName}</span>
+                                                            <span className="text-on-surface-secondary">{item.tpgTrainerName}</span>
                                                         ) : (
-                                                            <span className="text-gray-400">—</span>
+                                                            <span className="text-muted">—</span>
                                                         )}
                                                     </td>
                                                     <td className="py-2 pr-2">
                                                         <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${
-                                                            item.syncAction === 'assign' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
-                                                            item.syncAction === 'override' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
-                                                            item.syncAction === 'clear' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                                                            'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                                            item.syncAction === 'assign' ? 'bg-info-bg text-info' :
+                                                            item.syncAction === 'override' ? 'bg-warning-bg text-warning' :
+                                                            item.syncAction === 'clear' ? 'bg-danger-bg text-danger' :
+                                                            'bg-surface-elevated text-muted'
                                                         }`}>{
                                                             item.syncAction === 'assign' ? 'Assign' :
                                                             item.syncAction === 'override' ? 'Override' :
@@ -2117,14 +2117,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                                         else next.add(nricKey);
                                                                         setRevealedNrics(next);
                                                                     }}
-                                                                    className="text-gray-400 hover:text-gray-200 text-xs"
+                                                                    className="text-muted hover:text-gray-200 text-xs"
                                                                     title={isRevealed ? 'Hide NRIC' : 'Reveal NRIC'}
                                                                 >
                                                                     {isRevealed ? '🙈' : '👁️'}
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            <span className="text-xs text-amber-500">{primary ? 'No NRIC' : '—'}</span>
+                                                            <span className="text-xs text-warning">{primary ? 'No NRIC' : '—'}</span>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -2135,7 +2135,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             )}
                         </div>
                         <div className="p-4 border-t dark:border-gray-700 flex items-center justify-between">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">{tpgSelected.size} selected</span>
+                            <span className="text-sm text-muted">{tpgSelected.size} selected</span>
                             <div className="flex items-center gap-2">
                                 <Button variant="secondary" size="sm" onClick={() => setShowTpgPreview(false)}>Cancel</Button>
                                 <Button
@@ -2186,14 +2186,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {/* Import Run Modal */}
             {showImportModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+                    <div className="bg-surface rounded-lg shadow-xl w-full max-w-md">
                         <div className="p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Import Course Run</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            <h3 className="text-lg font-semibold text-on-surface mb-1">Import Course Run</h3>
+                            <p className="text-sm text-muted mb-4">
                                 Enter a Course Run ID to fetch its details from SSG and save it to the database.
                             </p>
 
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                 Course Run ID
                             </label>
                             <input
@@ -2202,13 +2202,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 onChange={e => { setImportRunId(e.target.value); setImportResult(null); }}
                                 onKeyDown={e => e.key === 'Enter' && !importLoading && handleImportRun()}
                                 placeholder="e.g. 1067907"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 mb-4"
+                                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 mb-4"
                                 autoFocus
                             />
 
                             {/* Result banner */}
                             {importResult && (
-                                <div className={`rounded-md p-3 mb-4 text-sm ${importResult.success ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+                                <div className={`rounded-md p-3 mb-4 text-sm ${importResult.success ? 'bg-success-bg border border-green-200 text-success dark:border-green-700' : 'bg-danger-bg border border-red-200 text-danger dark:border-red-700'}`}>
                                     <p className="font-medium">{importResult.message}</p>
                                     {importResult.detail && <p className="mt-1 text-xs opacity-80">{importResult.detail}</p>}
                                 </div>
@@ -2243,44 +2243,44 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {/* Calendar Sync Modal */}
             {showCalendarModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget && !calSyncing) setShowCalendarModal(false); }}>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <div className="bg-surface rounded-lg shadow-xl w-full max-w-lg">
                         <div className="p-6">
                             <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sync with Google Calendar</h3>
-                                <button onClick={() => !calSyncing && setShowCalendarModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+                                <h3 className="text-lg font-semibold text-on-surface">Sync with Google Calendar</h3>
+                                <button onClick={() => !calSyncing && setShowCalendarModal(false)} className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                Check Google Calendar events in the date range. Events with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">[VIRTUAL]</code> in the title will have their class type set to Virtual and Google Meet link saved.
+                            <p className="text-sm text-muted mb-4">
+                                Check Google Calendar events in the date range. Events with <code className="bg-surface-elevated px-1 rounded text-xs">[VIRTUAL]</code> in the title will have their class type set to Virtual and Google Meet link saved.
                             </p>
 
                             <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">Start Date</label>
                                     <input
                                         type="date"
                                         value={calSyncStartDate}
                                         onChange={e => setCalSyncStartDate(e.target.value)}
                                         disabled={calSyncing}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
+                                        className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm disabled:opacity-50"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">End Date</label>
                                     <input
                                         type="date"
                                         value={calSyncEndDate}
                                         onChange={e => setCalSyncEndDate(e.target.value)}
                                         disabled={calSyncing}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
+                                        className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm disabled:opacity-50"
                                     />
                                 </div>
                             </div>
 
                             {/* Sync progress */}
                             {calSyncing && (
-                                <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                                <div className="flex items-center gap-3 mb-4 p-3 bg-info-bg rounded-md">
                                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                                    <span className="text-sm text-blue-700 dark:text-blue-300">Syncing calendar events...</span>
+                                    <span className="text-sm text-primary">Syncing calendar events...</span>
                                 </div>
                             )}
 
@@ -2290,42 +2290,42 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     {calSyncResult.success ? (
                                         <>
                                             <div className="grid grid-cols-3 gap-3 mb-3">
-                                                <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-2 text-center">
-                                                    <p className="text-lg font-bold text-blue-600">{calSyncResult.summary?.totalEvents || 0}</p>
-                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Total Events</p>
+                                                <div className="bg-info-bg rounded-lg p-2 text-center">
+                                                    <p className="text-lg font-bold text-primary">{calSyncResult.summary?.totalEvents || 0}</p>
+                                                    <p className="text-[10px] text-muted">Total Events</p>
                                                 </div>
                                                 <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-2 text-center">
-                                                    <p className="text-lg font-bold text-purple-600">{calSyncResult.summary?.virtualEvents || 0}</p>
-                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Virtual Events</p>
+                                                    <p className="text-lg font-bold text-purple-700 dark:text-purple-300">{calSyncResult.summary?.virtualEvents || 0}</p>
+                                                    <p className="text-[10px] text-muted">Virtual Events</p>
                                                 </div>
-                                                <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-2 text-center">
-                                                    <p className="text-lg font-bold text-green-600">{calSyncResult.summary?.updated || 0}</p>
-                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Classes Updated</p>
+                                                <div className="bg-success-bg rounded-lg p-2 text-center">
+                                                    <p className="text-lg font-bold text-success">{calSyncResult.summary?.updated || 0}</p>
+                                                    <p className="text-[10px] text-muted">Classes Updated</p>
                                                 </div>
                                             </div>
 
                                             {calSyncResult.results?.length > 0 && (
                                                 <div className="max-h-48 overflow-y-auto border dark:border-gray-700 rounded-md">
                                                     <table className="w-full text-xs">
-                                                        <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                                                        <thead className="bg-surface-elevated sticky top-0">
                                                             <tr>
-                                                                <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Run ID</th>
-                                                                <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Course</th>
-                                                                <th className="px-2 py-1.5 text-center text-gray-500 dark:text-gray-400">Status</th>
+                                                                <th className="px-2 py-1.5 text-left text-muted">Run ID</th>
+                                                                <th className="px-2 py-1.5 text-left text-muted">Course</th>
+                                                                <th className="px-2 py-1.5 text-center text-muted">Status</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <tbody className="divide-y divide-default">
                                                             {calSyncResult.results.map((r: any, i: number) => (
                                                                 <tr key={i}>
-                                                                    <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId || '—'}</td>
-                                                                    <td className="px-2 py-1 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{r.courseTitle || r.event || '—'}</td>
+                                                                    <td className="px-2 py-1 text-on-surface-secondary font-mono">{r.courseRunId || '—'}</td>
+                                                                    <td className="px-2 py-1 text-on-surface-secondary truncate max-w-[200px]">{r.courseTitle || r.event || '—'}</td>
                                                                     <td className="px-2 py-1 text-center">
                                                                         {r.changes ? (
-                                                                            <span className="text-green-600 font-medium">Updated</span>
+                                                                            <span className="text-success font-medium">Updated</span>
                                                                         ) : r.status === 'no_match' ? (
                                                                             <span className="text-yellow-500">No match</span>
                                                                         ) : (
-                                                                            <span className="text-gray-400">Already virtual</span>
+                                                                            <span className="text-muted">Already virtual</span>
                                                                         )}
                                                                     </td>
                                                                 </tr>
@@ -2336,11 +2336,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             )}
 
                                             {calSyncResult.summary?.virtualEvents === 0 && (
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">No [VIRTUAL] events found in the date range.</p>
+                                                <p className="text-sm text-muted text-center py-2">No [VIRTUAL] events found in the date range.</p>
                                             )}
                                         </>
                                     ) : (
-                                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md p-3 text-sm text-red-700 dark:text-red-300">
+                                        <div className="bg-danger-bg border border-red-200 dark:border-red-700 rounded-md p-3 text-sm text-danger">
                                             {calSyncResult.error || calSyncResult.message || 'Sync failed.'}
                                         </div>
                                     )}

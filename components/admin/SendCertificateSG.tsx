@@ -88,71 +88,71 @@ export const SendCertificateSGView: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">Send Certificate (SG)</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+      <div className="bg-surface rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold text-on-surface mb-1">Send Certificate (SG)</h2>
+        <p className="text-sm text-muted mb-6">
           Generate a certificate from Google Slides template and email it to the student.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Student Name</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Student Name</label>
             <input
               type="text"
               value={form.studentName}
               onChange={e => handleChange('studentName', e.target.value)}
               required
               placeholder="e.g. John Doe"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Student Email</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Student Email</label>
             <input
               type="email"
               value={form.studentEmail}
               onChange={e => handleChange('studentEmail', e.target.value)}
               required
               placeholder="e.g. john@example.com"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Name</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Name</label>
             <input
               type="text"
               value={form.courseName}
               onChange={e => handleChange('courseName', e.target.value)}
               required
               placeholder="e.g. Applied AI with Python"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Dates</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Dates</label>
             <input
               type="text"
               value={form.courseDates}
               onChange={e => handleChange('courseDates', e.target.value)}
               required
               placeholder="e.g. 25 - 27 Mar 2026"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CC Email List</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">CC Email List</label>
             <input
               type="text"
               value={form.ccEmails}
               onChange={e => handleChange('ccEmails', e.target.value)}
               placeholder="Comma-separated email addresses"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Comma-separated. Leave empty for no CC.</p>
+            <p className="text-xs text-muted mt-1">Comma-separated. Leave empty for no CC.</p>
           </div>
 
           <button
@@ -172,13 +172,13 @@ export const SendCertificateSGView: React.FC = () => {
         </form>
 
         {result && (
-          <div className={`mt-4 p-3 rounded-md text-sm ${result.success ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'}`}>
+          <div className={`mt-4 p-3 rounded-md text-sm ${result.success ? 'bg-success-bg text-success border border-green-200 dark:border-green-800' : 'bg-danger-bg text-danger border border-red-200 dark:border-red-800'}`}>
             {result.message}
           </div>
         )}
 
-        <div className="mt-6 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-md">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="mt-6 p-4 bg-surface-elevated rounded-md">
+          <p className="text-xs text-muted">
             <strong>Note:</strong> This uses your Google Slides template and Gmail settings from the Google Integration section in Company Settings.
             The template must contain placeholders: <code className="bg-gray-200 dark:bg-slate-600 px-1 rounded">[Student Name]</code>, <code className="bg-gray-200 dark:bg-slate-600 px-1 rounded">[Course Name]</code>, <code className="bg-gray-200 dark:bg-slate-600 px-1 rounded">[Course Dates]</code>.
             Course name and dates are remembered for batch sending.

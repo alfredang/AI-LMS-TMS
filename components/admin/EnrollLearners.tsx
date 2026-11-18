@@ -268,7 +268,7 @@ const EnrollLearners: React.FC = () => {
   const [isCheckingExistingInvoice, setIsCheckingExistingInvoice] = useState(false);
   const ENROLMENT_DRAFT_KEY = 'enrolment_submission_draft';
 
-  const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
+  const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
   // Helper function to calculate age group from date of birth (from ClassDetailView)
   const getAgeGroup = (dob: string): 'Above 40' | 'Below 40' | 'N/A' => {
@@ -311,7 +311,7 @@ const EnrollLearners: React.FC = () => {
       case 'Cancelled':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
     }
   };
 
@@ -1408,21 +1408,21 @@ const EnrollLearners: React.FC = () => {
       <div className="max-w-3xl mx-auto p-6">
         <Card>
           <div className="p-6 border-b dark:border-gray-700 flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 bg-success-bg rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Company Application Submitted</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              <h2 className="text-2xl font-bold text-on-surface">Company Application Submitted</h2>
+              <p className="text-sm text-muted mt-0.5">
                 Enrolment is processing in the background
               </p>
             </div>
           </div>
 
           <div className="p-6 space-y-6">
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
+            <div className="bg-info-bg border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-sm text-info">
               {submissionResult.batchCount ? (
                 <>
                   <span className="font-semibold">{submissionResult.batchCount} learner{submissionResult.batchCount === 1 ? '' : 's'}</span> are being enrolled under{' '}
@@ -1458,9 +1458,9 @@ const EnrollLearners: React.FC = () => {
                     { label: 'Sponsorship', value: submissionResult.sponsorshipType },
                   ]
               ).map(({ label, value }) => (
-                <div key={label} className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white break-all">{value || 'N/A'}</p>
+                <div key={label} className="bg-surface-elevated rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">{label}</p>
+                  <p className="text-sm font-medium text-on-surface break-all">{value || 'N/A'}</p>
                 </div>
               ))}
             </div>
@@ -1494,29 +1494,29 @@ const EnrollLearners: React.FC = () => {
           <div className="p-6 border-b dark:border-gray-700">
             <div className="flex items-center gap-3">
               {submissionResult.success ? (
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 bg-success-bg rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
               ) : (
-                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 bg-danger-bg rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </div>
               )}
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Enrolment Creation Result</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                <h2 className="text-2xl font-bold text-on-surface">Enrolment Creation Result</h2>
+                <p className="text-sm text-muted mt-0.5">
                   Submitted at: {formatDateTime(submissionResult.submittedAt)}
                 </p>
               </div>
               <div className="ml-auto">
                 <span className={`inline-flex px-3 py-1.5 text-sm font-semibold rounded-full border ${
                   submissionResult.success
-                    ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
-                    : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                    ? 'bg-success-bg text-success border-green-200 dark:border-green-700'
+                    : 'bg-danger-bg text-danger border-red-200 dark:border-red-700'
                 }`}>
                   {submissionResult.success ? 'Success' : 'Error'}
                 </span>
@@ -1527,7 +1527,7 @@ const EnrollLearners: React.FC = () => {
           <div className="p-6 space-y-6">
             {/* Section 1: Submitted Trainee Data (from localStorage) */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+              <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">
                 Submitted Data
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1541,9 +1541,9 @@ const EnrollLearners: React.FC = () => {
                   { label: 'Sponsorship',     value: submissionResult.sponsorshipType },
                   { label: 'Fee Status',      value: submissionResult.feesCollectionStatus },
                 ].map(({ label, value }) => (
-                  <div key={label} className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white break-all">
+                  <div key={label} className="bg-surface-elevated rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">{label}</p>
+                    <p className="text-sm font-medium text-on-surface break-all">
                       {value || 'N/A'}
                     </p>
                   </div>
@@ -1553,30 +1553,30 @@ const EnrollLearners: React.FC = () => {
 
             {/* Section 2: SSG Response */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+              <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">
                 SSG Response
               </h3>
               {submissionResult.success ? (
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
-                    <p className="text-xs text-green-600 dark:text-green-400 mb-1">Enrolment ID</p>
-                    <p className="text-lg font-bold text-green-800 dark:text-green-300">
+                  <div className="bg-success-bg border border-green-200 dark:border-green-700 rounded-lg p-4">
+                    <p className="text-xs text-success mb-1">Enrolment ID</p>
+                    <p className="text-lg font-bold text-success">
                       {submissionResult.referenceNumber || 'N/A'}
                     </p>
                   </div>
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
-                    <p className="text-xs text-green-600 dark:text-green-400 mb-1">Enrolment Status</p>
-                    <p className="text-lg font-bold text-green-800 dark:text-green-300">
+                  <div className="bg-success-bg border border-green-200 dark:border-green-700 rounded-lg p-4">
+                    <p className="text-xs text-success mb-1">Enrolment Status</p>
+                    <p className="text-lg font-bold text-success">
                       {submissionResult.enrolmentStatus || 'Confirmed'}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">Error Details</p>
+                <div className="bg-danger-bg border border-red-200 dark:border-red-700 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-danger mb-2">Error Details</p>
                   <ul className="space-y-1">
                     {submissionResult.errorMessages?.map((msg, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
+                      <li key={i} className="flex items-start gap-2 text-sm text-danger">
                         <span className="flex-shrink-0 mt-0.5">✗</span>
                         <span>{msg}</span>
                       </li>
@@ -1599,16 +1599,16 @@ const EnrollLearners: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700">
+    <div className="bg-surface rounded-lg shadow-md dark:border-gray-700">
       {courseFeePopup}
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6 pt-4 dark:text-white">Enroll Learners</h1>
+        <h1 className="text-2xl font-bold text-on-surface mb-6 pt-4">Enroll Learners</h1>
 
         {/* Errors and Warnings */}
         {errors.length > 0 && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
             <h3 className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</h3>
-            <ul className="list-disc list-inside text-sm text-red-700">
+            <ul className="list-disc list-inside text-sm text-danger">
               {errors.map((error, index) => (
                 <li key={index}>{error}</li>
               ))}
@@ -1629,12 +1629,12 @@ const EnrollLearners: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Course Info Section */}
-          <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Course Information</h2>
+          <div className="bg-surface-elevated p-6 rounded-lg">
+            <h2 className="text-lg font-semibold text-on-surface mb-4">Course Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Course Reference Number <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                  Course Reference Number <span className="text-danger">*</span>
                 </label>
                 <input
                   type="text"
@@ -1643,17 +1643,17 @@ const EnrollLearners: React.FC = () => {
                   className={inputClasses}
                   placeholder="Enter course code (e.g., TGS-2024001234)"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-muted mt-1">
                   Enter the course code manually or select from available courses below
                 </p>
                 <div className="mt-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                     Or Select from Available Courses
                   </label>
                   {loadingCourses ? (
                     <div className="flex items-center space-x-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Loading courses...</span>
+                      <span className="text-sm text-muted">Loading courses...</span>
                     </div>
                   ) : (
                     <select
@@ -1670,7 +1670,7 @@ const EnrollLearners: React.FC = () => {
                     </select>
                   )}
                   {availableCourses.length === 0 && !loadingCourses && (
-                    <p className="text-xs text-amber-600 mt-1">
+                    <p className="text-xs text-warning mt-1">
                       No courses found in the database. You can still enter a course code manually above.
                     </p>
                   )}
@@ -1678,8 +1678,8 @@ const EnrollLearners: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Course Run ID <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                  Course Run ID <span className="text-danger">*</span>
                 </label>
                 <input
                   type="text"
@@ -1688,17 +1688,17 @@ const EnrollLearners: React.FC = () => {
                   className={inputClasses}
                   placeholder="Enter course run ID (e.g., 101)"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-muted mt-1">
                   Enter the course run ID manually or select from available runs below
                 </p>
                 <div className="mt-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                     Or Select from Available Course Runs
                   </label>
                   {loadingCourseRuns ? (
                     <div className="flex items-center space-x-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Loading course runs...</span>
+                      <span className="text-sm text-muted">Loading course runs...</span>
                     </div>
                   ) : (
                     <select
@@ -1715,7 +1715,7 @@ const EnrollLearners: React.FC = () => {
                     </select>
                   )}
                   {formData.courseReferenceNumber && availableCourseRuns.length === 0 && !loadingCourseRuns && (
-                    <p className="text-xs text-amber-600 mt-1">
+                    <p className="text-xs text-warning mt-1">
                       No course runs found for this course. You can still enter a course run ID manually above.
                     </p>
                   )}
@@ -1730,7 +1730,7 @@ const EnrollLearners: React.FC = () => {
               <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <h3 className="text-xl font-bold mb-4 dark:text-white">Add Learners to Class</h3>
                 <div className="relative">
-                  <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input
@@ -1743,10 +1743,10 @@ const EnrollLearners: React.FC = () => {
                 </div>
                 <div className="mt-4 max-h-60 overflow-y-auto space-y-2">
                   {searchResults.map(learner => (
-                    <div key={learner.email} className="p-2 flex justify-between items-center bg-gray-50 rounded-md dark:bg-gray-700/50">
+                    <div key={learner.email} className="p-2 flex justify-between items-center bg-surface-elevated rounded-md">
                       <div>
                         <p className="font-semibold text-sm dark:text-white">{learner.name}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">{learner.email}</p>
+                        <p className="text-xs text-on-surface-secondary">{learner.email}</p>
                       </div>
                       <Button type="button" size="sm" variant="ghost" onClick={() => handleLearnerSelection(learner)}>
                         Select
@@ -1754,8 +1754,8 @@ const EnrollLearners: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                <div className="text-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md mt-4">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">Can't find a learner?</p>
+                <div className="text-center p-4 border-2 border-dashed border-strong rounded-md mt-4">
+                  <p className="text-on-surface-secondary text-sm mb-2">Can't find a learner?</p>
                   <Button type="button" size="sm" onClick={() => setIsAddingLearner(true)}>
                     + Add New Learner Profile
                   </Button>
@@ -1780,21 +1780,21 @@ const EnrollLearners: React.FC = () => {
                     return d;
                   };
                   return (
-                    <div className="mb-4 p-3 bg-gray-50 rounded-md dark:bg-gray-700/50 text-sm space-y-1">
+                    <div className="mb-4 p-3 bg-surface-elevated rounded-md text-sm space-y-1">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Course Run ID</span>
+                        <span className="text-muted">Course Run ID</span>
                         <span className="font-medium dark:text-white">{formData.courseRunId}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Start Date</span>
+                        <span className="text-muted">Start Date</span>
                         <span className="font-medium dark:text-white">{formatDate(startDate)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">End Date</span>
+                        <span className="text-muted">End Date</span>
                         <span className="font-medium dark:text-white">{formatDate(endDate)}</span>
                       </div>
-                      <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
-                        <span className="text-gray-500 dark:text-gray-400">Total Enrolments</span>
+                      <div className="flex justify-between border-t border-default pt-1 mt-1">
+                        <span className="text-muted">Total Enrolments</span>
                         <span className="font-semibold dark:text-white">{enrolmentData.data.length}</span>
                       </div>
                     </div>
@@ -1806,7 +1806,7 @@ const EnrollLearners: React.FC = () => {
                   {enrolmentLoading ? (
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                      <p className="text-gray-500 dark:text-gray-400 mt-2">Loading enrolled learners...</p>
+                      <p className="text-muted mt-2">Loading enrolled learners...</p>
                     </div>
                   ) : enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) && enrolmentData.data && Array.isArray(enrolmentData.data) && enrolmentData.data.length > 0 ? (
                     enrolmentData.data.map((record: any, index: number) => {
@@ -1814,12 +1814,12 @@ const EnrollLearners: React.FC = () => {
                       const refNum = enrolment.referenceNumber || enrolment.enrolmentReferenceNumber || 'N/A';
                       const status = enrolment.status || enrolment.enrolmentStatus || '';
                       return (
-                        <div key={index} className="p-2 bg-blue-50 rounded-md dark:bg-blue-900/30">
+                        <div key={index} className="p-2 bg-info-bg rounded-md">
                           <div className="flex justify-between items-start gap-2">
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm dark:text-white truncate">{enrolment.trainee?.fullName || 'N/A'}</p>
-                              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">{enrolment.trainee?.email?.full || 'N/A'}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Ref: {refNum}</p>
+                              <p className="text-xs text-on-surface-secondary truncate">{enrolment.trainee?.email?.full || 'N/A'}</p>
+                              <p className="text-xs text-muted mt-0.5">Ref: {refNum}</p>
                             </div>
                             {status && (
                               <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${getStatusColor(status)}`}>
@@ -1831,7 +1831,7 @@ const EnrollLearners: React.FC = () => {
                       );
                     })
                   ) : (
-                    <p className="text-center text-gray-600 dark:text-gray-400 py-10">
+                    <p className="text-center text-on-surface-secondary py-10">
                       {formData.courseRunId ? 'No enrolled learners found for this course run.' : 'Select a course run to see enrolled learners.'}
                     </p>
                   )}
@@ -1842,7 +1842,7 @@ const EnrollLearners: React.FC = () => {
 
           {/* Selected Learner Section - Show when a learner is selected but not adding new */}
           {selectedLearner && !isAddingLearner && (
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+            <div className="bg-info-bg p-6 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300">Selected Learner</h3>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedLearner(null)} className="dark:text-blue-300 dark:hover:text-blue-200">
@@ -1851,25 +1851,25 @@ const EnrollLearners: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-blue-700 dark:text-blue-400">Name</p>
+                  <p className="text-sm text-primary">Name</p>
                   <p className="font-semibold text-blue-900 dark:text-blue-200">{selectedLearner.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-blue-700 dark:text-blue-400">Email</p>
+                  <p className="text-sm text-primary">Email</p>
                   <p className="font-semibold text-blue-900 dark:text-blue-200">{selectedLearner.email}</p>
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-sm text-blue-600 dark:text-blue-400">Please fill in the sponsorship and employer information below to complete the enrollment.</p>
+                <p className="text-sm text-primary">Please fill in the sponsorship and employer information below to complete the enrollment.</p>
               </div>
             </div>
           )}
 
           {/* Trainee Info Section - Only show when adding a new learner */}
           {isAddingLearner && (
-            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
+            <div className="bg-surface-elevated p-6 rounded-lg">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Trainee Information</h2>
+                <h2 className="text-lg font-semibold text-on-surface">Trainee Information</h2>
                 <Button type="button" size="sm" variant="ghost" onClick={handleBackToSearch} className="dark:text-gray-300 dark:hover:text-white">
                   ← Back to Search
                 </Button>
@@ -1877,8 +1877,8 @@ const EnrollLearners: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Trainee ID Type <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                    Trainee ID Type <span className="text-danger">*</span>
                   </label>
                   <select
                     value={formData.traineeIdType}
@@ -1892,8 +1892,8 @@ const EnrollLearners: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Trainee ID <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                    Trainee ID <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -1906,12 +1906,12 @@ const EnrollLearners: React.FC = () => {
                 </div>
               </div>
 
-              <h3 className="text-md font-semibold text-gray-800 mb-4 dark:text-gray-200">Trainee Particulars</h3>
+              <h3 className="text-md font-semibold text-on-surface mb-4">Trainee Particulars</h3>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Trainee Full Name <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                    Trainee Full Name <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -1924,8 +1924,8 @@ const EnrollLearners: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Trainee Date of Birth <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                    Trainee Date of Birth <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -1938,8 +1938,8 @@ const EnrollLearners: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Trainee Email Address <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                    Trainee Email Address <span className="text-danger">*</span>
                   </label>
                   <input
                     type="email"
@@ -1954,8 +1954,8 @@ const EnrollLearners: React.FC = () => {
                 {/* Contact Number Section */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Country Code <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                      Country Code <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -1968,8 +1968,8 @@ const EnrollLearners: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Phone Number <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                      Phone Number <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -1987,8 +1987,8 @@ const EnrollLearners: React.FC = () => {
 
           {/* Employer Info Section - Only show when a learner is selected */}
           {(selectedLearner || isAddingLearner) && (
-            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Sponsorship and Employer Information</h2>
+            <div className="bg-surface-elevated p-6 rounded-lg">
+              <h2 className="text-lg font-semibold text-on-surface mb-4">Sponsorship and Employer Information</h2>
 
               <div>
                 <label className="flex items-center space-x-2">
@@ -1996,9 +1996,9 @@ const EnrollLearners: React.FC = () => {
                     type="checkbox"
                     checked={showOptionalFields.enrolmentDate}
                     onChange={() => toggleOptionalField('enrolmentDate')}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded border-strong"
                   />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Specify Trainee Date of Enrolment?</span>
+                  <span className="text-sm font-medium text-on-surface-secondary">Specify Trainee Date of Enrolment?</span>
                 </label>
 
                 {showOptionalFields.enrolmentDate && (
@@ -2019,8 +2019,8 @@ const EnrollLearners: React.FC = () => {
                   Application (runs the full CA pipeline, shows in View
                   Company Application). INDIVIDUAL = plain enrolment. */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Trainee Sponsorship Type <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                  Trainee Sponsorship Type <span className="text-danger">*</span>
                 </label>
                 <select
                   value={formData.traineeSponsorshipType}
@@ -2032,7 +2032,7 @@ const EnrollLearners: React.FC = () => {
                   ))}
                 </select>
                 {isCompanyApplication && (
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  <p className="text-xs text-primary mt-1">
                     This learner will be enrolled as a Company Application and appear in View Company Application.
                   </p>
                 )}
@@ -2041,12 +2041,12 @@ const EnrollLearners: React.FC = () => {
               {/* Company Application details — shown for EMPLOYER sponsorship. */}
               {isCompanyApplication && (
                 <div className="space-y-4 mb-6">
-                  <h3 className="text-md font-semibold text-gray-800 dark:text-white">Employer Details</h3>
+                  <h3 className="text-md font-semibold text-on-surface">Employer Details</h3>
 
                   {/* Find the company first; add a new one only if it isn't listed. */}
                   {selectedEmployerKey === '' ? (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
                         Find Company
                       </label>
                       <input
@@ -2057,14 +2057,14 @@ const EnrollLearners: React.FC = () => {
                         placeholder="Search company by name or UEN…"
                         className={inputClasses}
                       />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      <p className="text-xs text-muted mt-1">
                         {loadingEmployers ? 'Loading companies…' : 'Searches QuickBooks + past applications.'}
                       </p>
 
                       {employerSearch.trim() && (
-                        <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                        <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-default divide-y divide-default">
                           {filteredEmployers.length === 0 ? (
-                            <p className="p-3 text-sm text-gray-500 dark:text-gray-400">No matching company found — use "Add a new employer" below.</p>
+                            <p className="p-3 text-sm text-muted">No matching company found — use "Add a new employer" below.</p>
                           ) : (
                             filteredEmployers.map(emp => (
                               <button
@@ -2073,8 +2073,8 @@ const EnrollLearners: React.FC = () => {
                                 onClick={() => handleEmployerSelect(emp.id)}
                                 className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                               >
-                                <span className="block text-sm font-medium text-gray-900 dark:text-white">{emp.employerOrgName || '(no name)'}</span>
-                                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                <span className="block text-sm font-medium text-on-surface">{emp.employerOrgName || '(no name)'}</span>
+                                <span className="block text-xs text-muted">
                                   {emp.employerUen ? `UEN ${emp.employerUen}` : 'From QuickBooks — UEN needed'}
                                 </span>
                               </button>
@@ -2086,14 +2086,14 @@ const EnrollLearners: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAddNewEmployer}
-                        className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                        className="mt-3 text-sm font-medium text-primary hover:underline"
                       >
                         + Can't find it? Add a new employer
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-3 rounded-md bg-gray-100 dark:bg-gray-700/40 px-3 py-2">
-                      <span className="text-sm text-gray-700 dark:text-gray-200">
+                    <div className="flex items-center justify-between gap-3 rounded-md bg-surface-elevated px-3 py-2">
+                      <span className="text-sm text-on-surface-secondary">
                         {selectedEmployerKey === NEW_EMPLOYER_KEY
                           ? 'Entering a new employer'
                           : <>Selected: <span className="font-semibold">{formData.employerOrgName || '(company)'}</span></>}
@@ -2101,7 +2101,7 @@ const EnrollLearners: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleChangeEmployer}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+                        className="text-sm font-medium text-primary hover:underline whitespace-nowrap"
                       >
                         Change
                       </button>
@@ -2111,8 +2111,8 @@ const EnrollLearners: React.FC = () => {
                   {selectedEmployerKey !== '' && (
                   <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Trainee Identity Type <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                      Trainee Identity Type <span className="text-danger">*</span>
                     </label>
                     <select
                       value={formData.traineeIdentityType || ''}
@@ -2123,13 +2123,13 @@ const EnrollLearners: React.FC = () => {
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
                     </select>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Determines the SSG grant the employer is eligible for.</p>
+                    <p className="text-xs text-muted mt-1">Determines the SSG grant the employer is eligible for.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Employer Organization Name <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Employer Organization Name <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2140,8 +2140,8 @@ const EnrollLearners: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Employer UEN <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Employer UEN <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2155,8 +2155,8 @@ const EnrollLearners: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Employer Contact Name <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Employer Contact Name <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2167,8 +2167,8 @@ const EnrollLearners: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Employer Contact Designation <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Employer Contact Designation <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2182,8 +2182,8 @@ const EnrollLearners: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Employer Contact Email <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Employer Contact Email <span className="text-danger">*</span>
                       </label>
                       <input
                         type="email"
@@ -2194,8 +2194,8 @@ const EnrollLearners: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Employer Contact Telephone <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Employer Contact Telephone <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2215,11 +2215,11 @@ const EnrollLearners: React.FC = () => {
                   means Company Application (rendered above), so this never shows. */}
               {false && (
                 <div className="space-y-4">
-                  <h3 className="text-md font-semibold text-gray-800 dark:text-white">Employer Details</h3>
+                  <h3 className="text-md font-semibold text-on-surface">Employer Details</h3>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Employer UEN <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                      Employer UEN <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -2229,12 +2229,12 @@ const EnrollLearners: React.FC = () => {
                       maxLength={50}
                       className={inputClasses}
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Employer organisation's UEN</p>
+                    <p className="text-xs text-muted mt-1">Employer organisation's UEN</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Employer Full Name <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                      Employer Full Name <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -2244,12 +2244,12 @@ const EnrollLearners: React.FC = () => {
                       maxLength={50}
                       className={inputClasses}
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The employer contact's person name</p>
+                    <p className="text-xs text-muted mt-1">The employer contact's person name</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Employer Email Address <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                      Employer Email Address <span className="text-danger">*</span>
                     </label>
                     <input
                       type="email"
@@ -2259,7 +2259,7 @@ const EnrollLearners: React.FC = () => {
                       maxLength={100}
                       className={inputClasses}
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The employer contact's email address</p>
+                    <p className="text-xs text-muted mt-1">The employer contact's email address</p>
                   </div>
 
                   {/* Employer Contact Number */}
@@ -2270,9 +2270,9 @@ const EnrollLearners: React.FC = () => {
                           type="checkbox"
                           checked={showOptionalFields.employerAreaCode}
                           onChange={() => toggleOptionalField('employerAreaCode')}
-                          className="rounded border-gray-300"
+                          className="rounded border-strong"
                         />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Specify Area Code</span>
+                        <span className="text-sm text-on-surface-secondary">Specify Area Code</span>
                       </label>
 
                       {showOptionalFields.employerAreaCode && (
@@ -2288,8 +2288,8 @@ const EnrollLearners: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Country Code <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Country Code <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2302,8 +2302,8 @@ const EnrollLearners: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Phone Number <span className="text-red-500">*</span>
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                        Phone Number <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
@@ -2327,9 +2327,9 @@ const EnrollLearners: React.FC = () => {
                         type="checkbox"
                         checked={showOptionalFields.employerUen}
                         onChange={() => toggleOptionalField('employerUen')}
-                        className="rounded border-gray-300"
+                        className="rounded border-strong"
                       />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Specify Employer UEN?</span>
+                      <span className="text-sm font-medium text-on-surface-secondary">Specify Employer UEN?</span>
                     </label>
 
                     {showOptionalFields.employerUen && (
@@ -2352,9 +2352,9 @@ const EnrollLearners: React.FC = () => {
                         type="checkbox"
                         checked={showOptionalFields.employerFullName}
                         onChange={() => toggleOptionalField('employerFullName')}
-                        className="rounded border-gray-300"
+                        className="rounded border-strong"
                       />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Specify Employer Full Name?</span>
+                      <span className="text-sm font-medium text-on-surface-secondary">Specify Employer Full Name?</span>
                     </label>
 
                     {showOptionalFields.employerFullName && (
@@ -2377,9 +2377,9 @@ const EnrollLearners: React.FC = () => {
                         type="checkbox"
                         checked={showOptionalFields.employerEmail}
                         onChange={() => toggleOptionalField('employerEmail')}
-                        className="rounded border-gray-300"
+                        className="rounded border-strong"
                       />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Specify Employer Email Address?</span>
+                      <span className="text-sm font-medium text-on-surface-secondary">Specify Employer Email Address?</span>
                     </label>
 
                     {showOptionalFields.employerEmail && (
@@ -2401,13 +2401,13 @@ const EnrollLearners: React.FC = () => {
           )}
 
           {/* Training Partner Info Section */}
-          <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Training Partner Information</h2>
+          <div className="bg-surface-elevated p-6 rounded-lg">
+            <h2 className="text-lg font-semibold text-on-surface mb-4">Training Partner Information</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Training Partner UEN <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                  Training Partner UEN <span className="text-danger">*</span>
                 </label>
                 <input
                   type="text"
@@ -2420,8 +2420,8 @@ const EnrollLearners: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Training Partner Code <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                  Training Partner Code <span className="text-danger">*</span>
                 </label>
                 <input
                   type="text"
@@ -2431,7 +2431,7 @@ const EnrollLearners: React.FC = () => {
                   maxLength={15}
                   className={inputClasses}
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code for the training partner conducting the course for which the trainee is enrolled</p>
+                <p className="text-xs text-muted mt-1">Code for the training partner conducting the course for which the trainee is enrolled</p>
               </div>
             </div>
           </div>
@@ -2439,10 +2439,10 @@ const EnrollLearners: React.FC = () => {
           {/* Preview Request Body — hidden for Company Applications (which use a
               different payload shape submitted to the CA pipeline). */}
           {!isCompanyApplication && (
-            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Preview Request Body</h2>
-              <div className="bg-white p-4 rounded border dark:bg-gray-800 dark:border-gray-700">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto dark:text-gray-300">
+            <div className="bg-surface-elevated p-6 rounded-lg">
+              <h2 className="text-lg font-semibold text-on-surface mb-4">Preview Request Body</h2>
+              <div className="bg-surface p-4 rounded border dark:border-gray-700">
+                <pre className="text-sm text-on-surface-secondary whitespace-pre-wrap overflow-x-auto">
                   {JSON.stringify(buildPayload(), null, 2)}
                 </pre>
               </div>
@@ -2457,27 +2457,27 @@ const EnrollLearners: React.FC = () => {
           {isCompanyApplication && selectedEmployerKey !== '' && (
             <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg p-5 space-y-4">
               <div className="flex items-start justify-between gap-3 flex-wrap">
-                <h3 className="text-md font-semibold text-gray-800 dark:text-white">
+                <h3 className="text-md font-semibold text-on-surface">
                   Consolidated batch{caBatch.length > 0 ? ` (${caBatch.length} learner${caBatch.length === 1 ? '' : 's'})` : ''}
                 </h3>
-                <span className="text-xs text-gray-500 dark:text-gray-400 max-w-xs text-right">
+                <span className="text-xs text-muted max-w-xs text-right">
                   All staged learners share this employer + course run → one invoice.
                 </span>
               </div>
 
               {caBatch.length > 0 ? (
-                <ul className="divide-y divide-indigo-100 dark:divide-indigo-800/60 rounded-md border border-indigo-100 dark:border-indigo-800/60 bg-white dark:bg-gray-800">
+                <ul className="divide-y divide-indigo-100 dark:divide-indigo-800/60 rounded-md border border-indigo-100 dark:border-indigo-800/60 bg-surface">
                   {caBatch.map((b, i) => (
                     <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <span className="text-gray-800 dark:text-gray-200">
+                      <span className="text-on-surface">
                         <span className="font-medium">{b.name || '(unnamed)'}</span>
-                        <span className="text-gray-500 dark:text-gray-400 ml-2">{b.nric}</span>
+                        <span className="text-muted ml-2">{b.nric}</span>
                       </span>
                       <button
                         type="button"
                         onClick={() => removeFromBatch(i)}
                         disabled={isEnrolBatch}
-                        className="text-xs font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                        className="text-xs font-medium text-danger hover:underline disabled:opacity-50"
                       >
                         Remove
                       </button>
@@ -2485,7 +2485,7 @@ const EnrollLearners: React.FC = () => {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted">
                   Fill the trainee fields above, then <span className="font-medium">Add learner to batch</span>. Repeat for each learner from this company, then enrol them all at once for a single invoice.
                 </p>
               )}
@@ -2539,7 +2539,7 @@ const EnrollLearners: React.FC = () => {
                   setWarnings([]);
                 }
               }}
-              className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="px-6 py-2 border border-strong rounded-md text-on-surface-secondary hover:bg-surface-hover"
             >
               Clear Form
             </button>
@@ -2564,16 +2564,16 @@ const EnrollLearners: React.FC = () => {
           company sharing ONE consolidated main tax invoice. */}
       {showSingleCaConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-800">
+          <div className="w-full max-w-md rounded-lg bg-surface shadow-xl">
             <div className="p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h3 className="text-lg font-semibold text-on-surface">
                 Is {formData.employerOrgName?.trim() || 'this company'} enrolling only 1 learner?
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
+              <p className="text-sm text-on-surface-secondary">
                 You&apos;re about to enrol <span className="font-medium">just this one learner</span>, which
                 generates <span className="font-medium">a separate tax invoice for them alone</span>.
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
+              <p className="text-sm text-on-surface-secondary">
                 If the company is enrolling <span className="font-medium">more than one learner</span> for this
                 course, don&apos;t enrol them one by one — use <span className="font-medium">&ldquo;+ Add learner
                 to batch&rdquo;</span> to stage everyone, then <span className="font-medium">&ldquo;Enrol all &amp;
@@ -2581,7 +2581,7 @@ const EnrollLearners: React.FC = () => {
                 invoice</span>.
               </p>
             </div>
-            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-default">
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -2589,7 +2589,7 @@ const EnrollLearners: React.FC = () => {
                   setShowSingleCaConfirm(false);
                   void handleCompanyApplicationSubmit();
                 }}
-                className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
               >
                 Yes, just 1 — enrol &amp; invoice
               </button>
@@ -2625,15 +2625,15 @@ const EnrollLearners: React.FC = () => {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-800">
+            <div className="w-full max-w-lg rounded-lg bg-surface shadow-xl">
               <div className="p-6 space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-on-surface">
                   {employerLabel} already has an invoice for this class
                 </h3>
 
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2 dark:border-amber-800/60 dark:bg-amber-900/20">
+                <div className="rounded-md border border-amber-300 bg-warning-bg p-3 space-y-2 dark:border-amber-800/60">
                   {existingInvoice.invoices.map(inv => (
-                    <div key={inv.invoiceId} className="text-xs text-amber-800 dark:text-amber-200">
+                    <div key={inv.invoiceId} className="text-xs text-warning">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="font-mono font-semibold">{inv.docNumber || inv.invoiceId}</span>
                         <span>·</span>
@@ -2654,7 +2654,7 @@ const EnrollLearners: React.FC = () => {
                     rather than guessed. */}
                 {!existingInvoice.canReplace && existingInvoice.invoices.length > 1 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                    <p className="text-xs font-semibold text-on-surface-secondary">
                       Which invoice will you add {addingCount === 1 ? 'this learner' : 'them'} to?
                     </p>
                     {existingInvoice.invoices.map(inv => {
@@ -2662,7 +2662,7 @@ const EnrollLearners: React.FC = () => {
                       return (
                         <label
                           key={inv.invoiceId}
-                          className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer"
+                          className="flex items-center gap-2 text-xs text-on-surface-secondary cursor-pointer"
                         >
                           <input
                             type="radio"
@@ -2683,14 +2683,14 @@ const EnrollLearners: React.FC = () => {
                 )}
 
                 {existingInvoice.canReplace ? (
-                  <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                  <div className="rounded-md bg-surface-elevated p-3 text-sm text-on-surface-secondary">
                     The company has not seen this invoice yet, so we can replace it with a single
                     invoice covering all {totalCount} learners. The swap happens once SSG grants the
                     new {addingCount === 1 ? 'learner' : 'learners'} — until then the current invoice
                     stays exactly as it is.
                   </div>
                 ) : (
-                  <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                  <div className="rounded-md bg-surface-elevated p-3 text-sm text-on-surface-secondary">
                     {describeReplaceBlock(existingInvoice.blockedReason)} Add{' '}
                     {addingCount === 1 ? 'this learner' : 'these learners'} to it yourself in
                     QuickBooks, or bill {addingCount === 1 ? 'them' : 'them'} on a second invoice.
@@ -2698,7 +2698,7 @@ const EnrollLearners: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-default">
                 <button
                   type="button"
                   disabled={isBusy}
@@ -2706,7 +2706,7 @@ const EnrollLearners: React.FC = () => {
                     setShowExistingInvoiceConfirm(false);
                     setPendingCaAction(null);
                   }}
-                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -2714,7 +2714,7 @@ const EnrollLearners: React.FC = () => {
                   type="button"
                   disabled={isBusy}
                   onClick={() => void runPendingCaAction('auto')}
-                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
                 >
                   Create a separate invoice
                 </button>
@@ -2723,7 +2723,7 @@ const EnrollLearners: React.FC = () => {
                     type="button"
                     disabled={isBusy}
                     onClick={() => void runPendingCaAction('replace')}
-                    className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50"
                   >
                     Replace with 1 invoice for all {totalCount}
                   </button>
@@ -2732,7 +2732,7 @@ const EnrollLearners: React.FC = () => {
                     type="button"
                     disabled={isBusy}
                     onClick={() => void runPendingCaAction('enrol-only')}
-                    className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50"
                   >
                     Enrol only — I&apos;ll edit the invoice
                   </button>

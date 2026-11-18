@@ -167,10 +167,10 @@ const Panel: React.FC<{
 }> = ({ title, meta, controls, children, className = '' }) => (
   <Card className={`p-5 sm:p-6 ${className}`}>
     <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+      <h3 className="text-lg font-bold text-on-surface">{title}</h3>
       <div className="flex flex-wrap items-center gap-3">
         {controls}
-        {meta && <span className="text-sm text-gray-500 dark:text-gray-400">{meta}</span>}
+        {meta && <span className="text-sm text-muted">{meta}</span>}
       </div>
     </div>
     {children}
@@ -178,7 +178,7 @@ const Panel: React.FC<{
 );
 
 const FilterLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{children}</span>
+  <span className="text-xs font-semibold uppercase tracking-wide text-muted">{children}</span>
 );
 
 // ---------------------------------------------------------------- main
@@ -341,10 +341,10 @@ const TrainingProviderDashboard: React.FC = () => {
   if (!data && error) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-3">
-        <div className="text-lg text-red-600">Error: {error}</div>
+        <div className="text-lg text-danger">Error: {error}</div>
         <button
           onClick={() => setReloadTick((t) => t + 1)}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+          className="rounded-lg border border-strong px-4 py-2 text-sm font-medium hover:bg-surface-hover"
         >
           Retry
         </button>
@@ -377,8 +377,8 @@ const TrainingProviderDashboard: React.FC = () => {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-3xl font-bold">Training Analytics Dashboard</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Showing: <span className="font-medium text-gray-700 dark:text-gray-200">{summary}</span>
+          <p className="mt-1 text-sm text-muted">
+            Showing: <span className="font-medium text-on-surface-secondary">{summary}</span>
             {(loading || trendLoading || rankLoading) && (
               <span className="ml-2 animate-pulse text-primary">Updating…</span>
             )}
@@ -387,7 +387,7 @@ const TrainingProviderDashboard: React.FC = () => {
         <button
           onClick={() => setReloadTick((t) => t + 1)}
           disabled={loading || trendLoading || rankLoading}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          className="rounded-lg border border-strong px-4 py-2 text-sm font-medium transition-colors hover:bg-surface-hover disabled:opacity-50"
         >
           {loading || trendLoading || rankLoading ? 'Refreshing...' : 'Refresh'}
         </button>
@@ -618,8 +618,8 @@ const TrainingProviderDashboard: React.FC = () => {
                 value={rankMetric}
                 onChange={setRankMetric}
               />
-              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                Top <span className="w-6 font-bold text-gray-900 dark:text-white tabular-nums">{topN}</span>
+              <label className="flex items-center gap-2 text-sm text-on-surface-secondary">
+                Top <span className="w-6 font-bold text-on-surface tabular-nums">{topN}</span>
                 <input
                   type="range"
                   min={5}
@@ -636,7 +636,7 @@ const TrainingProviderDashboard: React.FC = () => {
           meta={`${ranking.length} of top ${courses?.length ?? 0} by ${rankMetric} · ${rankPeriodLabel} · click a course to filter`}
         >
           {courses && courses.length === 0 ? (
-            <p className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p className="py-10 text-center text-sm text-muted">
               No enrolments in {rankPeriodLabel.toLowerCase()} for these filters.
             </p>
           ) : (

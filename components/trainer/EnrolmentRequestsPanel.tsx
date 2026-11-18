@@ -22,9 +22,9 @@ interface EnrolmentRequest {
 }
 
 const STATUS_STYLE: Record<EnrolmentRequest['status'], { label: string; cls: string }> = {
-  submitted: { label: 'Pending', cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-  failed:    { label: 'Failed', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  enrolled:  { label: 'Enrolled', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  submitted: { label: 'Pending', cls: 'bg-warning-bg text-warning' },
+  failed:    { label: 'Failed', cls: 'bg-danger-bg text-danger' },
+  enrolled:  { label: 'Enrolled', cls: 'bg-success-bg text-success' },
   dismissed: { label: 'Dismissed', cls: 'bg-surface-elevated text-on-surface-secondary' },
 };
 
@@ -171,7 +171,7 @@ export const EnrolmentRequestsPanel: React.FC<{
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-on-surface">Enrolment Requests</h2>
           {pending > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 text-xs font-semibold">
+            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-warning-bg text-warning text-xs font-semibold">
               {pending} pending
             </span>
           )}
@@ -204,7 +204,7 @@ export const EnrolmentRequestsPanel: React.FC<{
 
       {open && (
         <>
-          {error && <p className="px-4 py-2 text-xs text-red-500 border-b border-default">{error}</p>}
+          {error && <p className="px-4 py-2 text-xs text-danger border-b border-default">{error}</p>}
 
           {/* Enrolment QR code for the trainer to show the class */}
           {showQr && qrAvailable && enrolUrl && (
@@ -213,7 +213,7 @@ export const EnrolmentRequestsPanel: React.FC<{
                 type="button"
                 onClick={() => setQrZoomed(true)}
                 title="Show the QR code full screen"
-                className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm cursor-zoom-in self-start"
+                className="bg-white p-2 rounded-lg border border-default shadow-sm cursor-zoom-in self-start"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={qrSrc(enrolUrl, 300)} alt="Enrolment request QR code" width={132} height={132} />
@@ -350,7 +350,7 @@ export const EnrolmentRequestsPanel: React.FC<{
                             <button disabled={busy} onClick={() => { setRefEditId(r.id); setRefInput(''); }} className={`${btn} bg-surface-elevated border border-default text-on-surface-secondary hover:bg-surface-hover`}>
                               Enter Ref
                             </button>
-                            <button disabled={busy} onClick={() => act(r.id, 'dismiss')} className={`${btn} text-red-500 hover:underline`}>
+                            <button disabled={busy} onClick={() => act(r.id, 'dismiss')} className={`${btn} text-danger hover:underline`}>
                               Dismiss
                             </button>
                           </div>
@@ -393,10 +393,10 @@ export const EnrolmentRequestsPanel: React.FC<{
                           </button>
                         )}
                         {r.status === 'failed' && r.lastError && !msg && (
-                          <p className="mt-1.5 text-xs text-red-500 whitespace-normal">{r.lastError}</p>
+                          <p className="mt-1.5 text-xs text-danger whitespace-normal">{r.lastError}</p>
                         )}
                         {msg && (
-                          <p className={`mt-1.5 text-xs whitespace-normal ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>{msg.text}</p>
+                          <p className={`mt-1.5 text-xs whitespace-normal ${msg.ok ? 'text-success' : 'text-danger'}`}>{msg.text}</p>
                         )}
                       </td>
                     </tr>
@@ -416,12 +416,12 @@ export const EnrolmentRequestsPanel: React.FC<{
           onClick={() => setQrZoomed(false)}
           className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center gap-4 p-6 cursor-zoom-out"
         >
-          <p className="text-3xl font-bold text-gray-900 text-center">Scan to check or complete your enrolment</p>
+          <p className="text-3xl font-bold text-on-surface text-center">Scan to check or complete your enrolment</p>
           <p className="text-base font-medium text-amber-700 text-center">This is not the attendance QR code. Take your attendance with the SSG QR code as usual.</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrSrc(enrolUrl, 1000)} alt="Enrolment request QR code" style={{ width: 'min(64vh, 88vw)', height: 'min(64vh, 88vw)' }} />
-          <p className="text-sm text-gray-500 break-all text-center">{enrolUrl}</p>
-          <p className="text-xs text-gray-400">Click anywhere or press Esc to close</p>
+          <p className="text-sm text-muted break-all text-center">{enrolUrl}</p>
+          <p className="text-xs text-muted">Click anywhere or press Esc to close</p>
         </div>
       )}
     </div>

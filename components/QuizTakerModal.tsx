@@ -163,23 +163,23 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
       }}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full my-8 flex flex-col max-h-[90vh]"
+        className="bg-surface rounded-lg shadow-xl max-w-2xl w-full my-8 flex flex-col max-h-[90vh]"
         draggable={false}
         onDragStart={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header — quiz title + close */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+        <div className="px-6 py-4 border-b border-default flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex-shrink-0 w-8 h-8 rounded-md bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-sm font-bold">
+            <span className="flex-shrink-0 w-8 h-8 rounded-md bg-info-bg flex items-center justify-center text-primary text-sm font-bold">
               ?
             </span>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-white truncate">
+              <h2 className="text-base font-semibold text-on-surface truncate">
                 {title || 'Quiz'}
               </h2>
               {previousScore && !result && (
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                <p className="text-[11px] text-muted">
                   Previous best: {previousScore.score}/{previousScore.total}
                 </p>
               )}
@@ -187,7 +187,7 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none p-1 flex-shrink-0"
+            className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none p-1 flex-shrink-0"
             aria-label="Close"
           >
             ×
@@ -196,7 +196,7 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
 
         {/* Progress bar row — segmented progress + counter + tally badges */}
         {!result && (
-          <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-shrink-0">
+          <div className="px-6 py-3 border-b border-default flex items-center gap-3 flex-shrink-0">
             <div className="flex-1 flex gap-1">
               {questions.map((q, i) => {
                 const isLocked = q.id in lockedResults;
@@ -215,14 +215,14 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
                 );
               })}
             </div>
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+            <span className="text-xs font-medium text-muted whitespace-nowrap">
               {currentIndex + 1} / {questions.length}
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-danger-bg text-danger">
               <span>×</span>
               <span>{wrongCount}</span>
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-success-bg text-success">
               <span>✓</span>
               <span>{correctCount}</span>
             </span>
@@ -237,29 +237,29 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
               <div className="text-center mb-6">
                 <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-3 ${
                   result.score === result.total
-                    ? 'bg-green-100 dark:bg-green-900/40'
+                    ? 'bg-success-bg'
                     : result.score >= Math.ceil(result.total * 0.5)
-                      ? 'bg-yellow-100 dark:bg-yellow-900/40'
-                      : 'bg-red-100 dark:bg-red-900/40'
+                      ? 'bg-warning-bg'
+                      : 'bg-danger-bg'
                 }`}>
                   <span className={`text-2xl font-bold ${
                     result.score === result.total
-                      ? 'text-green-700 dark:text-green-300'
+                      ? 'text-success'
                       : result.score >= Math.ceil(result.total * 0.5)
-                        ? 'text-yellow-700 dark:text-yellow-300'
-                        : 'text-red-700 dark:text-red-300'
+                        ? 'text-warning'
+                        : 'text-danger'
                   }`}>
                     {result.score}/{result.total}
                   </span>
                 </div>
-                <p className="text-base font-semibold text-gray-800 dark:text-white">
+                <p className="text-base font-semibold text-on-surface">
                   {result.score === result.total
                     ? '🎉 Perfect score!'
                     : result.score >= Math.ceil(result.total * 0.5)
                       ? 'Good effort!'
                       : 'Keep learning and try again'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-muted mt-1">
                   Your score has been saved.
                 </p>
               </div>
@@ -283,12 +283,12 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
                       <div className="flex items-start gap-2 mb-2">
                         <span className={`flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                           wasCorrect
-                            ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
-                            : 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
+                            ? 'bg-green-200 dark:bg-green-800 text-success'
+                            : 'bg-red-200 dark:bg-red-800 text-danger'
                         }`}>
                           {wasCorrect ? '✓' : '✗'}
                         </span>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                        <p className="text-sm font-semibold text-on-surface">
                           {qi + 1}. {q.question}
                         </p>
                       </div>
@@ -301,10 +301,10 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
                               key={oi}
                               className={`px-2 py-1 rounded ${
                                 isCorrect
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 font-semibold'
+                                  ? 'bg-success-bg text-success font-semibold'
                                   : isSelected
-                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 line-through'
-                                    : 'text-gray-600 dark:text-gray-400'
+                                    ? 'bg-danger-bg text-danger line-through'
+                                    : 'text-on-surface-secondary'
                               }`}
                             >
                               {isCorrect && '✓ '}
@@ -323,10 +323,10 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
             // Single-question view (Google-Forms style)
             <div>
               <div className="flex items-start gap-3 mb-6">
-                <span className="flex-shrink-0 text-base font-semibold text-gray-500 dark:text-gray-400">
+                <span className="flex-shrink-0 text-base font-semibold text-muted">
                   {currentIndex + 1}.
                 </span>
-                <p className="text-base font-medium text-gray-800 dark:text-white flex-1 leading-relaxed">
+                <p className="text-base font-medium text-on-surface flex-1 leading-relaxed">
                   {currentQuestion.question}
                 </p>
               </div>
@@ -342,20 +342,20 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
                       disabled={isCurrentLocked}
                       className={`w-full text-left flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-blue-500 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-200 dark:ring-blue-900/40'
-                          : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 hover:border-gray-400 dark:hover:border-gray-500'
+                          ? 'border-blue-500 dark:border-blue-500 bg-info-bg ring-2 ring-blue-200 dark:ring-blue-900/40'
+                          : 'border-default bg-surface-elevated hover:border-gray-400 dark:hover:border-gray-500'
                       } ${isCurrentLocked ? 'cursor-default opacity-90' : 'cursor-pointer'}`}
                     >
                       <span
                         className={`flex-shrink-0 text-sm font-bold w-6 ${
                           isSelected
-                            ? 'text-blue-600 dark:text-blue-300'
-                            : 'text-gray-500 dark:text-gray-400'
+                            ? 'text-primary'
+                            : 'text-muted'
                         }`}
                       >
                         {letter}.
                       </span>
-                      <span className="text-sm text-gray-800 dark:text-gray-200 flex-1">
+                      <span className="text-sm text-on-surface flex-1">
                         {opt}
                       </span>
                     </button>
@@ -366,14 +366,14 @@ const QuizTakerModal: React.FC<QuizTakerModalProps> = ({
           ) : null}
 
           {error && (
-            <div className="mt-4 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+            <div className="mt-4 p-3 rounded-md bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
               {error}
             </div>
           )}
         </div>
 
         {/* Footer — Back / Cancel / Next or Submit */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="px-6 py-4 border-t border-default flex items-center justify-between gap-2 flex-shrink-0">
           {result ? (
             <div className="w-full flex justify-end">
               <Button variant="primary" onClick={onClose}>Close</Button>

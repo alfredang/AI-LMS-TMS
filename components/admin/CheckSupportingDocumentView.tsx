@@ -243,8 +243,8 @@ export const CheckSupportingDocumentView: React.FC = () => {
   const filterPills: Array<{ value: typeof statusFilter; label: string; count: number; activeClass: string }> = [
     { value: 'all', label: 'Total', count: stats.total, activeClass: 'bg-gray-700 text-white' },
     { value: 'outstanding', label: 'Outstanding', count: stats.outstanding, activeClass: 'bg-blue-600 text-white' },
-    { value: 'verified', label: 'Verified', count: stats.verified, activeClass: 'bg-emerald-600 text-white' },
-    { value: 'pending', label: 'Pending', count: stats.pending, activeClass: 'bg-amber-500 text-white' },
+    { value: 'verified', label: 'Verified', count: stats.verified, activeClass: 'bg-emerald-700 text-white' },
+    { value: 'pending', label: 'Pending', count: stats.pending, activeClass: 'bg-amber-700 text-white' },
     { value: 'mismatch', label: 'Mismatch', count: stats.mismatch, activeClass: 'bg-red-600 text-white' },
   ];
 
@@ -252,12 +252,12 @@ export const CheckSupportingDocumentView: React.FC = () => {
     <div className="space-y-5">
       {/* Hero header */}
       <div className="flex items-start gap-4 flex-wrap">
-        <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-          <Icon name={IconName.Shield} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+        <div className="w-12 h-12 rounded-xl bg-info-bg flex items-center justify-center flex-shrink-0">
+          <Icon name={IconName.Shield} className="w-6 h-6 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-2xl font-bold dark:text-white">Check Supporting Document</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-3xl">
+          <p className="text-sm text-muted mt-1 max-w-3xl">
             Outstanding supporting documents block invoice emails to employers. Verify each learner&apos;s
             doc against name, NRIC, employer and UEN — once an employer&apos;s entire batch is cleared,
             release the consolidated tax invoice from View Company Application.
@@ -308,20 +308,20 @@ export const CheckSupportingDocumentView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search learner, NRIC, employer, UEN, course…"
-            className="w-full pl-9 pr-9 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white"
+            className="w-full pl-9 pr-9 py-2 text-sm bg-surface border border-strong rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-surface-hover"
               aria-label="Clear search"
             >
               <Icon name={IconName.Close} className="w-3.5 h-3.5 text-gray-400" />
             </button>
           )}
         </div>
-        <div className="inline-flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <div className="inline-flex items-center gap-1 p-1 bg-surface-elevated rounded-lg">
           {filterPills.map(pill => {
             const isActive = statusFilter === pill.value;
             return (
@@ -332,12 +332,12 @@ export const CheckSupportingDocumentView: React.FC = () => {
                 className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors inline-flex items-center gap-1.5 ${
                   isActive
                     ? pill.activeClass
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700'
+                    : 'text-on-surface-secondary hover:bg-white dark:hover:bg-gray-700'
                 }`}
               >
                 {pill.label}
                 <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${
-                  isActive ? 'bg-white/20' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+                  isActive ? 'bg-white/20' : 'bg-surface text-on-surface-secondary'
                 }`}>
                   {pill.count}
                 </span>
@@ -352,7 +352,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
 
       {error && (
         <Card>
-          <div className="p-3 text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+          <div className="p-3 text-sm text-danger flex items-center gap-2">
             <Icon name={IconName.Warning} className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -361,7 +361,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
 
       {loading && rows.length === 0 ? (
         <Card>
-          <div className="p-12 flex items-center justify-center text-gray-500 dark:text-gray-400 gap-3">
+          <div className="p-12 flex items-center justify-center text-muted gap-3">
             <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-blue-500" />
             <span className="text-sm">Loading company applications…</span>
           </div>
@@ -369,20 +369,20 @@ export const CheckSupportingDocumentView: React.FC = () => {
       ) : stats.outstanding === 0 ? (
         <Card>
           <div className="p-12 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-800/60 mb-4">
-              <Icon name={IconName.CheckCircle} className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-success-bg ring-1 ring-emerald-200 dark:ring-emerald-800/60 mb-4">
+              <Icon name={IconName.CheckCircle} className="w-8 h-8 text-success" />
             </div>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">All caught up</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-lg font-bold text-on-surface">All caught up</p>
+            <p className="text-sm text-muted mt-1">
               Every company application row has a verified supporting document.
             </p>
           </div>
         </Card>
       ) : employerGroups.length === 0 ? (
         <Card>
-          <div className="p-12 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-12 text-center text-muted">
             <Icon name={IconName.Search} className="w-10 h-10 mx-auto mb-3 opacity-50" />
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">No matches</p>
+            <p className="text-sm font-semibold text-on-surface-secondary">No matches</p>
             <p className="text-xs mt-1">Try clearing the search or switching to a different status filter.</p>
           </div>
         </Card>
@@ -413,29 +413,29 @@ export const CheckSupportingDocumentView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => toggleGroup(crCollapseKey)}
-                      className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                      className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-surface-hover transition-colors text-left"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <Icon
                           name={IconName.ChevronDown}
                           className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isCollapsed ? '-rotate-90' : ''}`}
                         />
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                          <Icon name={IconName.Building} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        <div className="w-10 h-10 rounded-lg bg-surface-elevated flex items-center justify-center flex-shrink-0">
+                          <Icon name={IconName.Building} className="w-5 h-5 text-muted" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm dark:text-white truncate">
                             <span className="font-bold">{emp.employerName}</span>
-                            <span className="mx-2 text-gray-400 dark:text-gray-500">·</span>
-                            <span className="font-semibold text-gray-700 dark:text-gray-200">{cr.courseTitle}</span>
+                            <span className="mx-2 text-muted">·</span>
+                            <span className="font-semibold text-on-surface-secondary">{cr.courseTitle}</span>
                           </p>
-                          <div className="mt-1 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-gray-500 dark:text-gray-400">
+                          <div className="mt-1 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-muted">
                             {cr.courseStartDate && (
                               <span
                                 className="inline-flex items-center gap-1"
                                 title={`Course start date: ${formatCourseDateLong(cr.courseStartDate)}`}
                               >
-                                <span className="text-gray-400 dark:text-gray-500">Start date</span>
+                                <span className="text-muted">Start date</span>
                                 {formatCourseDateLong(cr.courseStartDate)}
                               </span>
                             )}
@@ -444,7 +444,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                 className="inline-flex items-center gap-1 font-mono"
                                 title={`Course Run ID: ${cr.courseRunId}`}
                               >
-                                <span className="text-gray-400 dark:text-gray-500 font-sans">Course run</span>
+                                <span className="text-muted font-sans">Course run</span>
                                 {cr.courseRunId}
                               </span>
                             )}
@@ -453,7 +453,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                 className="inline-flex items-center gap-1 font-mono"
                                 title={`Employer UEN: ${emp.employerUen}`}
                               >
-                                <span className="text-gray-400 dark:text-gray-500 font-sans">UEN</span>
+                                <span className="text-muted font-sans">UEN</span>
                                 {emp.employerUen}
                               </span>
                             )}
@@ -478,7 +478,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                           return (
                             <div
                               key={id || `${cr.key}-${idx}`}
-                              className={`flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors ${
+                              className={`flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors ${
                                 idx > 0 ? 'border-t dark:border-gray-800' : ''
                               }`}
                             >
@@ -489,7 +489,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {nric && (
                                       <span
-                                        className="text-[11px] font-mono text-gray-500 dark:text-gray-400"
+                                        className="text-[11px] font-mono text-muted"
                                         title="NRIC masked for privacy"
                                       >
                                         {maskNric(nric)}
@@ -501,7 +501,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         onClick={(e) => e.stopPropagation()}
-                                        className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                                         title="Open uploaded doc in Drive"
                                       >
                                         <Icon name={IconName.ExternalLink} className="w-3 h-3" />
@@ -531,8 +531,8 @@ export const CheckSupportingDocumentView: React.FC = () => {
                           );
                         })}
                         {cr.rows.length > 1 && !allVerified && (
-                          <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-800/40 border-t dark:border-gray-800 flex items-center justify-between">
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          <div className="px-4 py-2.5 bg-surface-elevated border-t dark:border-gray-800 flex items-center justify-between">
+                            <p className="text-[11px] text-muted">
                               Verify the entire batch in one pass — opens all {cr.rows.length} learners in the modal.
                             </p>
                             <Button onClick={() => openModalForGroup(cr.rows)}>
@@ -571,25 +571,25 @@ export const CheckSupportingDocumentView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleGroup(empCollapseKey)}
-                    className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                    className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-surface-hover transition-colors text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <Icon
                         name={IconName.ChevronDown}
                         className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isEmpCollapsed ? '-rotate-90' : ''}`}
                       />
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                        <Icon name={IconName.Building} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                      <div className="w-10 h-10 rounded-lg bg-surface-elevated flex items-center justify-center flex-shrink-0">
+                        <Icon name={IconName.Building} className="w-5 h-5 text-muted" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold dark:text-white truncate">{emp.employerName}</p>
-                        <div className="mt-1 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-gray-500 dark:text-gray-400">
+                        <div className="mt-1 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-muted">
                           {emp.employerUen && (
                             <span
                               className="inline-flex items-center gap-1 font-mono"
                               title={`Employer UEN: ${emp.employerUen}`}
                             >
-                              <span className="text-gray-400 dark:text-gray-500 font-sans">UEN</span>
+                              <span className="text-muted font-sans">UEN</span>
                               {emp.employerUen}
                             </span>
                           )}
@@ -635,29 +635,29 @@ export const CheckSupportingDocumentView: React.FC = () => {
                         return (
                           <div
                             key={cr.key}
-                            className={`rounded-lg border-l-4 ${crBorder} bg-white dark:bg-gray-800/60 ring-1 ring-gray-200 dark:ring-gray-700/60 overflow-hidden`}
+                            className={`rounded-lg border-l-4 ${crBorder} bg-surface ring-1 ring-gray-200 dark:ring-gray-700/60 overflow-hidden`}
                           >
                             {/* Course-run header */}
                             <button
                               type="button"
                               onClick={() => toggleGroup(crCollapseKey)}
-                              className="w-full px-3 py-2.5 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors text-left"
+                              className="w-full px-3 py-2.5 flex items-center justify-between gap-3 hover:bg-surface-hover transition-colors text-left"
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <Icon
                                   name={IconName.ChevronDown}
                                   className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${isCrCollapsed ? '-rotate-90' : ''}`}
                                 />
-                                <Icon name={IconName.BookOpen} className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                <Icon name={IconName.BookOpen} className="w-4 h-4 text-muted flex-shrink-0" />
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{cr.courseTitle}</p>
-                                  <div className="mt-0.5 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-gray-500 dark:text-gray-400">
+                                  <p className="text-sm font-semibold text-on-surface truncate">{cr.courseTitle}</p>
+                                  <div className="mt-0.5 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-muted">
                                     {cr.courseStartDate && (
                                       <span
                                         className="inline-flex items-center gap-1"
                                         title={`Course start date: ${formatCourseDateLong(cr.courseStartDate)}`}
                                       >
-                                        <span className="text-gray-400 dark:text-gray-500">Start date</span>
+                                        <span className="text-muted">Start date</span>
                                         {formatCourseDateLong(cr.courseStartDate)}
                                       </span>
                                     )}
@@ -666,7 +666,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                         className="inline-flex items-center gap-1 font-mono"
                                         title={`Course Run ID: ${cr.courseRunId}`}
                                       >
-                                        <span className="text-gray-400 dark:text-gray-500 font-sans">Course run</span>
+                                        <span className="text-muted font-sans">Course run</span>
                                         {cr.courseRunId}
                                       </span>
                                     )}
@@ -702,7 +702,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                   return (
                                     <div
                                       key={id || `${cr.key}-${idx}`}
-                                      className={`flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors ${
+                                      className={`flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors ${
                                         idx > 0 ? 'border-t dark:border-gray-800' : ''
                                       }`}
                                     >
@@ -713,7 +713,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                           <div className="flex items-center gap-2 mt-0.5">
                                             {nric && (
                                               <span
-                                                className="text-[11px] font-mono text-gray-500 dark:text-gray-400"
+                                                className="text-[11px] font-mono text-muted"
                                                 title="NRIC masked for privacy"
                                               >
                                                 {maskNric(nric)}
@@ -725,7 +725,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                                                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                                                 title="Open uploaded doc in Drive"
                                               >
                                                 <Icon name={IconName.ExternalLink} className="w-3 h-3" />
@@ -755,8 +755,8 @@ export const CheckSupportingDocumentView: React.FC = () => {
                                   );
                                 })}
                                 {cr.rows.length > 1 && !crAllVerified && (
-                                  <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-800/40 border-t dark:border-gray-800 flex items-center justify-between">
-                                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                  <div className="px-4 py-2.5 bg-surface-elevated border-t dark:border-gray-800 flex items-center justify-between">
+                                    <p className="text-[11px] text-muted">
                                       Verify the entire batch in one pass — opens all {cr.rows.length} learners in the modal.
                                     </p>
                                     <Button onClick={() => openModalForGroup(cr.rows)}>
@@ -799,34 +799,34 @@ export const CheckSupportingDocumentView: React.FC = () => {
 type StatTone = 'emerald' | 'blue' | 'red' | 'amber' | 'gray';
 const STAT_TONES: Record<StatTone, { bg: string; iconBg: string; iconColor: string; value: string }> = {
   emerald: {
-    bg: 'bg-white dark:bg-gray-800 border-emerald-200 dark:border-emerald-800/60',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
-    value: 'text-emerald-700 dark:text-emerald-300',
+    bg: 'bg-surface border-emerald-200 dark:border-emerald-800/60',
+    iconBg: 'bg-success-bg',
+    iconColor: 'text-success',
+    value: 'text-success',
   },
   blue: {
-    bg: 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-800/60',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
-    iconColor: 'text-blue-600 dark:text-blue-400',
-    value: 'text-blue-700 dark:text-blue-300',
+    bg: 'bg-surface border-blue-200 dark:border-blue-800/60',
+    iconBg: 'bg-info-bg',
+    iconColor: 'text-primary',
+    value: 'text-primary',
   },
   red: {
-    bg: 'bg-white dark:bg-gray-800 border-red-200 dark:border-red-800/60',
-    iconBg: 'bg-red-100 dark:bg-red-900/30',
-    iconColor: 'text-red-600 dark:text-red-400',
-    value: 'text-red-700 dark:text-red-300',
+    bg: 'bg-surface border-red-200 dark:border-red-800/60',
+    iconBg: 'bg-danger-bg',
+    iconColor: 'text-danger',
+    value: 'text-danger',
   },
   amber: {
-    bg: 'bg-white dark:bg-gray-800 border-amber-200 dark:border-amber-800/60',
-    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
-    iconColor: 'text-amber-600 dark:text-amber-400',
-    value: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-surface border-amber-200 dark:border-amber-800/60',
+    iconBg: 'bg-warning-bg',
+    iconColor: 'text-warning',
+    value: 'text-warning',
   },
   gray: {
-    bg: 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700',
-    iconBg: 'bg-gray-100 dark:bg-gray-800',
-    iconColor: 'text-gray-500 dark:text-gray-400',
-    value: 'text-gray-700 dark:text-gray-200',
+    bg: 'bg-surface border-default',
+    iconBg: 'bg-surface-elevated',
+    iconColor: 'text-muted',
+    value: 'text-on-surface-secondary',
   },
 };
 
@@ -844,10 +844,10 @@ const StatTile: React.FC<{
         <Icon name={icon} className={`w-5 h-5 ${t.iconColor}`} />
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{label}</p>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted">{label}</p>
         <p className={`text-2xl font-bold leading-tight mt-0.5 ${t.value}`}>{value}</p>
         {subtitle && (
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{subtitle}</p>
+          <p className="text-[11px] text-muted mt-0.5 truncate">{subtitle}</p>
         )}
       </div>
     </div>
@@ -858,25 +858,25 @@ const STATUS_KIND_META: Record<RowEffectiveStatus, { label: string; icon: IconNa
   verified: {
     label: 'Verified',
     icon: IconName.CheckCircle,
-    chipClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300/60',
+    chipClass: 'bg-success-bg text-success ring-1 ring-emerald-300/60',
     dotClass: 'bg-emerald-500',
   },
   mismatch: {
     label: 'Mismatch',
     icon: IconName.Warning,
-    chipClass: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60',
+    chipClass: 'bg-danger-bg text-danger ring-1 ring-red-300/60',
     dotClass: 'bg-red-500',
   },
   pending: {
     label: 'Pending',
     icon: IconName.Eye,
-    chipClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60',
+    chipClass: 'bg-warning-bg text-warning ring-1 ring-amber-300/60',
     dotClass: 'bg-amber-400',
   },
   noDoc: {
     label: 'No Doc',
     icon: IconName.Upload,
-    chipClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 ring-1 ring-gray-300/60',
+    chipClass: 'bg-surface-elevated text-on-surface-secondary ring-1 ring-gray-300/60',
     dotClass: 'bg-gray-400',
   },
 };

@@ -44,7 +44,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
   const [emailError, setEmailError] = useState<string | null>(null);
   
   const defaultPassword = 'Tertiary888';
-  const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
+  const inputClasses = "w-full px-3 py-2 border border-strong rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -262,7 +262,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Add New Trainer</h1>
+        <h1 className="text-3xl font-bold text-on-surface">Add New Trainer</h1>
         <Button variant="ghost" onClick={onCancel}>
           <Icon name={IconName.Back} className="w-4 h-4 mr-2" />
           Back to Trainers
@@ -272,8 +272,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
       <Card className="p-8 dark:bg-gray-800 dark:border-gray-700">
         <div className="space-y-6">
           {/* Profile Picture Section */}
-          <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Profile Picture</h3>
+          <div className="bg-surface-elevated p-6 rounded-lg">
+            <h3 className="text-lg font-medium text-on-surface mb-4">Profile Picture</h3>
             <div className="flex items-center space-x-6">
               <div className="flex-shrink-0">
                 <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center overflow-hidden">
@@ -304,12 +304,12 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
                     />
                   </label>
                   <div className="flex items-center space-x-2">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm">or</span>
+                    <span className="text-muted text-sm">or</span>
                     <button
                       type="button"
                       onClick={handleGenerateAvatar}
                       disabled={isGeneratingAvatar}
-                      className="px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-sm font-medium text-primary bg-info-bg border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGeneratingAvatar ? 'Generating...' : 'Generate AI Avatar'}
                     </button>
@@ -323,8 +323,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                Email <span className="text-danger">*</span>
               </label>
               <div className="relative">
                 <input
@@ -353,27 +353,27 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
                 )}
                 {emailError && (
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                    <Icon name={IconName.X} className="w-4 h-4 text-red-500" />
+                    <Icon name={IconName.X} className="w-4 h-4 text-danger" />
                   </div>
                 )}
               </div>
               {emailError && (
-                <p className="mt-1 text-sm text-red-600">{emailError}</p>
+                <p className="mt-1 text-sm text-danger">{emailError}</p>
               )}
               {!emailError && emailExists && !isAlreadyTrainer && existingUserInfo && (
-                <p className="mt-1 text-sm text-blue-600">
+                <p className="mt-1 text-sm text-primary">
                   ℹ️ Account found for <strong>{existingUserInfo.fullName}</strong> (current role: {existingUserInfo.roles.join(', ')}). The Trainer role will be added to this account.
                 </p>
               )}
               {!emailError && !emailExists && formData.email && !isCheckingEmail && (
-                <p className="mt-1 text-sm text-green-600">✓ Email is available</p>
+                <p className="mt-1 text-sm text-success">✓ Email is available</p>
               )}
             </div>
 
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Full Name <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                Full Name <span className="text-danger">*</span>
               </label>
               <input
                 type="text"
@@ -387,7 +387,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
 
             {/* Default Password (Read-only) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
                 Default Password
               </label>
               <input
@@ -397,13 +397,13 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
                 readOnly
                 disabled
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default password from Company Settings will be assigned to the new trainer</p>
+              <p className="text-xs text-muted mt-1">Default password from Company Settings will be assigned to the new trainer</p>
             </div>
 
             {/* Telephone */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Telephone <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                Telephone <span className="text-danger">*</span>
               </label>
               <input
                 type="tel"
@@ -417,8 +417,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
 
             {/* Trainer Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Trainer Type <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                Trainer Type <span className="text-danger">*</span>
               </label>
               <select
                 name="trainerType"
@@ -436,8 +436,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
 
             {/* Status */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Status <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                Status <span className="text-danger">*</span>
               </label>
               <select
                 name="status"
@@ -454,8 +454,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
 
             {/* Gender */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Gender <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
+                Gender <span className="text-danger">*</span>
               </label>
               <select
                 name="gender"
@@ -473,7 +473,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
 
             {/* LinkedIn URL */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-on-surface-secondary mb-2">
                 LinkedIn Profile URL
               </label>
               <input

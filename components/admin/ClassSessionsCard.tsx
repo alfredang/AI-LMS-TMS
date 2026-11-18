@@ -49,24 +49,24 @@ const modeLabel = (s: ClassSession) => {
   return raw ? { short: raw, full: raw } : null;
 };
 
-const TH = 'px-3 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap';
+const TH = 'px-3 py-1.5 text-left font-semibold text-muted whitespace-nowrap';
 
 const CalendarCell: React.FC<{ s: ClassSession; checked: boolean }> = ({ s, checked }) => {
   if (!checked) {
-    return <span className="text-gray-400" title="Calendar not checked — Google Calendar wasn't reachable in this environment.">—</span>;
+    return <span className="text-muted" title="Calendar not checked — Google Calendar wasn't reachable in this environment.">—</span>;
   }
   if (s.calendarMatched && s.calendarLink) {
     return (
       <a href={s.calendarLink} target="_blank" rel="noopener noreferrer"
-         className="text-blue-600 dark:text-blue-400 hover:underline"
+         className="text-primary hover:underline"
          title={s.calendarEventDate ? `Calendar event on ${s.calendarEventDate}` : 'Open calendar event'}>
         View event ↗
       </a>
     );
   }
-  if (s.calendarMatched) return <span className="text-emerald-600 dark:text-emerald-400">Matched</span>;
+  if (s.calendarMatched) return <span className="text-success">Matched</span>;
   return (
-    <span className="text-amber-600 dark:text-amber-400"
+    <span className="text-warning"
           title="No calendar event matched on this date. Matching is by DATE (+ course-run-id / title), not time — so check whether the event was moved to a different date, or its title was renamed (with the 'Course Run ID' line removed from its description).">
       Not found
     </span>
@@ -81,8 +81,8 @@ const CalendarCell: React.FC<{ s: ClassSession; checked: boolean }> = ({ s, chec
 export function ClassSessionsCard({ sessions, calendarChecked = false, ssgError = null }: ClassSessionsCardProps) {
   if (!sessions || sessions.length === 0) {
     return ssgError
-      ? <div className="text-sm text-amber-600 dark:text-amber-400">Couldn’t load sessions from SSG — {ssgError}</div>
-      : <div className="text-sm text-gray-500 dark:text-gray-400">No sessions found for this class.</div>;
+      ? <div className="text-sm text-warning">Couldn’t load sessions from SSG — {ssgError}</div>
+      : <div className="text-sm text-muted">No sessions found for this class.</div>;
   }
 
   // Group by startDate, preserving first-seen order.
@@ -98,15 +98,15 @@ export function ClassSessionsCard({ sessions, calendarChecked = false, ssgError 
 
   return (
     <div>
-      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+      <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
         Sessions ({sessions.length}) · {groups.length} day{groups.length !== 1 ? 's' : ''}
       </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+      <div className="text-xs text-muted mb-2">
         Showing latest SSG information · calendar matched live
       </div>
-      <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="rounded-md border border-default overflow-hidden">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+          <thead className="bg-surface-elevated border-b border-default">
             <tr>
               <th className={`${TH} w-10`}>#</th>
               <th className={TH}>Time</th>
@@ -117,13 +117,13 @@ export function ClassSessionsCard({ sessions, calendarChecked = false, ssgError 
               <th className="w-full p-0"></th>
             </tr>
           </thead>
-          <tbody className="text-gray-700 dark:text-gray-200">
+          <tbody className="text-on-surface-secondary">
             {groups.map((g, gi) => (
               <React.Fragment key={g.day || gi}>
-                <tr className="bg-gray-100 dark:bg-gray-700/60">
-                  <td colSpan={7} className="px-3 py-1.5 font-semibold text-gray-700 dark:text-gray-200">
+                <tr className="bg-surface-elevated">
+                  <td colSpan={7} className="px-3 py-1.5 font-semibold text-on-surface-secondary">
                     <span>{fmtDay(g.day)}</span>
-                    <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                    <span className="ml-2 text-xs font-normal text-muted">
                       · {g.items.length} session{g.items.length !== 1 ? 's' : ''}
                     </span>
                   </td>
@@ -131,12 +131,12 @@ export function ClassSessionsCard({ sessions, calendarChecked = false, ssgError 
                 {g.items.map((s, si) => {
                   const m = modeLabel(s);
                   return (
-                    <tr key={s.id || s.ssgSessionId || si} className="border-t border-gray-100 dark:border-gray-700/60">
-                      <td className="px-3 py-1.5 whitespace-nowrap w-10 text-gray-500 dark:text-gray-400">{s.sessionNumber ?? si + 1}</td>
+                    <tr key={s.id || s.ssgSessionId || si} className="border-t border-default">
+                      <td className="px-3 py-1.5 whitespace-nowrap w-10 text-muted">{s.sessionNumber ?? si + 1}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap font-medium">{s.startTime || '—'}{s.endTime ? ` – ${s.endTime}` : ''}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap" title={m?.full || undefined}>{m?.short || '—'}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap">{s.trainerName || '—'}</td>
-                      <td className="px-3 py-1.5 whitespace-nowrap">{s.attendanceTaken ? <span className="text-emerald-600 dark:text-emerald-400">Taken</span> : <span className="text-gray-400">—</span>}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{s.attendanceTaken ? <span className="text-success">Taken</span> : <span className="text-muted">—</span>}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap"><CalendarCell s={s} checked={calendarChecked} /></td>
                       <td className="w-full p-0"></td>
                     </tr>
@@ -148,7 +148,7 @@ export function ClassSessionsCard({ sessions, calendarChecked = false, ssgError 
         </table>
       </div>
       {anyUnmatched && (
-        <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+        <div className="mt-2 text-xs text-warning">
           ⚠ Some sessions have no matching calendar event. Check the SSG session date/time against Google Calendar, and that the event <strong>title</strong> still matches (a renamed event won’t match).
         </div>
       )}

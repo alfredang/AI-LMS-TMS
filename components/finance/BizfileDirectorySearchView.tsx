@@ -40,7 +40,7 @@ export default function BizfileDirectorySearchView() {
   const renderResult = () => {
     if (!result) return null;
     const entity = Array.isArray(result) ? result[0] : result;
-    if (!entity) return <p className="text-sm text-gray-500">No data returned.</p>;
+    if (!entity) return <p className="text-sm text-muted">No data returned.</p>;
 
     const addr = entity.registeredAddress;
     const addressParts = addr
@@ -72,9 +72,9 @@ export default function BizfileDirectorySearchView() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {fields.map(({ label, value }) =>
           value != null && value !== '' ? (
-            <div key={label} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-3">
-              <dt className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{label}</dt>
-              <dd className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{String(value)}</dd>
+            <div key={label} className="bg-surface-elevated rounded-lg p-3">
+              <dt className="text-xs font-medium text-muted uppercase tracking-wider">{label}</dt>
+              <dd className="mt-1 text-sm font-medium text-on-surface">{String(value)}</dd>
             </div>
           ) : null
         )}
@@ -85,8 +85,8 @@ export default function BizfileDirectorySearchView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Entity Directory Search</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-on-surface">Entity Directory Search</h1>
+        <p className="mt-1 text-sm text-muted">
           Search entity details by UEN, name, or FBRN.{' '}
           <span className="text-xs opacity-70">(1 API call)</span>
         </p>
@@ -94,7 +94,7 @@ export default function BizfileDirectorySearchView() {
 
       {/* Search By Toggle */}
       <div>
-        <label className="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider mb-2">Search By</label>
+        <label className="block text-xs font-semibold uppercase text-muted tracking-wider mb-2">Search By</label>
         <div className="flex gap-2">
           {([['uen', 'UEN'], ['name', 'Name'], ['fbrn', 'FBRN']] as const).map(([key, label]) => (
             <button
@@ -103,7 +103,7 @@ export default function BizfileDirectorySearchView() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 searchBy === key
                   ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                  : 'bg-surface-elevated text-on-surface-secondary hover:bg-gray-200 dark:hover:bg-slate-600'
               }`}
             >
               {label}
@@ -115,23 +115,23 @@ export default function BizfileDirectorySearchView() {
       <div className="max-w-md">
         {searchBy === 'uen' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">UEN</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">UEN</label>
             <input value={uen} onChange={(e) => setUen(e.target.value)} placeholder="e.g. 201200696W"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
           </div>
         )}
         {searchBy === 'name' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Entity Name (exact)</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Entity Name (exact)</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Tertiary Infotech Academy Pte. Ltd."
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
           </div>
         )}
         {searchBy === 'fbrn' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">FBRN</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">FBRN</label>
             <input value={fbrn} onChange={(e) => setFbrn(e.target.value)} placeholder="e.g. CN-18901239123"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
+              className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
           </div>
         )}
       </div>
@@ -142,21 +142,21 @@ export default function BizfileDirectorySearchView() {
       </button>
 
       {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">{error}</div>
+        <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-danger text-sm">{error}</div>
       )}
 
       {result && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Results</h2>
+          <h2 className="text-lg font-bold text-on-surface">Results</h2>
           {renderResult()}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <div className="border border-default rounded-lg overflow-hidden">
             <button onClick={() => setShowJson(!showJson)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors">
               <span>▶ JSON Response</span>
-              <span className="text-xs text-gray-400">{showJson ? 'collapse' : 'expand'}</span>
+              <span className="text-xs text-muted">{showJson ? 'collapse' : 'expand'}</span>
             </button>
             {showJson && (
-              <pre className="px-4 py-3 bg-gray-50 dark:bg-slate-900 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto max-h-96 border-t border-gray-200 dark:border-gray-700">
+              <pre className="px-4 py-3 bg-surface-elevated text-xs font-mono text-on-surface overflow-x-auto max-h-96 border-t border-default">
                 {JSON.stringify(result, null, 2)}
               </pre>
             )}

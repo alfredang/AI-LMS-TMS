@@ -19,10 +19,10 @@ const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onTogg
                 <button
                     type="button"
                     onClick={onToggle}
-                    className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                    className="p-2 rounded-md hover:bg-surface-hover transition-colors"
                     title={title}
                 >
-                    {icon && <Icon name={icon} className="w-5 h-5 text-gray-500 dark:text-gray-400" />}
+                    {icon && <Icon name={icon} className="w-5 h-5 text-muted" />}
                 </button>
             </div>
         );
@@ -35,12 +35,12 @@ const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onTogg
                 onClick={onToggle}
                 className="w-full flex items-center gap-2 px-3 py-1 group cursor-pointer"
             >
-                {icon && <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />}
-                <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider truncate flex-1 text-left">
+                {icon && <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted" />}
+                <h3 className="text-xs font-semibold uppercase text-muted tracking-wider truncate flex-1 text-left">
                     {title}
                 </h3>
                 <svg
-                    className={`w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-3.5 h-3.5 text-muted group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                 >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -60,11 +60,11 @@ const SubSection: React.FC<{ title: string; isOpen: boolean; onToggle: () => voi
         <button
             type="button"
             onClick={onToggle}
-            className="w-full flex items-center justify-between pl-8 pr-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md"
+            className="w-full flex items-center justify-between pl-8 pr-3 py-1.5 group cursor-pointer hover:bg-surface-hover rounded-md"
         >
-            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">{title}</span>
+            <span className="text-xs font-semibold uppercase text-muted tracking-wider">{title}</span>
             <svg
-                className={`w-3 h-3 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                className={`w-3 h-3 text-muted group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -155,14 +155,14 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                         if (onNavigate) onNavigate();
                     }}
                     className={`flex items-center justify-center rounded-md p-2 transition-colors ${adminPage === page
-                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                        ? 'nav-item-active'
+                        : 'text-on-surface hover:bg-surface-hover'
                         }`}
                     title={label || page}
                 >
                     {icon && <Icon name={icon} className="w-5 h-5" />}
                     {typeof badge === 'number' && badge > 0 && (
-                        <span className="absolute -mt-4 ml-3 inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-[9px] font-bold text-white">
+                        <span className="absolute -mt-4 ml-3 inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-red-600 text-[9px] font-bold text-white">
                             {badge > 99 ? '99+' : badge}
                         </span>
                     )}
@@ -191,15 +191,15 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 className={`flex items-center gap-2 rounded-md px-3 transition-colors font-medium ${
                     nested ? 'pl-12 py-1.5 text-xs' : isSubItem ? 'pl-8 py-2 text-sm' : 'py-2 text-sm'
                 } ${adminPage === page
-                        ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                        ? 'nav-item-active'
+                        : 'text-on-surface hover:bg-surface-hover'
                     }`}
             >
                 {icon && <Icon name={icon} className="w-4 h-4" />}
                 <span className="flex-1 truncate">{label || page}</span>
                 {typeof badge === 'number' && badge > 0 && (
                     <span
-                        className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-[10px] font-bold text-white"
+                        className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-[10px] font-bold text-white"
                         title={`${badge} company application${badge === 1 ? '' : 's'} need attention`}
                     >
                         {badge > 99 ? '99+' : badge}
@@ -210,7 +210,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
     };
 
     return (
-        <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
+        <nav className="space-y-6 p-4 bg-surface text-on-surface h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" icon={IconName.Dashboard} />
 
             <NavItem page={AdminPage.Calendar} label="View Calendar" icon={IconName.Calendar} />
@@ -248,7 +248,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                         onSelectWorkflow?.('company-application');
                         if (onNavigate) onNavigate();
                     }}
-                    className="flex items-center gap-2 rounded-md pl-8 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
+                    className="flex items-center gap-2 rounded-md pl-8 py-2 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors"
                     title="How Company Application works — step by step"
                 >
                     <span className="flex-1 truncate">Workflow Guide</span>
@@ -344,7 +344,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                         { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
                         { id: 'assessment', label: 'Assessment', icon: '📝' },
                     ].map(item => (
-                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors">
                             <span className="text-sm">{item.icon}</span>
                             <span>{item.label}</span>
                         </a>
@@ -358,7 +358,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                         { id: 'certificate', label: 'Certificate', icon: '🎓' },
                         { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
                     ].map(item => (
-                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors">
                             <span className="text-sm">{item.icon}</span>
                             <span>{item.label}</span>
                         </a>
@@ -372,7 +372,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                         { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
                         { id: 'receipt', label: 'Receipt', icon: '🧾' },
                     ].map(item => (
-                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface transition-colors">
                             <span className="text-sm">{item.icon}</span>
                             <span>{item.label}</span>
                         </a>
@@ -392,7 +392,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface"
                         >
                             {label}
                             <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -405,7 +405,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     href="https://alfredang.github.io/microsoftredeemcode/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                    className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface"
                 >
                     MS Redeem Code
                     <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -433,7 +433,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                        className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface"
                     >
                         {label}
                         <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -450,7 +450,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface"
                         >
                             {label}
                             <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -80,13 +80,13 @@ function hasSfcInvoice(row: Pick<SfcPreviewRow, 'matched_qbo_doc_number' | 'clai
 
 const matchBadgeClass = (s: string) => {
   switch (s) {
-    case 'ready': return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
-    case 'already_applied': return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300';
-    case 'unmatched': return 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300';
-    case 'invalid': return 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300';
+    case 'ready': return 'bg-success-bg text-success';
+    case 'already_applied': return 'bg-info-bg text-primary';
+    case 'unmatched': return 'bg-danger-bg text-danger';
+    case 'invalid': return 'bg-warning-bg text-warning';
     case 'skipped_da': return 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300';
-    case 'needs_review': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-    default: return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
+    case 'needs_review': return 'bg-warning-bg text-warning';
+    default: return 'bg-surface-elevated text-on-surface-secondary';
   }
 };
 
@@ -104,11 +104,11 @@ const matchBadgeLabel = (s: string) => {
 
 const applyBadgeClass = (s: string | null) => {
   switch (String(s || '').toLowerCase()) {
-    case 'applied': return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
-    case 'skipped': return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300';
-    case 'failed': return 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300';
-    case 'pending': return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300';
-    default: return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
+    case 'applied': return 'bg-success-bg text-success';
+    case 'skipped': return 'bg-warning-bg text-warning';
+    case 'failed': return 'bg-danger-bg text-danger';
+    case 'pending': return 'bg-info-bg text-primary';
+    default: return 'bg-surface-elevated text-on-surface-secondary';
   }
 };
 
@@ -120,7 +120,7 @@ const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, labe
         className="relative h-5 w-5 rounded-full"
         style={{ background: `conic-gradient(currentColor ${p}%, rgba(255,255,255,0.25) 0)` }}
       >
-        <div className="absolute inset-[2px] rounded-full bg-white dark:bg-slate-900" />
+        <div className="absolute inset-[2px] rounded-full bg-surface" />
       </div>
       <span className="text-xs font-semibold tabular-nums">{p}%</span>
       {label ? <span className="text-xs text-on-surface-secondary">{label}</span> : null}
@@ -545,7 +545,7 @@ const SfcPaymentSyncView: React.FC = () => {
             onDragLeave={(e) => handleDragEvents(e, false)}
             onDrop={handleDrop}
             className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${
-              isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500'
+              isDragOver ? 'border-blue-500 bg-info-bg' : 'border-strong hover:border-blue-500'
             }`}
           >
             <input
@@ -556,31 +556,31 @@ const SfcPaymentSyncView: React.FC = () => {
               onChange={(e) => applySelectedFile(e.target.files?.[0] || null)}
             />
             <label htmlFor={fileInputId} className="cursor-pointer">
-              <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-              <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+              <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+              <p className="mt-2 font-semibold text-on-surface">
                 {file ? file.name : 'Drag & drop your file here, or click to browse'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">XLSX file format only</p>
-              {file && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>}
+              <p className="text-xs text-muted mt-1">XLSX file format only</p>
+              {file && <p className="text-xs text-muted mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>}
             </label>
           </div>
 
           {fileValidationError && !error && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-lg text-sm">
+            <div className="p-3 bg-warning-bg text-warning rounded-lg text-sm">
               {fileValidationError}
             </div>
           )}
 
           {error && (
-            <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+            <div className="mt-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
                 <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+                <h4 className="font-semibold text-on-surface">Something went wrong!</h4>
+                <p className="text-sm text-on-surface-secondary mt-1 whitespace-pre-line">{error}</p>
               </div>
-              <button type="button" onClick={() => setError(null)} className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <button type="button" onClick={() => setError(null)} className="flex-shrink-0 text-muted hover:text-gray-600 dark:hover:text-gray-300">
                 <Icon name={IconName.Close} className="w-5 h-5" />
               </button>
             </div>
@@ -597,14 +597,14 @@ const SfcPaymentSyncView: React.FC = () => {
               {uploading ? 'Processing…' : 'Upload & Parse'}
             </Button>
           </div>
-          {!actorUserId && <p className="text-xs text-red-600 dark:text-red-300">Login required.</p>}
+          {!actorUserId && <p className="text-xs text-danger">Login required.</p>}
         </form>
       </Card>
 
       {/* DA info banner — shown when DA enrolments are present in this batch */}
       {batch && counts.da > 0 && (
         <div className="rounded-lg border border-purple-200 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-800 p-4 flex items-start gap-3">
-          <Icon name={IconName.InfoCircle} className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+          <Icon name={IconName.InfoCircle} className="w-5 h-5 text-purple-700 dark:text-purple-300 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-purple-800 dark:text-purple-200">
             <strong>{counts.da}</strong> Direct Application (DA) enrolment{counts.da !== 1 ? 's' : ''} detected.
             For DA rows, SFC payments are applied to the supplemental QB invoice with DocNumber <strong>SFC-CA-…</strong> (from the SSG Application ID).
@@ -630,7 +630,7 @@ const SfcPaymentSyncView: React.FC = () => {
             <Card className="p-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                 <div className="flex items-start gap-3">
-                  <Icon name={IconName.InfoCircle} className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
+                  <Icon name={IconName.InfoCircle} className="w-5 h-5 text-indigo-700 dark:text-indigo-300 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-on-surface">
                       {unmatchedWithEnrolment.length} row{unmatchedWithEnrolment.length !== 1 ? 's' : ''} matched to an enrolment but no QB invoice found.
@@ -640,11 +640,11 @@ const SfcPaymentSyncView: React.FC = () => {
                     </p>
                     {syncInvoiceResult && (
                       <>
-                        <p className="text-xs mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                        <p className="text-xs mt-1.5 font-semibold text-success">
                           Last sync: {syncInvoiceResult.resolved} resolved, {syncInvoiceResult.notFound} not found in QB, {syncInvoiceResult.rejected} rejected (failed content verification), {syncInvoiceResult.errors} errors (of {syncInvoiceResult.total} processed)
                         </p>
                         {!!syncInvoiceResult.warnings?.length && (
-                          <p className="text-xs mt-1 font-semibold text-red-600 dark:text-red-400">
+                          <p className="text-xs mt-1 font-semibold text-danger">
                             {syncInvoiceResult.warnings.join(' · ')}
                           </p>
                         )}
@@ -669,7 +669,7 @@ const SfcPaymentSyncView: React.FC = () => {
             <Card className="p-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                 <div className="flex items-start gap-3">
-                  <Icon name={IconName.InfoCircle} className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+                  <Icon name={IconName.InfoCircle} className="w-5 h-5 text-purple-700 dark:text-purple-300 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-on-surface">
                       {daReadyMissingSfc.length} Ready DA row{daReadyMissingSfc.length !== 1 ? 's' : ''} with no SFC-CA invoice yet.
@@ -679,11 +679,11 @@ const SfcPaymentSyncView: React.FC = () => {
                     </p>
                     {bulkGenerateSfcResult && (
                       <>
-                        <p className="text-xs mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                        <p className="text-xs mt-1.5 font-semibold text-success">
                           Last run: {bulkGenerateSfcResult.generated} generated, {bulkGenerateSfcResult.failed} failed (of {bulkGenerateSfcResult.total} processed)
                         </p>
                         {bulkGenerateSfcResult.errors.slice(0, 5).map((e) => (
-                          <p key={e.rowId} className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                          <p key={e.rowId} className="text-[11px] text-danger mt-0.5">
                             Claim {e.claimId || e.rowId}: {e.error}
                           </p>
                         ))}
@@ -714,11 +714,11 @@ const SfcPaymentSyncView: React.FC = () => {
               <div className="text-[11px] text-on-surface-secondary">Total Rows</div>
             </Card>
             <Card className="p-3 text-center border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-900/10">
-              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{counts.ready}</div>
+              <div className="text-lg font-bold text-success">{counts.ready}</div>
               <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">Ready</div>
             </Card>
             <Card className="p-3 text-center border border-blue-500/30 bg-blue-50/40 dark:bg-blue-900/10">
-              <div className="text-lg font-bold text-blue-700 dark:text-blue-300">{counts.already_applied}</div>
+              <div className="text-lg font-bold text-primary">{counts.already_applied}</div>
               <div className="text-[11px] text-blue-700/80 dark:text-blue-300/80">Already Applied</div>
             </Card>
             <Card className="p-3 text-center border border-purple-500/30 bg-purple-50/40 dark:bg-purple-900/10">
@@ -726,11 +726,11 @@ const SfcPaymentSyncView: React.FC = () => {
               <div className="text-[11px] text-purple-700/80 dark:text-purple-300/80">DA Enrolments</div>
             </Card>
             <Card className="p-3 text-center border border-yellow-500/30 bg-yellow-50/40 dark:bg-yellow-900/10">
-              <div className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{counts.needs_review}</div>
+              <div className="text-lg font-bold text-warning">{counts.needs_review}</div>
               <div className="text-[11px] text-yellow-700/80 dark:text-yellow-300/80">Needs Review</div>
             </Card>
             <Card className="p-3 text-center border border-red-500/30 bg-red-50/40 dark:bg-red-900/10">
-              <div className="text-lg font-bold text-red-700 dark:text-red-300">{counts.unmatched + counts.invalid}</div>
+              <div className="text-lg font-bold text-danger">{counts.unmatched + counts.invalid}</div>
               <div className="text-[11px] text-red-700/80 dark:text-red-300/80">Need Attention</div>
             </Card>
           </div>
@@ -755,7 +755,7 @@ const SfcPaymentSyncView: React.FC = () => {
           {applyResult && (
             <Card className="p-5">
               <div className="flex items-center gap-2">
-                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-emerald-500" />
+                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                 <div className="text-sm font-semibold text-on-surface">Apply finished</div>
               </div>
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -781,16 +781,16 @@ const SfcPaymentSyncView: React.FC = () => {
               {(
                 [
                   { key: 'all', label: 'All', count: rows.length, cls: 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-900' },
-                  { key: 'ready', label: 'Ready', count: counts.ready, cls: 'bg-emerald-600 text-white' },
+                  { key: 'ready', label: 'Ready', count: counts.ready, cls: 'bg-emerald-700 text-white' },
                   { key: 'already_applied', label: 'Already Applied', count: counts.already_applied, cls: 'bg-blue-600 text-white' },
                   { key: 'da', label: 'DA', count: counts.da, cls: 'bg-purple-600 text-white' },
-                  { key: 'needs_review', label: 'Needs Review', count: counts.needs_review, cls: 'bg-yellow-500 text-white' },
-                  { key: 'unmatched', label: 'Unmatched', count: counts.unmatched, cls: 'bg-red-500 text-white' },
-                  { key: 'invalid', label: 'Invalid', count: counts.invalid, cls: 'bg-orange-500 text-white' },
+                  { key: 'needs_review', label: 'Needs Review', count: counts.needs_review, cls: 'bg-yellow-700 text-white' },
+                  { key: 'unmatched', label: 'Unmatched', count: counts.unmatched, cls: 'bg-red-600 text-white' },
+                  { key: 'invalid', label: 'Invalid', count: counts.invalid, cls: 'bg-orange-700 text-white' },
                   ...(applyResult ? [
-                    { key: 'applied', label: 'Applied', count: rows.filter((r) => r.apply_status === 'applied').length, cls: 'bg-emerald-600 text-white' },
-                    { key: 'failed', label: 'Failed', count: rows.filter((r) => r.apply_status === 'failed').length, cls: 'bg-red-500 text-white' },
-                    { key: 'skipped', label: 'Skipped', count: rows.filter((r) => r.apply_status === 'skipped').length, cls: 'bg-amber-500 text-white' },
+                    { key: 'applied', label: 'Applied', count: rows.filter((r) => r.apply_status === 'applied').length, cls: 'bg-emerald-700 text-white' },
+                    { key: 'failed', label: 'Failed', count: rows.filter((r) => r.apply_status === 'failed').length, cls: 'bg-red-600 text-white' },
+                    { key: 'skipped', label: 'Skipped', count: rows.filter((r) => r.apply_status === 'skipped').length, cls: 'bg-amber-700 text-white' },
                   ] : []),
                 ] as Array<{ key: string; label: string; count: number; cls: string }>
               ).map((opt) => (
@@ -936,19 +936,19 @@ const SfcPaymentSyncView: React.FC = () => {
                                 {invoiceGenLoading.has(r.id) ? 'Generating…' : 'Generate Invoice'}
                               </button>
                               {invoiceGenErrors.has(r.id) && (
-                                <p className="text-[10px] text-red-600 dark:text-red-400 max-w-[200px] whitespace-pre-wrap">{invoiceGenErrors.get(r.id)}</p>
+                                <p className="text-[10px] text-danger max-w-[200px] whitespace-pre-wrap">{invoiceGenErrors.get(r.id)}</p>
                               )}
                             </div>
                           )}
                         </td>
                         <td className="px-3 py-2 text-xs text-right font-mono">{fmtMoney(r.matched_qbo_invoice_balance)}</td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${r.fms_updated ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300'}`}>
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${r.fms_updated ? 'bg-success-bg text-success' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                             {r.fms_updated ? 'Paid' : 'Not Received'}
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${r.qb_updated ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300'}`}>
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${r.qb_updated ? 'bg-success-bg text-success' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                             {r.qb_updated ? 'Applied' : 'Pending'}
                           </span>
                         </td>
@@ -964,7 +964,7 @@ const SfcPaymentSyncView: React.FC = () => {
                           {r.is_da ? (
                             <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300">DA</span>
                           ) : (
-                            <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-700/30 dark:text-gray-400">Non-DA</span>
+                            <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-surface-elevated text-muted">Non-DA</span>
                           )}
                         </td>
                         <td className="px-3 py-2 min-w-[130px]">
@@ -986,7 +986,7 @@ const SfcPaymentSyncView: React.FC = () => {
                                 {invoiceGenLoading.has(r.id) ? 'Generating…' : 'Generate Invoice'}
                               </button>
                               {invoiceGenErrors.has(r.id) && (
-                                <p className="text-[10px] text-red-600 dark:text-red-400 max-w-[200px] whitespace-pre-wrap">{invoiceGenErrors.get(r.id)}</p>
+                                <p className="text-[10px] text-danger max-w-[200px] whitespace-pre-wrap">{invoiceGenErrors.get(r.id)}</p>
                               )}
                             </div>
                           ) : (
@@ -996,7 +996,7 @@ const SfcPaymentSyncView: React.FC = () => {
                             <span className="text-[11px] text-on-surface-secondary">—</span>
                           )}
                           {r.apply_status === 'failed' && r.apply_error && (
-                            <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 max-w-[200px] whitespace-pre-wrap">{r.apply_error}</p>
+                            <p className="text-[10px] text-danger mt-0.5 max-w-[200px] whitespace-pre-wrap">{r.apply_error}</p>
                           )}
                         </td>
                       </tr>

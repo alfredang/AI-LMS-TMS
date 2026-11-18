@@ -48,7 +48,7 @@ interface EmployerOption {
 }
 
 const inputClasses =
-  'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500';
+  'block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white';
 
 const dash = (value: string) => (value && value.trim() !== '' ? value.trim() : '—');
 
@@ -57,15 +57,15 @@ const dash = (value: string) => (value && value.trim() !== '' ? value.trim() : '
 const statusPillClass = (status: string): string => {
   const s = status.trim().toLowerCase();
   if (s === 'confirmed' || s === 'enrolled' || s === 'enroled' || s === 'completed') {
-    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+    return 'bg-success-bg text-success';
   }
   if (s.includes('cancel') || s.includes('withdraw') || s === 'rejected') {
-    return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    return 'bg-danger-bg text-danger';
   }
   if (s.includes('pending') || s.includes('await')) {
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+    return 'bg-warning-bg text-warning';
   }
-  return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+  return 'bg-surface-elevated text-on-surface-secondary';
 };
 
 const ITEMS_PER_PAGE = 25;
@@ -78,13 +78,13 @@ const emailDomain = (email: string): string => {
 };
 
 const StatTile: React.FC<{ label: string; value: string | number; icon: IconName; accent: string }> = ({ label, value, icon, accent }) => (
-  <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-3 shadow-sm">
+  <div className="flex items-center gap-3 rounded-xl border border-default bg-surface px-4 py-3 shadow-sm">
     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${accent}`}>
       <Icon name={icon} className="w-5 h-5" />
     </div>
     <div className="min-w-0">
-      <p className="text-2xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">{value}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{label}</p>
+      <p className="text-2xl font-bold text-on-surface leading-none tabular-nums">{value}</p>
+      <p className="text-xs text-muted mt-1 truncate">{label}</p>
     </div>
   </div>
 );
@@ -196,12 +196,12 @@ export const SyncedEnrolmentsView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.Sync} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <div className="w-11 h-11 rounded-xl bg-info-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.Sync} className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white leading-tight">All Synced Enrolments</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <h1 className="text-3xl font-bold text-on-surface leading-tight">All Synced Enrolments</h1>
+            <p className="text-sm text-muted mt-1">
               Employer-sponsored enrolments already in the system that are not tracked as Company Applications.
             </p>
           </div>
@@ -213,17 +213,17 @@ export const SyncedEnrolmentsView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Total enrolments" value={stats.total.toLocaleString()} icon={IconName.Users} accent="bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300" />
-        <StatTile label="With a grant" value={stats.withGrant.toLocaleString()} icon={IconName.CheckCircle} accent="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300" />
+        <StatTile label="Total enrolments" value={stats.total.toLocaleString()} icon={IconName.Users} accent="bg-info-bg text-primary" />
+        <StatTile label="With a grant" value={stats.withGrant.toLocaleString()} icon={IconName.CheckCircle} accent="bg-success-bg text-success" />
         <StatTile label="Distinct courses" value={stats.courses.toLocaleString()} icon={IconName.BookOpen} accent="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300" />
         <StatTile label="Employers (by email)" value={stats.companies.toLocaleString()} icon={IconName.Building} accent="bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300" />
       </div>
 
-      <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-lg p-4 flex items-start gap-3">
-        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-blue-800 dark:text-blue-200">
+      <div className="bg-info-bg border-l-4 border-blue-500 dark:border-blue-400 rounded-lg p-4 flex items-start gap-3">
+        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-info">
           <p className="font-semibold mb-1">These learners are already enrolled</p>
-          <p className="text-blue-700 dark:text-blue-300">
+          <p className="text-primary">
             They came in through the enrolment/sync path rather than a Company Application upload, so they never appeared
             under View Company Application. To invoice or verify supporting documents for any of them, tick the rows and
             click <strong>Add to Company Application</strong> — you&apos;ll pick the paying company, and they&apos;ll move into
@@ -236,24 +236,24 @@ export const SyncedEnrolmentsView: React.FC = () => {
         <div
           className={`rounded-lg p-4 flex items-start justify-between gap-3 ${
             resultMessage.tone === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800'
-              : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
+              ? 'bg-success-bg border border-emerald-200 dark:border-emerald-800'
+              : 'bg-warning-bg border border-amber-200 dark:border-amber-800'
           }`}
         >
           <div className="flex items-start gap-2">
             <Icon
               name={resultMessage.tone === 'success' ? IconName.CheckCircle : IconName.Warning}
-              className={`w-5 h-5 flex-shrink-0 mt-0.5 ${resultMessage.tone === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}
+              className={`w-5 h-5 flex-shrink-0 mt-0.5 ${resultMessage.tone === 'success' ? 'text-success' : 'text-warning'}`}
             />
             <div className="text-sm">
-              <p className={resultMessage.tone === 'success' ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}>
+              <p className={resultMessage.tone === 'success' ? 'text-emerald-800 dark:text-emerald-200' : 'text-warning'}>
                 {resultMessage.text}
               </p>
               {resultMessage.tone === 'success' && (
                 <button
                   type="button"
                   onClick={() => setAdminPage(AdminPage.ViewCompanyApplication)}
-                  className="mt-1 text-sm font-medium text-emerald-700 dark:text-emerald-300 underline hover:no-underline"
+                  className="mt-1 text-sm font-medium text-success underline hover:no-underline"
                 >
                   Go to View Company Application →
                 </button>
@@ -261,7 +261,7 @@ export const SyncedEnrolmentsView: React.FC = () => {
             </div>
           </div>
           <button type="button" onClick={() => setResultMessage(null)} aria-label="Dismiss">
-            <Icon name={IconName.Close} className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" />
+            <Icon name={IconName.Close} className="w-4 h-4 text-muted hover:text-gray-600 dark:hover:text-gray-200" />
           </button>
         </div>
       )}
@@ -269,9 +269,9 @@ export const SyncedEnrolmentsView: React.FC = () => {
       <Card className="p-6">
         <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
           <div className="flex-1 w-full">
-            <label htmlFor="search-synced-enrolments" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Search</label>
+            <label htmlFor="search-synced-enrolments" className="block text-sm font-bold text-on-surface-secondary mb-1">Search</label>
             <div className="relative">
-              <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Icon name={IconName.Search} className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="search-synced-enrolments"
                 type="text"
@@ -288,26 +288,26 @@ export const SyncedEnrolmentsView: React.FC = () => {
           </Button>
         </div>
 
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        <p className="text-xs text-muted mb-3">
           {isLoading
             ? 'Loading…'
             : `${filtered.length.toLocaleString()} enrolment${filtered.length === 1 ? '' : 's'}${searchQuery.trim() ? ` matching “${searchQuery.trim()}”` : ''}`}
-          {selectedIds.size > 0 && <span className="ml-2 font-medium text-blue-600 dark:text-blue-400">· {selectedIds.size} selected</span>}
+          {selectedIds.size > 0 && <span className="ml-2 font-medium text-primary">· {selectedIds.size} selected</span>}
         </p>
 
         {loadError && (
-          <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <Icon name={IconName.Warning} className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-red-600 dark:text-red-400 text-sm">{loadError}</p>
+          <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800">
+            <Icon name={IconName.Warning} className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+            <p className="text-danger text-sm">{loadError}</p>
           </div>
         )}
 
-        <div className="overflow-auto max-h-[65vh] rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="overflow-auto max-h-[65vh] rounded-lg border border-default shadow-sm">
           <table className="min-w-max w-full text-xs">
-            <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0 z-10 shadow-sm">
-              <tr className="text-left text-gray-600 dark:text-gray-300">
+            <thead className="bg-surface-elevated sticky top-0 z-10 shadow-sm">
+              <tr className="text-left text-on-surface-secondary">
                 <th className="px-3 py-2 w-8">
-                  <input type="checkbox" checked={pageAllSelected} onChange={togglePageAll} aria-label="Select all on page" className="w-3.5 h-3.5 rounded border-gray-300" />
+                  <input type="checkbox" checked={pageAllSelected} onChange={togglePageAll} aria-label="Select all on page" className="w-3.5 h-3.5 rounded border-strong" />
                 </th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Learner</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">NRIC</th>
@@ -322,24 +322,24 @@ export const SyncedEnrolmentsView: React.FC = () => {
                 <th className="px-3 py-2 font-semibold whitespace-nowrap text-right">Grant Amt</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
+            <tbody className="divide-y divide-default bg-surface">
               {pageRows.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center text-gray-400 dark:text-gray-500">
+                  <td colSpan={12} className="px-3 py-10 text-center text-muted">
                     {rows.length === 0 ? 'No synced enrolments found.' : 'No rows match your search.'}
                   </td>
                 </tr>
               ) : (
                 pageRows.map((r, idx) => {
                   const checked = selectedIds.has(r.id);
-                  const zebra = idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/20' : 'bg-white dark:bg-gray-900';
+                  const zebra = idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/20' : 'bg-surface';
                   return (
                     <tr
                       key={r.id}
-                      className={`text-gray-800 dark:text-gray-200 transition-colors hover:bg-blue-50/40 dark:hover:bg-gray-800/50 ${checked ? 'bg-blue-50/70 dark:bg-blue-900/25' : zebra}`}
+                      className={`text-on-surface transition-colors hover:bg-blue-50/40 dark:hover:bg-gray-800/50 ${checked ? 'bg-blue-50/70 dark:bg-blue-900/25' : zebra}`}
                     >
                       <td className="px-3 py-2">
-                        <input type="checkbox" checked={checked} onChange={() => toggleRow(r.id)} aria-label={`Select ${r.traineeName}`} className="w-3.5 h-3.5 rounded border-gray-300" />
+                        <input type="checkbox" checked={checked} onChange={() => toggleRow(r.id)} aria-label={`Select ${r.traineeName}`} className="w-3.5 h-3.5 rounded border-strong" />
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap font-medium">{dash(r.traineeName)}</td>
                       <td className="px-3 py-2 whitespace-nowrap font-mono">{r.nric ? maskNric(r.nric) : '—'}</td>
@@ -366,8 +366,8 @@ export const SyncedEnrolmentsView: React.FC = () => {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              Page <span className="font-semibold text-gray-700 dark:text-gray-200">{currentPage}</span> of {totalPages}
+            <span className="text-xs text-muted">
+              Page <span className="font-semibold text-on-surface-secondary">{currentPage}</span> of {totalPages}
             </span>
             <nav className="flex items-center gap-1" aria-label="Pagination">
               <button
@@ -375,14 +375,14 @@ export const SyncedEnrolmentsView: React.FC = () => {
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 aria-label="Previous page"
-                className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Icon name={IconName.ChevronDown} className="w-4 h-4 rotate-90" />
               </button>
 
               {pageWindow(currentPage, totalPages).map((p, i) =>
                 p === '…' ? (
-                  <span key={`gap-${i}`} className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-gray-500 select-none">…</span>
+                  <span key={`gap-${i}`} className="w-8 h-8 flex items-center justify-center text-muted select-none">…</span>
                 ) : (
                   <button
                     key={p}
@@ -393,7 +393,7 @@ export const SyncedEnrolmentsView: React.FC = () => {
                     className={`min-w-8 h-8 px-2 flex items-center justify-center rounded-md text-sm font-medium border transition-colors ${
                       p === currentPage
                         ? 'bg-blue-600 text-white border-blue-600'
-                        : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                        : 'border-strong text-on-surface-secondary hover:bg-surface-hover'
                     }`}
                   >
                     {p}
@@ -406,7 +406,7 @@ export const SyncedEnrolmentsView: React.FC = () => {
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 aria-label="Next page"
-                className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Icon name={IconName.ChevronDown} className="w-4 h-4 -rotate-90" />
               </button>
@@ -531,14 +531,14 @@ const EmployerPickerModal: React.FC<{
   const tabClass = (active: boolean) =>
     `flex-1 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
       active
-        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-400'
-        : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/40'
+        ? 'border-blue-500 bg-info-bg text-primary dark:border-blue-400'
+        : 'border-default text-on-surface-secondary hover:bg-surface-hover'
     }`;
 
   const newInput = (label: string, key: keyof NewCompany, opts?: { required?: boolean; placeholder?: string; type?: string }) => (
     <label className="block">
-      <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label}{opts?.required && <span className="text-red-500"> *</span>}
+      <span className="block text-xs font-medium text-on-surface-secondary mb-1">
+        {label}{opts?.required && <span className="text-danger"> *</span>}
       </span>
       <input
         type={opts?.type ?? 'text'}
@@ -552,19 +552,19 @@ const EmployerPickerModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[88vh] flex flex-col">
-        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[88vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-default">
           <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add {selectedRows.length} enrolment{selectedRows.length === 1 ? '' : 's'} to Company Application</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Choose the company that is paying for these learners. This is who the invoice will be billed to.</p>
+            <h2 className="text-lg font-bold text-on-surface">Add {selectedRows.length} enrolment{selectedRows.length === 1 ? '' : 's'} to Company Application</h2>
+            <p className="text-sm text-muted mt-0.5">Choose the company that is paying for these learners. This is who the invoice will be billed to.</p>
           </div>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0" aria-label="Close">
-            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-surface-hover flex items-center justify-center flex-shrink-0" aria-label="Close">
+            <Icon name={IconName.Close} className="w-4 h-4 text-on-surface-secondary" />
           </button>
         </div>
 
         <div className="p-6 flex-1 overflow-y-auto space-y-4">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <div className="rounded-lg border border-amber-200 bg-warning-bg dark:border-amber-800 px-3 py-2 text-xs text-warning">
             These are older enrolments. Before you generate an invoice afterwards, double-check the company wasn&apos;t already
             billed in QuickBooks — the system can&apos;t see invoices created directly there.
           </div>
@@ -582,7 +582,7 @@ const EmployerPickerModal: React.FC<{
           {mode === 'pick' ? (
             <>
               <div className="relative">
-                <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Icon name={IconName.Search} className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={search}
@@ -593,16 +593,16 @@ const EmployerPickerModal: React.FC<{
                 />
               </div>
 
-              {loadError && <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>}
+              {loadError && <p className="text-sm text-danger">{loadError}</p>}
               {loading ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-10 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="animate-spin rounded-full h-7 w-7 border-2 border-gray-300 border-t-blue-600 dark:border-gray-600 dark:border-t-blue-400" />
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-sm text-muted">
+                  <div className="animate-spin rounded-full h-7 w-7 border-2 border-strong border-t-blue-600 dark:border-t-blue-400" />
                   <span>Loading companies…</span>
                 </div>
               ) : (
-                <ul className="divide-y divide-gray-100 dark:divide-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 max-h-72 overflow-y-auto">
+                <ul className="divide-y divide-default rounded-lg border border-default max-h-72 overflow-y-auto">
                   {results.length === 0 ? (
-                    <li className="px-3 py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+                    <li className="px-3 py-6 text-center text-sm text-muted">
                       No companies match. If it&apos;s a brand-new company, use <strong>Add a new company</strong> above.
                     </li>
                   ) : (
@@ -613,15 +613,15 @@ const EmployerPickerModal: React.FC<{
                           <button
                             type="button"
                             onClick={() => setChosen(e)}
-                            className={`w-full text-left px-3 py-2 flex items-center justify-between gap-3 transition-colors ${active ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}
+                            className={`w-full text-left px-3 py-2 flex items-center justify-between gap-3 transition-colors ${active ? 'bg-info-bg' : 'hover:bg-surface-hover'}`}
                           >
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName || '(no name)'}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              <p className="text-sm font-medium text-on-surface truncate">{e.employerOrgName || '(no name)'}</p>
+                              <p className="text-xs text-muted truncate">
                                 {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN'}{e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
                               </p>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${e.source === 'history' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${e.source === 'history' ? 'bg-surface-elevated text-on-surface-secondary' : 'bg-success-bg text-success'}`}>
                               {e.source === 'history' ? 'not in QuickBooks' : 'in QuickBooks'}
                             </span>
                           </button>
@@ -633,7 +633,7 @@ const EmployerPickerModal: React.FC<{
               )}
 
               {chosen && chosen.source === 'history' && (
-                <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                <div className="rounded-lg border border-red-200 bg-danger-bg dark:border-red-800 px-3 py-2 text-xs text-danger">
                   <strong>{chosen.employerOrgName}</strong> isn&apos;t in QuickBooks yet. You can still add these to Company
                   Application, but the invoice won&apos;t generate until the company is added in QuickBooks first.
                 </div>
@@ -641,7 +641,7 @@ const EmployerPickerModal: React.FC<{
             </>
           ) : (
             <>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 px-3 py-2 text-xs text-blue-800 dark:text-blue-200">
+              <div className="rounded-lg border border-blue-200 bg-info-bg dark:border-blue-800 px-3 py-2 text-xs text-info">
                 Only the company name is required. When you generate the invoice later, this company will be created in
                 QuickBooks automatically — so double-check the name and UEN are correct to avoid a duplicate or typo&apos;d customer.
               </div>
@@ -656,13 +656,13 @@ const EmployerPickerModal: React.FC<{
             </>
           )}
 
-          {submitError && <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>}
+          {submitError && <p className="text-sm text-danger">{submitError}</p>}
         </div>
 
-        <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between gap-3 p-6 border-t border-default">
+          <p className="text-xs text-muted">
             {billingName
-              ? <>Billing to <strong className="text-gray-700 dark:text-gray-200">{billingName}</strong></>
+              ? <>Billing to <strong className="text-on-surface-secondary">{billingName}</strong></>
               : mode === 'pick' ? 'Select a company to continue' : 'Enter a company name to continue'}
           </p>
           <div className="flex gap-3">

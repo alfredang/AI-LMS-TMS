@@ -570,7 +570,7 @@ const ProFormaInvoiceView: React.FC = () => {
           )}
           <div className="px-6 pt-4 pb-5">
             {isComplete ? (
-              <button onClick={opts.onDone} className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium transition-colors">Done</button>
+              <button onClick={opts.onDone} className="w-full py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium transition-colors">Done</button>
             ) : (
               <p className="text-[11px] text-center text-on-surface-secondary/60">Please do not close this page while processing.</p>
             )}
@@ -707,12 +707,12 @@ const ProFormaInvoiceView: React.FC = () => {
                   <td className={`${cell} text-center`}>
                     {record.pro_forma_url ? (
                       <button onClick={() => handleDriveLink(record)} disabled={verifyingId === record.id} title="Open in Google Drive"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 transition-colors disabled:opacity-60">
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-success-bg text-success hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors disabled:opacity-60">
                         {verifyingId === record.id ? <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-green-700 dark:border-green-400" /> : <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />}
                         {verifyingId === record.id ? 'Checking...' : 'View'}
                       </button>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500 dark:bg-gray-700/40 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-elevated text-muted">
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500" />Pending
                       </span>
                     )}
@@ -821,14 +821,14 @@ const ProFormaInvoiceView: React.FC = () => {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" style={BACKDROP_STYLE}>
           <div className="bg-surface rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 border border-default">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-400" /></div>
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-warning-bg flex items-center justify-center"><Icon name={IconName.Warning} className="w-5 h-5 text-warning" /></div>
               <h3 className="text-lg font-semibold text-on-surface">Generate All Pending Invoices?</h3>
             </div>
             <p className="text-sm text-on-surface-secondary mb-2">You are about to generate <span className="font-semibold text-on-surface">all pending proforma invoices</span> with no filters applied.</p>
             <p className="text-sm text-on-surface-secondary mb-6">This may take a significant amount of time. Are you sure?</p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowConfirmAll(false)} className="px-4 py-2 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-surface-hover text-on-surface transition-colors">Cancel</button>
-              <button onClick={handleSync} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"><Icon name={IconName.Sync} className="w-4 h-4" />Yes, Generate All</button>
+              <button onClick={handleSync} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-amber-700 text-white hover:bg-amber-800 transition-colors"><Icon name={IconName.Sync} className="w-4 h-4" />Yes, Generate All</button>
             </div>
           </div>
         </div>
@@ -839,7 +839,7 @@ const ProFormaInvoiceView: React.FC = () => {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" style={BACKDROP_STYLE}>
           <div className="bg-surface rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 border border-default">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-400" /></div>
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-warning-bg flex items-center justify-center"><Icon name={IconName.Warning} className="w-5 h-5 text-warning" /></div>
               <h3 className="text-lg font-semibold text-on-surface">Send Emails to All Learners?</h3>
             </div>
             <p className="text-sm text-on-surface-secondary mb-2">You are about to send proforma invoice emails to <span className="font-semibold text-on-surface">all learners with generated invoices</span> with no filters applied.</p>
@@ -857,7 +857,7 @@ const ProFormaInvoiceView: React.FC = () => {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" style={BACKDROP_STYLE}>
           <div className="bg-surface rounded-xl shadow-xl max-w-md w-full mx-4 p-6 border border-default">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-400" /></div>
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-warning-bg flex items-center justify-center"><Icon name={IconName.Warning} className="w-5 h-5 text-warning" /></div>
               <h3 className="text-lg font-semibold text-on-surface">Invoice Unavailable</h3>
             </div>
             <p className="text-sm text-on-surface-secondary mb-2">The proforma invoice for <span className="font-medium text-on-surface">{popupRecord.full_name}</span> is no longer available on Google Drive.</p>

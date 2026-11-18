@@ -15,7 +15,7 @@ export const SearchAssessmentsView: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const resultsPerPage = 10;
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const handleSearch = async () => {
         if (!courseRunId.trim() || !courseReferenceNumber.trim()) {
@@ -83,15 +83,15 @@ export const SearchAssessmentsView: React.FC = () => {
 
             {/* Search Filters Card */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Search Criteria</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Search Criteria</h3>
+                <p className="text-sm text-on-surface-secondary mb-4">
                     Course Run ID and Course Reference Number are required. Other fields are optional.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                        <label htmlFor="course-run-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Run ID <span className="text-danger">*</span>
                         </label>
                         <input
                             id="course-run-id"
@@ -104,8 +104,8 @@ export const SearchAssessmentsView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="course-ref-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Reference Number <span className="text-red-500">*</span>
+                        <label htmlFor="course-ref-number" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                            Course Reference Number <span className="text-danger">*</span>
                         </label>
                         <input
                             id="course-ref-number"
@@ -120,7 +120,7 @@ export const SearchAssessmentsView: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="enrolment-ref" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label htmlFor="enrolment-ref" className="block text-sm font-bold text-on-surface-secondary mb-1">
                             Enrolment Reference Number
                         </label>
                         <input
@@ -134,7 +134,7 @@ export const SearchAssessmentsView: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label htmlFor="trainee-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label htmlFor="trainee-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                             Trainee ID/NRIC
                         </label>
                         <input
@@ -172,7 +172,7 @@ export const SearchAssessmentsView: React.FC = () => {
                 </div>
 
                 {searchError && (
-                    <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    <p className="text-danger text-sm mt-3">{searchError}</p>
                 )}
             </Card>
 
@@ -181,7 +181,7 @@ export const SearchAssessmentsView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Searching assessments...</p>
+                        <p className="mt-4 text-on-surface-secondary">Searching assessments...</p>
                     </div>
                 </div>
             )}
@@ -196,80 +196,80 @@ export const SearchAssessmentsView: React.FC = () => {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Reference Number
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Result
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Score
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Grade
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Assessment Date
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Skill Code
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Course Reference Number
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Course Title
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Course Run ID
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Course Start Date
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Course End Date
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Trainee ID
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Trainee Full Name
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Trainee ID Type
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Enrolment Reference Number
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Training Partner UEN
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Training Partner Code
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Training Partner Name
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Conferring Institute UEN
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Conferring Institute Code
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Conferring Institute Name
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Created On
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Updated On
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {currentResults.map((assessment, index) => {
                                     // Helper to get result badge color
                                     const getResultColor = (result: string) => {
@@ -277,21 +277,21 @@ export const SearchAssessmentsView: React.FC = () => {
                                             case 'pass':
                                             case 'passed':
                                             case 'competent':
-                                                return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
+                                                return 'bg-success-bg text-success border-green-200 dark:border-green-700';
                                             case 'fail':
                                             case 'failed':
                                             case 'not yet competent':
-                                                return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+                                                return 'bg-danger-bg text-danger border-red-200 dark:border-red-700';
                                             case 'void':
-                                                return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700';
+                                                return 'bg-surface-elevated text-gray-800 border-default dark:text-gray-300';
                                             default:
-                                                return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700';
+                                                return 'bg-info-bg text-info border-blue-200 dark:border-blue-700';
                                         }
                                     };
                                     
                                     return (
-                                        <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">
+                                        <tr key={index} className="hover:bg-surface-hover">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface font-medium">
                                                 {assessment.referenceNumber || 'N/A'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -299,67 +299,67 @@ export const SearchAssessmentsView: React.FC = () => {
                                                     {assessment.result || 'N/A'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.score || '0'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.grade || '-'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.assessmentDate || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.skillCode || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.course?.referenceNumber || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 text-sm text-on-surface">
                                                 {assessment.course?.title || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.course?.run?.id || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.course?.run?.startDate || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.course?.run?.endDate || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.trainee?.id || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 text-sm text-on-surface">
                                                 {assessment.trainee?.fullName || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.trainee?.idType?.type || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.enrolment?.referenceNumber || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.trainingPartner?.uen || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.trainingPartner?.code || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 text-sm text-on-surface">
                                                 {assessment.trainingPartner?.name || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.conferringInstitute?.uen || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.conferringInstitute?.code || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 text-sm text-on-surface">
                                                 {assessment.conferringInstitute?.name || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.meta?.createdOn || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
                                                 {assessment.meta?.updatedOn || 'N/A'}
                                             </td>
                                         </tr>
@@ -372,7 +372,7 @@ export const SearchAssessmentsView: React.FC = () => {
                     {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="p-4 border-t dark:border-gray-700 flex justify-between items-center">
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <p className="text-sm text-on-surface-secondary">
                                 Showing {indexOfFirstResult + 1} to {Math.min(indexOfLastResult, searchResults.length)} of {searchResults.length} results
                             </p>
                             <div className="flex gap-2">
@@ -383,7 +383,7 @@ export const SearchAssessmentsView: React.FC = () => {
                                 >
                                     Previous
                                 </Button>
-                                <span className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
+                                <span className="px-4 py-2 text-sm text-on-surface-secondary">
                                     Page {currentPage} of {totalPages}
                                 </span>
                                 <Button
@@ -402,8 +402,8 @@ export const SearchAssessmentsView: React.FC = () => {
             {/* Empty State */}
             {!isSearching && searchResults.length === 0 && !searchError && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter search criteria to find assessments</p>
                         <p className="text-sm mt-2">Course Run ID and Course Reference Number are required. Optionally filter by enrolment number or trainee ID.</p>
                     </div>
@@ -421,7 +421,7 @@ export const ViewAssessmentView: React.FC = () => {
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     const handleSearch = async () => {
         if (!assessmentId.trim()) {
@@ -468,27 +468,27 @@ export const ViewAssessmentView: React.FC = () => {
                 case 'pass':
                 case 'passed':
                 case 'competent':
-                    return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
+                    return 'bg-success-bg text-success border-green-200 dark:border-green-700';
                 case 'fail':
                 case 'failed':
                 case 'not yet competent':
-                    return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+                    return 'bg-danger-bg text-danger border-red-200 dark:border-red-700';
                 default:
-                    return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700';
+                    return 'bg-surface-elevated text-gray-800 border-default dark:text-gray-300';
             }
         };
 
         return (
             <div className="space-y-6">
                 {/* Assessment Summary */}
-                <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                <div className="bg-info-bg p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                     <h4 className="font-bold text-blue-900 dark:text-blue-300 text-lg">
                         {assessment.course?.title || 'Assessment Details'}
                     </h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    <p className="text-sm text-primary mt-1">
                         Reference: <span className="font-semibold">{assessment.referenceNumber || assessmentId}</span>
                     </p>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    <p className="text-sm text-primary mt-1">
                         Result: <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getResultColor(assessment.result)}`}>
                             {assessment.result || 'N/A'}
                         </span>
@@ -499,168 +499,168 @@ export const ViewAssessmentView: React.FC = () => {
                 <Card className="p-0 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Field
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-on-surface-secondary uppercase tracking-wider border-b dark:border-gray-700">
                                         Value
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            <tbody className="bg-surface divide-y divide-default">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Assessment Reference Number
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.referenceNumber || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Assessment Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.assessmentDate || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Result
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         <span className={`inline-flex px-2 py-1 text-sm font-semibold rounded-full border ${getResultColor(assessment.result)}`}>
                                             {assessment.result || 'N/A'}
                                         </span>
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Skill Code
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.skillCode || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Reference Number
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.course?.referenceNumber || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Title
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.course?.title || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Run ID
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.course?.run?.id || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course Start Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.course?.run?.startDate || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Course End Date
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.course?.run?.endDate || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Trainee ID
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.trainee?.id || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Trainee ID Type
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.trainee?.idType?.type || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Trainee Full Name
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.trainee?.fullName || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Enrolment Reference Number
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.enrolment?.referenceNumber || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Training Partner UEN
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.trainingPartner?.uen || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Training Partner Name
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.trainingPartner?.name || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Training Partner Code
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.trainingPartner?.code || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Conferring Institute UEN
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.conferringInstitute?.uen || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Conferring Institute Name
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.conferringInstitute?.name || 'N/A'}
                                     </td>
                                 </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <tr className="hover:bg-surface-hover">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-on-surface-secondary">
                                         Conferring Institute Code
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    <td className="px-6 py-4 text-sm text-on-surface">
                                         {assessment.conferringInstitute?.code || 'N/A'}
                                     </td>
                                 </tr>
@@ -679,11 +679,11 @@ export const ViewAssessmentView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    {/* <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Assessment Lookup</h3> */}
+                    {/* <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Assessment Lookup</h3> */}
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="assessment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="assessment-id" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                 Assessment ID
                             </label>
                             <input
@@ -717,7 +717,7 @@ export const ViewAssessmentView: React.FC = () => {
                     </div>
 
                     {searchError && (
-                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                        <p className="text-danger text-sm mt-3">{searchError}</p>
                     )}
                 </div>
             </Card>
@@ -727,7 +727,7 @@ export const ViewAssessmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching assessment details...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching assessment details...</p>
                     </div>
                 </div>
             )}
@@ -737,18 +737,18 @@ export const ViewAssessmentView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Assessment Details</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-muted mt-1">
                             Assessment ID: {assessmentId}
                         </p>
                     </div>
                     <div className="p-6">
                         {renderAssessmentDetails()}
 
-                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                        <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                            <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 ▼ View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
+                            <pre className="mt-3 text-xs text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600 font-mono">
 {JSON.stringify(webhookResponse, null, 2)}
                             </pre>
                         </details>
@@ -773,26 +773,26 @@ export const ViewAssessmentView: React.FC = () => {
             {/* Error State */}
             {webhookResponse && !isSearching && searchError && (
                 <Card className="p-0">
-                    <div className="p-6 border-b dark:border-gray-700 bg-red-50 dark:bg-red-900/20">
-                        <h3 className="text-xl font-bold text-red-800 dark:text-red-300">Error</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                    <div className="p-6 border-b dark:border-gray-700 bg-danger-bg">
+                        <h3 className="text-xl font-bold text-danger">Error</h3>
+                        <p className="text-muted mt-1">
                             Assessment ID: {assessmentId}
                         </p>
                     </div>
                     <div className="p-6">
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-8 text-center">
+                        <div className="bg-danger-bg border border-red-200 dark:border-red-700 rounded-lg p-8 text-center">
                             <Icon name={IconName.X} className="w-12 h-12 mx-auto text-red-500 dark:text-red-400 mb-3" />
-                            <h4 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">Assessment Not Found</h4>
-                            <p className="text-red-700 dark:text-red-400 mb-4">
+                            <h4 className="text-lg font-bold text-danger mb-2">Assessment Not Found</h4>
+                            <p className="text-danger mb-4">
                                 {searchError}
                             </p>
                         </div>
 
-                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                        <details className="mt-6 bg-surface-elevated border border-default rounded-lg p-4">
+                            <summary className="font-semibold text-on-surface cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 ▼ View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
+                            <pre className="mt-3 text-xs text-on-surface-secondary whitespace-pre-wrap overflow-x-auto max-h-96 bg-surface p-3 rounded border dark:border-gray-600 font-mono">
 {JSON.stringify(webhookResponse, null, 2)}
                             </pre>
                         </details>
@@ -817,8 +817,8 @@ export const ViewAssessmentView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500 dark:text-gray-400">
-                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <div className="text-center text-muted">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-muted" />
                         <p className="text-lg font-medium">Enter Assessment ID to view details</p>
                         <p className="text-sm mt-2">Provide an Assessment ID (e.g. ASM-2601-159004) to fetch details from SSG</p>
                     </div>

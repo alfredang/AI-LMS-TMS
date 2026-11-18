@@ -17,18 +17,18 @@ import { BulkUploadCoursesView } from './admin/BulkUploadCoursesView';
 
 const getTypeColor = (courseType: string) => {
     switch (courseType) {
-        case 'WSQ': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+        case 'WSQ': return 'bg-info-bg text-info';
         case 'CASL': return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
         case 'IBF': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
-        default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        default: return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
     }
 }
 
 const getModeColor = (mode: string) => {
     switch (mode) {
         case 'Virtual': return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300';
-        case 'Hybrid': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-        default: return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+        case 'Hybrid': return 'bg-warning-bg text-warning';
+        default: return 'bg-success-bg text-success';
     }
 }
 
@@ -367,7 +367,7 @@ const ManagementCourseList: React.FC = () => {
         await loadCourseInfo(course, 'edit');
     };
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
     // Use effect to set course in context when selectedCourse changes
     React.useEffect(() => {
@@ -431,10 +431,10 @@ const ManagementCourseList: React.FC = () => {
                             label="Class Type"
                             value={
                                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                                    course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                    course.classType === 'Virtual' ? 'bg-info-bg text-info'
                                     : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
                                     : course.classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300'
-                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                    : 'bg-surface-elevated text-on-surface-secondary'
                                 }`}>
                                     {course.classType || 'Physical'}
                                 </span>
@@ -445,11 +445,11 @@ const ManagementCourseList: React.FC = () => {
                             value={(() => {
                                 const status = (course.classStatus || '').toLowerCase();
                                 const styleMap: Record<string, string> = {
-                                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-                                    pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-                                    confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                                    cancelled: 'bg-danger-bg text-danger',
+                                    pending:   'bg-warning-bg text-warning',
+                                    confirmed: 'bg-success-bg text-success',
                                 };
-                                const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                                const style = styleMap[status] || 'bg-surface-elevated text-on-surface-secondary';
                                 return (
                                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${style}`}>
                                         {course.classStatus || 'N/A'}
@@ -514,7 +514,7 @@ const ManagementCourseList: React.FC = () => {
                         </div>
                         <div className="p-6 flex flex-col flex-grow">
                             <h3 className="text-xl font-bold mb-4 h-14 line-clamp-2 overflow-hidden">
-                                {validity.status === 'expired' && <span className="text-red-600 dark:text-red-400">(Expired) </span>}
+                                {validity.status === 'expired' && <span className="text-danger">(Expired) </span>}
                                 {course.title}
                             </h3>
 
@@ -534,7 +534,7 @@ const ManagementCourseList: React.FC = () => {
                                 <DetailRow label="Course Duration" value={
                                     <div className="flex flex-col items-end">
                                         <span>{totalHours} Hours Total</span>
-                                        <span className="text-gray-400 font-normal">
+                                        <span className="text-muted font-normal">
                                             ({course.trainingHours}T + {course.assessmentHours}A)
                                         </span>
                                     </div>
@@ -558,10 +558,10 @@ const ManagementCourseList: React.FC = () => {
                                         );
                                     }
                                     const endColor = validity.status === 'expired'
-                                        ? 'text-red-600 dark:text-red-400'
+                                        ? 'text-danger'
                                         : validity.status === 'expiring'
                                             ? 'text-orange-500 dark:text-orange-400'
-                                            : 'text-green-600 dark:text-green-400';
+                                            : 'text-success';
                                     return (
                                         <>
                                             {startRow}
@@ -571,7 +571,7 @@ const ManagementCourseList: React.FC = () => {
                                                 </span>
                                             } />
                                             <DetailRow label="Status" value={
-                                                <span className={`font-semibold ${validity.status === 'expired' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                <span className={`font-semibold ${validity.status === 'expired' ? 'text-danger' : 'text-success'}`}>
                                                     {validity.status === 'expired' ? 'Expired' : 'Active'}
                                                 </span>
                                             } />
@@ -592,7 +592,7 @@ const ManagementCourseList: React.FC = () => {
                                                 checked={!!course.isUtapEligible}
                                                 readOnly
                                                 disabled
-                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 disabled:opacity-100 disabled:cursor-default"
+                                                className="h-4 w-4 rounded border-strong text-primary disabled:opacity-100 disabled:cursor-default"
                                             />
                                         } />
                                     </>
@@ -744,7 +744,7 @@ const ManagementCourseList: React.FC = () => {
                                             checked={!!course.isUtapEligible}
                                             readOnly
                                             disabled
-                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 disabled:opacity-100 disabled:cursor-default"
+                                            className="h-4 w-4 rounded border-strong text-primary disabled:opacity-100 disabled:cursor-default"
                                             aria-label={`${course.title} UTAP eligible`}
                                         />
                                     </td>
@@ -769,7 +769,7 @@ const ManagementCourseList: React.FC = () => {
                                     <td className="px-4 py-4 text-sm text-on-surface-secondary max-w-[200px]">
                                         <div className="font-medium">{course.numOfTrainers || 0} trainer{(course.numOfTrainers || 0) !== 1 ? 's' : ''}</div>
                                         {course.trainersList && (
-                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2" title={course.trainersList}>
+                                            <div className="text-xs text-muted mt-1 line-clamp-2" title={course.trainersList}>
                                                 {course.trainersList}
                                             </div>
                                         )}
@@ -831,7 +831,7 @@ const ManagementCourseList: React.FC = () => {
     if (currentError) {
         return (
             <div className="text-center py-8">
-                <p className="text-red-600 mb-4">Error loading courses: {currentError}</p>
+                <p className="text-danger mb-4">Error loading courses: {currentError}</p>
                 <button
                     onClick={() => window.location.reload()}
                     className="px-4 py-2 bg-primary text-white rounded hover:opacity-90"
@@ -857,24 +857,24 @@ const ManagementCourseList: React.FC = () => {
             {(role === UserRole.Admin || role === UserRole.Developer || role === UserRole.TrainingProvider) && (
                 <div className="grid grid-cols-5 gap-4 mb-6">
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-green-600">{fundedCourses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Funded Courses</p>
+                        <p className="text-4xl font-bold text-success">{fundedCourses}</p>
+                        <p className="text-on-surface-secondary mt-1">Funded Courses</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-blue-600">{wsqCourses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+                        <p className="text-4xl font-bold text-primary">{wsqCourses}</p>
+                        <p className="text-on-surface-secondary mt-1">WSQ Courses</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-teal-600">{caslCourses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">CASL Courses</p>
+                        <p className="text-4xl font-bold text-teal-700 dark:text-teal-300">{caslCourses}</p>
+                        <p className="text-on-surface-secondary mt-1">CASL Courses</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-purple-600">{ibfCourses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">IBF Courses</p>
+                        <p className="text-4xl font-bold text-purple-700 dark:text-purple-300">{ibfCourses}</p>
+                        <p className="text-on-surface-secondary mt-1">IBF Courses</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-gray-500">{unfundedCourses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unfunded Courses</p>
+                        <p className="text-4xl font-bold text-muted">{unfundedCourses}</p>
+                        <p className="text-on-surface-secondary mt-1">Unfunded Courses</p>
                     </Card>
                 </div>
             )}
@@ -920,19 +920,19 @@ const ManagementCourseList: React.FC = () => {
                     <>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <Card className="p-6 text-center">
-                                <p className="text-4xl font-bold text-green-600">{trainerCurrentClasses}</p>
-                                <p className="text-gray-600 dark:text-gray-300 mt-1">Current Classes</p>
+                                <p className="text-4xl font-bold text-success">{trainerCurrentClasses}</p>
+                                <p className="text-on-surface-secondary mt-1">Current Classes</p>
                             </Card>
                             <Card className="p-6 text-center">
-                                <p className="text-4xl font-bold text-blue-600">{trainerUpcomingClasses}</p>
-                                <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                                <p className="text-4xl font-bold text-primary">{trainerUpcomingClasses}</p>
+                                <p className="text-on-surface-secondary mt-1">Upcoming Classes</p>
                             </Card>
                             <Card className="p-6 text-center">
-                                <p className="text-4xl font-bold text-gray-500">{trainerPastClasses}</p>
-                                <p className="text-gray-600 dark:text-gray-300 mt-1">Past Classes</p>
+                                <p className="text-4xl font-bold text-muted">{trainerPastClasses}</p>
+                                <p className="text-on-surface-secondary mt-1">Past Classes</p>
                             </Card>
                         </div>
-                        <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default mb-6">
+                        <div className="tabs w-fit mb-6">
                             {([
                                 { key: 'all' as const, label: 'All Classes' },
                                 { key: 'current' as const, label: 'Current Classes' },
@@ -942,7 +942,7 @@ const ManagementCourseList: React.FC = () => {
                                 <button
                                     key={tab.key}
                                     onClick={() => { setTrainerClassView(tab.key); setCurrentPage(1); }}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === tab.key ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
+                                    className={`tab ${trainerClassView === tab.key ? 'tab-active' : ''}`}
                                 >
                                     {tab.label}
                                 </button>
@@ -959,7 +959,7 @@ const ManagementCourseList: React.FC = () => {
                         <label htmlFor="general-search-courses" className="block text-sm font-medium text-on-surface-secondary">General Search</label>
                         <div className="relative mt-1">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Icon name={IconName.Eye} className="w-5 h-5 text-gray-400" />
+                                <Icon name={IconName.Eye} className="w-5 h-5 text-muted" />
                             </div>
                             <input
                                 type="text"
@@ -977,7 +977,7 @@ const ManagementCourseList: React.FC = () => {
                             <div className="flex items-center rounded-md bg-surface-elevated p-0.5 border border-default">
                                 <button
                                     onClick={() => handleViewModeChange('block')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-muted hover:text-on-surface'}`}
                                     aria-label="Block view"
                                     aria-pressed={viewMode === 'block'}
                                 >
@@ -985,7 +985,7 @@ const ManagementCourseList: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => handleViewModeChange('table')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-muted hover:text-on-surface'}`}
                                     aria-label="Table view"
                                     aria-pressed={viewMode === 'table'}
                                 >
@@ -1087,7 +1087,7 @@ const ManagementCourseList: React.FC = () => {
             {/* Pagination Controls */}
             {filteredCourses.length > itemsPerPage && (
                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                    <div className="text-sm text-on-surface-secondary">
                         Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredCourses.length)} of {filteredCourses.length} courses
                     </div>
                     <div className="flex items-center gap-2">
@@ -1118,7 +1118,7 @@ const ManagementCourseList: React.FC = () => {
                                         onClick={() => setCurrentPage(pageNum)}
                                         className={`px-3 py-1 text-sm rounded-md transition-colors ${currentPage === pageNum
                                             ? 'bg-primary text-white'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                            : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
                                             }`}
                                     >
                                         {pageNum}
@@ -1159,7 +1159,7 @@ const ManagementCourseList: React.FC = () => {
 //         <Card className="p-6">
 //             <h3 className="text-xl font-bold mb-4">Trending Courses</h3>
 //             {trending.length === 0 ? (
-//                 <p className="text-gray-500">No trending courses available</p>
+//                 <p className="text-muted">No trending courses available</p>
 //             ) : (
 //                 <ul className="space-y-2">
 //                     {trending.map(course => (
@@ -1167,7 +1167,7 @@ const ManagementCourseList: React.FC = () => {
 //                             <a 
 //                                 href="#" 
 //                                 onClick={(e) => { e.preventDefault(); /* setSelectedCourse(course); */}}
-//                                 className="flex justify-between items-center p-2 rounded-md hover:bg-gray-100 group"
+//                                 className="flex justify-between items-center p-2 rounded-md hover:bg-surface-hover group"
 //                             >
 //                                 <span className="font-semibold text-on-surface group-hover:text-primary">{course.title}</span>
 //                                 <svg className="w-5 h-5 text-subtle group-hover:text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
@@ -1235,42 +1235,42 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                 <div className="flex items-center my-auto py-3">
                     <div className="text-xs space-y-2 flex-grow">
                         <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Code</span>
-                            <span className="font-mono text-gray-800 dark:text-gray-200">{displayCourseCodes(course)}</span>
+                            <span className="font-semibold text-muted">Course Code</span>
+                            <span className="font-mono text-on-surface">{displayCourseCodes(course)}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Duration</span>
-                            <span className="font-medium text-gray-800 dark:text-gray-200 text-right">{totalHours} Hours ({course.trainingHours}T + {course.assessmentHours}A)</span>
+                            <span className="font-semibold text-muted">Course Duration</span>
+                            <span className="font-medium text-on-surface text-right">{totalHours} Hours ({course.trainingHours}T + {course.assessmentHours}A)</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Type</span>
+                            <span className="font-semibold text-muted">Course Type</span>
                             <span className={`font-semibold px-2 py-0.5 rounded ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
                         </div>
                         {(course.courseRunCode || course.courseRunId) && (
                             <div className="flex justify-between items-center">
-                                <span className="font-semibold text-gray-500 dark:text-gray-400">Course Run</span>
-                                <span className="font-mono text-gray-800 dark:text-gray-200">{course.courseRunCode || course.courseRunId}</span>
+                                <span className="font-semibold text-muted">Course Run</span>
+                                <span className="font-mono text-on-surface">{course.courseRunCode || course.courseRunId}</span>
                             </div>
                         )}
                         <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-500 dark:text-gray-400">Class Type</span>
+                            <span className="font-semibold text-muted">Class Type</span>
                             <span className={`font-semibold px-2 py-0.5 rounded ${
-                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                course.classType === 'Virtual' ? 'bg-info-bg text-info'
                                 : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
                                 : course.classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                : 'bg-surface-elevated text-on-surface-secondary'
                             }`}>{course.classType || 'Physical'}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-500 dark:text-gray-400">Class Status</span>
+                            <span className="font-semibold text-muted">Class Status</span>
                             {(() => {
                                 const status = (course.classStatus || '').toLowerCase();
                                 const styleMap: Record<string, string> = {
-                                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-                                    pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-                                    confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                                    cancelled: 'bg-danger-bg text-danger',
+                                    pending:   'bg-warning-bg text-warning',
+                                    confirmed: 'bg-success-bg text-success',
                                 };
-                                const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                                const style = styleMap[status] || 'bg-surface-elevated text-on-surface-secondary';
                                 return (
                                     <span className={`font-semibold px-2 py-0.5 rounded ${style}`}>
                                         {course.classStatus || 'N/A'}
@@ -1280,21 +1280,21 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                         </div>
                         {course.startDate && (
                             <div className="flex justify-between items-center">
-                                <span className="font-semibold text-gray-500 dark:text-gray-400">Start Date</span>
-                                <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                                <span className="font-semibold text-muted">Start Date</span>
+                                <span className="font-medium text-on-surface">{new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                             </div>
                         )}
                         {course.endDate && (
                             <div className="flex justify-between items-center">
-                                <span className="font-semibold text-gray-500 dark:text-gray-400">End Date</span>
-                                <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                                <span className="font-semibold text-muted">End Date</span>
+                                <span className="font-medium text-on-surface">{new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="border-t border-gray-200 dark:border-gray-700 mt-auto pt-3 flex justify-between items-center">
+                <div className="border-t border-default mt-auto pt-3 flex justify-between items-center">
                     <span className="font-semibold text-on-surface text-sm dark:text-gray-200">View Course</span>
                     <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center transition-colors">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1415,7 +1415,7 @@ const LearnerCourseList: React.FC = () => {
     if (error) {
         return (
             <div className="text-center py-8">
-                <p className="text-red-500 mb-4">Error loading courses: {error}</p>
+                <p className="text-danger mb-4">Error loading courses: {error}</p>
                 <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-white rounded hover:opacity-90">Retry</button>
             </div>
         );
@@ -1429,21 +1429,21 @@ const LearnerCourseList: React.FC = () => {
             {/* KPI Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-green-600">{currentClasses}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Current Classes</p>
+                    <p className="text-4xl font-bold text-success">{currentClasses}</p>
+                    <p className="text-on-surface-secondary mt-1">Current Classes</p>
                 </Card>
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-blue-600">{upcomingClasses}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                    <p className="text-4xl font-bold text-primary">{upcomingClasses}</p>
+                    <p className="text-on-surface-secondary mt-1">Upcoming Classes</p>
                 </Card>
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-gray-500">{pastClasses}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Past Classes</p>
+                    <p className="text-4xl font-bold text-muted">{pastClasses}</p>
+                    <p className="text-on-surface-secondary mt-1">Past Classes</p>
                 </Card>
             </div>
 
             {/* Class Tabs */}
-            <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default">
+            <div className="tabs w-fit">
                 {([
                     { key: 'all' as const, label: 'All Classes' },
                     { key: 'current' as const, label: 'Current Classes' },
@@ -1453,7 +1453,7 @@ const LearnerCourseList: React.FC = () => {
                     <button
                         key={tab.key}
                         onClick={() => setClassTab(tab.key)}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${classTab === tab.key ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
+                        className={`tab ${classTab === tab.key ? 'tab-active' : ''}`}
                     >
                         {tab.label}
                     </button>
@@ -1463,18 +1463,18 @@ const LearnerCourseList: React.FC = () => {
             {/* Search + View Toggle */}
             <div className="flex items-center gap-3">
                 <div className="relative flex-1">
-                    <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Icon name={IconName.Search} className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                         type="text"
                         placeholder="Search by course code, title, or run ID..."
                         value={searchQuery}
                         onChange={handleSearchChange}
-                        className="w-full pl-9 pr-9 py-2.5 text-sm text-on-surface bg-surface border border-default rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+                        className="w-full pl-9 pr-9 py-2.5 text-sm text-on-surface bg-surface border border-default rounded-xl placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
                     />
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-gray-600 dark:hover:text-gray-200"
                             aria-label="Clear search"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1488,7 +1488,7 @@ const LearnerCourseList: React.FC = () => {
                     <button
                         onClick={() => handleViewModeChange('grid')}
                         title="Card view"
-                        className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-muted hover:text-on-surface'}`}
                     >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
@@ -1498,7 +1498,7 @@ const LearnerCourseList: React.FC = () => {
                     <button
                         onClick={() => handleViewModeChange('list')}
                         title="List view"
-                        className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-white shadow' : 'text-muted hover:text-on-surface'}`}
                     >
                         <Icon name={IconName.Menu} className="w-4 h-4" />
                     </button>
@@ -1556,7 +1556,7 @@ const CourseList: React.FC = () => {
                 <h2 className="text-3xl font-bold dark:text-white">{title}</h2>
                 {role === UserRole.Admin && (
                     <div className="flex flex-wrap items-center gap-3">
-                        <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+                        <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-primary hover:bg-blue-50 dark:border-blue-400 dark:hover:bg-blue-900/20">
                             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
                             Bulk Upload Courses
                         </Button>

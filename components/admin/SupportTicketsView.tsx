@@ -20,10 +20,10 @@ interface Ticket {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  Open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  'In Progress': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  Resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  Closed: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  Open: 'bg-info-bg text-primary',
+  'In Progress': 'bg-warning-bg text-warning',
+  Resolved: 'bg-success-bg text-success',
+  Closed: 'bg-surface-elevated text-muted',
 };
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
@@ -97,12 +97,12 @@ const SupportTicketsView: React.FC = () => {
             onClick={() => setStatusFilter(status)}
             className={`p-3 rounded-xl border text-center transition-all ${
               statusFilter === status
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-400 shadow-sm'
-                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-gray-300 dark:hover:border-gray-600'
+                ? 'border-blue-500 bg-info-bg dark:border-blue-400 shadow-sm'
+                : 'border-default bg-surface hover:border-gray-300 dark:hover:border-gray-600'
             }`}
           >
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{count}</p>
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{status}</p>
+            <p className="text-2xl font-bold text-on-surface">{count}</p>
+            <p className="text-xs font-medium text-muted">{status}</p>
           </button>
         ))}
       </div>
@@ -110,13 +110,13 @@ const SupportTicketsView: React.FC = () => {
       {/* Search */}
       <Card className="p-4 mb-4">
         <div className="relative">
-          <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search by ticket #, subject, or learner name..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            className="w-full pl-10 pr-4 py-2.5 border border-strong rounded-lg bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
           />
         </div>
       </Card>
@@ -129,21 +129,21 @@ const SupportTicketsView: React.FC = () => {
           </div>
         ) : filteredTickets.length === 0 ? (
           <div className="text-center py-16">
-            <Icon name={IconName.Chat} className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-            <p className="text-gray-500 dark:text-gray-400 font-medium">No tickets found</p>
+            <Icon name={IconName.Chat} className="w-16 h-16 mx-auto mb-4 text-muted" />
+            <p className="text-muted font-medium">No tickets found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticket #</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learner</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Subject</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">Category</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Replies</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Date</th>
+                <tr className="bg-surface-elevated border-b border-default">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Ticket #</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Learner</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Subject</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider hidden lg:table-cell">Category</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider hidden md:table-cell">Replies</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider hidden md:table-cell">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,21 +151,21 @@ const SupportTicketsView: React.FC = () => {
                   <tr
                     key={ticket.id}
                     onClick={() => openTicketDetail(ticket.id)}
-                    className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-blue-50/50 dark:hover:bg-slate-700/30 cursor-pointer transition"
+                    className="border-b border-default hover:bg-blue-50/50 dark:hover:bg-slate-700/30 cursor-pointer transition"
                   >
-                    <td className="py-3 px-4 text-sm font-mono text-blue-600 dark:text-blue-400 whitespace-nowrap">{ticket.ticket_number}</td>
+                    <td className="py-3 px-4 text-sm font-mono text-primary whitespace-nowrap">{ticket.ticket_number}</td>
                     <td className="py-3 px-4">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{ticket.learner_name}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{ticket.learner_email}</p>
+                      <p className="text-sm font-medium text-on-surface">{ticket.learner_name}</p>
+                      <p className="text-xs text-muted">{ticket.learner_email}</p>
                     </td>
                     <td className="py-3 px-4">
-                      <p className="text-sm text-gray-800 dark:text-gray-200 truncate max-w-[250px]">{ticket.subject}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate max-w-[250px]">{ticket.description.substring(0, 60)}{ticket.description.length > 60 ? '...' : ''}</p>
+                      <p className="text-sm text-on-surface truncate max-w-[250px]">{ticket.subject}</p>
+                      <p className="text-xs text-muted mt-0.5 truncate max-w-[250px]">{ticket.description.substring(0, 60)}{ticket.description.length > 60 ? '...' : ''}</p>
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 hidden lg:table-cell">{ticket.category}</td>
+                    <td className="py-3 px-4 text-sm text-on-surface-secondary hidden lg:table-cell">{ticket.category}</td>
                     <td className="py-3 px-4"><StatusBadge status={ticket.status} /></td>
-                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell text-center">{ticket.reply_count}</td>
-                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell whitespace-nowrap">{formatDate(ticket.created_at)}</td>
+                    <td className="py-3 px-4 text-sm text-muted hidden md:table-cell text-center">{ticket.reply_count}</td>
+                    <td className="py-3 px-4 text-sm text-muted hidden md:table-cell whitespace-nowrap">{formatDate(ticket.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -79,14 +79,14 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="space-y-6">
                     <div>
-                        <label htmlFor="course-select" className="block text-lg font-medium text-gray-700 dark:text-gray-300">
+                        <label htmlFor="course-select" className="block text-lg font-medium text-on-surface-secondary">
                             1. Select Course
                         </label>
                         <select
                             id="course-select"
                             value={selectedCourseId}
                             onChange={e => setSelectedCourseId(e.target.value)}
-                            className="mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                            className="mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="" disabled>-- Choose a course --</option>
                             {allCourses.map(course => (
@@ -96,7 +96,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
                     </div>
 
                     <div>
-                        <label htmlFor="topic" className="block text-lg font-medium text-gray-700 dark:text-gray-300">
+                        <label htmlFor="topic" className="block text-lg font-medium text-on-surface-secondary">
                             2. Quiz Topic
                         </label>
                         <input
@@ -105,12 +105,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
                             value={topic}
                             onChange={e => setTopic(e.target.value)}
                             placeholder="e.g., 'React Hooks', 'JavaScript Arrays', 'Database Design'"
-                            className="mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
+                            className="mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:placeholder-gray-400"
                         />
                     </div>
 
                     <div>
-                        <label htmlFor="instruction" className="block text-lg font-medium text-gray-700 dark:text-gray-300">
+                        <label htmlFor="instruction" className="block text-lg font-medium text-on-surface-secondary">
                             3. Additional Instructions (Optional)
                         </label>
                         <textarea
@@ -118,7 +118,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
                             value={instruction}
                             onChange={e => setInstruction(e.target.value)}
                             placeholder="e.g., 'Focus on practical examples', 'Include beginner-friendly questions', 'Make it challenging'"
-                            className="mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
+                            className="mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:placeholder-gray-400"
                         />
                     </div>
 
@@ -130,7 +130,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
                         {isLoading ? 'Generating Quiz...' : 'Generate Quiz'}
                     </Button>
 
-                    {error && <p className="text-red-500 mt-2">{error}</p>}
+                    {error && <p className="text-danger mt-2">{error}</p>}
                 </div>
             </Card>
 
@@ -160,8 +160,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
                                         <div
                                             key={optionIndex}
                                             className={`p-3 rounded-md border ${option === question.correctAnswer
-                                                    ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300'
-                                                    : 'bg-gray-50 border-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'
+                                                    ? 'bg-success-bg border-green-300 text-success dark:border-green-600'
+                                                    : 'bg-surface-elevated border-default dark:text-gray-300'
                                                 }`}
                                         >
                                             <span className="font-medium">
@@ -169,7 +169,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = () => {
                                             </span>
                                             {option}
                                             {option === question.correctAnswer && (
-                                                <span className="ml-2 text-green-600 font-semibold">✓ Correct</span>
+                                                <span className="ml-2 text-success font-semibold">✓ Correct</span>
                                             )}
                                         </div>
                                     ))}

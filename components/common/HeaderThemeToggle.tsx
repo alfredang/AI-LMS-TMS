@@ -6,7 +6,7 @@ import { ThemeMode, getCurrentTheme, setThemePreference } from '@utils/colorUtil
  * preference; "System" is chosen on the profile page (Appearance).
  */
 const HeaderThemeToggle: React.FC = () => {
-    const [theme, setTheme] = useState<ThemeMode>('dark');
+    const [theme, setTheme] = useState<ThemeMode>('light');
 
     // Track the live theme, so the icon stays right when the profile picker
     // or the device ("System") changes it.
@@ -25,7 +25,7 @@ const HeaderThemeToggle: React.FC = () => {
             onClick={() => setThemePreference(next)}
             aria-label={`Switch to ${next} theme`}
             title={`Switch to ${next} theme`}
-            className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="icon-btn-round"
         >
             {theme === 'dark' ? (
                 <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

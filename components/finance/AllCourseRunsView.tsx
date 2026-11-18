@@ -103,27 +103,27 @@ const maskNric = (nric: string | null): string => {
 };
 
 const statusColor = (status: string | null): string => {
-  if (!status) return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  if (!status) return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
   const s = status.toLowerCase();
   if (s.includes('completed') || s.includes('disbursed') || s.includes('confirmed'))
-    return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+    return 'bg-success-bg text-success';
   if (s.includes('cancelled'))
-    return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    return 'bg-danger-bg text-danger';
   if (s.includes('rejected') || s.includes('refunded'))
-    return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+    return 'bg-danger-bg text-danger';
   if (s.includes('pending') || s.includes('ready'))
-    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+    return 'bg-warning-bg text-warning';
   if (s.includes('processing') || s.includes('approved') || s.includes('grant processing'))
-    return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    return 'bg-info-bg text-info';
+  return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
 };
 
 const grantPaymentBadge = (status: string | null | undefined): string => {
   const s = String(status || '').trim().toUpperCase();
-  if (s === 'FULLY_PAID') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
-  if (s === 'PARTIAL') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
-  if (s === 'NOT_RECEIVED') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  if (s === 'FULLY_PAID') return 'bg-success-bg text-success';
+  if (s === 'PARTIAL') return 'bg-warning-bg text-warning';
+  if (s === 'NOT_RECEIVED') return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
+  return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
 };
 
 const PAGE_SIZE = 20;
@@ -152,16 +152,16 @@ async function pollInvoiceJobSettled(
 
 // Column group header styling
 const groupHeaderColors: Record<string, string> = {
-  course: 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300',
-  trainee: 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300',
+  course: 'bg-info-bg text-primary',
+  trainee: 'bg-success-bg text-success',
   sponsor: 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300',
-  enrolment: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
+  enrolment: 'bg-warning-bg text-warning',
   bl: 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300',
   nbl: 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300',
-  tg: 'bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300',
+  tg: 'bg-orange-50 dark:bg-orange-950 text-warning',
   sfc: 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300',
-  grant_pay: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
-  fees: 'bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300',
+  grant_pay: 'bg-success-bg text-success',
+  fees: 'bg-surface-elevated text-on-surface-secondary',
   assessment: 'bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300',
 };
 
@@ -212,7 +212,7 @@ const StickyScrollbar: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
           zIndex: 9999,
           overflowX: 'auto',
           overflowY: 'hidden',
-          background: '#0f172a',
+          background: 'rgb(var(--c-surface-elevated))', // design-system token
         });
       } else {
         setStyle({ display: 'none' });
@@ -866,20 +866,20 @@ const AllCourseRunsView: React.FC = () => {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="p-4 text-center">
-            <p className="text-3xl font-bold text-blue-600">{stats.totalEnrolments.toLocaleString()}</p>
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Total Enrolments</p>
+            <p className="text-3xl font-bold text-primary">{stats.totalEnrolments.toLocaleString()}</p>
+            <p className="text-xs text-on-surface-secondary mt-1">Total Enrolments</p>
           </Card>
           <Card className="p-4 text-center">
-            <p className="text-3xl font-bold text-indigo-600">{formatCurrency(stats.totalBL)}</p>
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Total BL Grants</p>
+            <p className="text-3xl font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(stats.totalBL)}</p>
+            <p className="text-xs text-on-surface-secondary mt-1">Total BL Grants</p>
           </Card>
           <Card className="p-4 text-center">
-            <p className="text-3xl font-bold text-teal-600">{formatCurrency(stats.totalNBL)}</p>
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Total Non-BL Grants</p>
+            <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">{formatCurrency(stats.totalNBL)}</p>
+            <p className="text-xs text-on-surface-secondary mt-1">Total Non-BL Grants</p>
           </Card>
           <Card className="p-4 text-center">
-            <p className="text-3xl font-bold text-pink-600">{formatCurrency(stats.totalSFC)}</p>
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Total SFC Claims</p>
+            <p className="text-3xl font-bold text-pink-700 dark:text-pink-300">{formatCurrency(stats.totalSFC)}</p>
+            <p className="text-xs text-on-surface-secondary mt-1">Total SFC Claims</p>
           </Card>
         </div>
       )}
@@ -897,7 +897,7 @@ const AllCourseRunsView: React.FC = () => {
                 placeholder="Search by trainee name, NRIC, enrolment ID, course title, course code…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface placeholder-gray-400"
+                className="w-full pl-10 pr-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface placeholder-muted"
               />
             </div>
             <select
@@ -1044,13 +1044,13 @@ const AllCourseRunsView: React.FC = () => {
       </Card>
 
       {syncToast && (
-        <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'}`}>
+        <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-danger-bg text-danger' : 'bg-success-bg text-success'}`}>
           {syncToast}
         </div>
       )}
 
       {shouldSuggestImport && (
-        <div className="p-3 rounded-lg text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
+        <div className="p-3 rounded-lg text-sm bg-warning-bg text-warning border border-amber-200 dark:border-amber-800">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <div className="font-medium">No results for Course Run ID {searchedCrId}.</div>
@@ -1058,7 +1058,7 @@ const AllCourseRunsView: React.FC = () => {
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium disabled:opacity-50"
+              className="px-3 py-1.5 rounded-md bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium disabled:opacity-50"
               onClick={() => {
                 setShowImportModal(true);
                 setImportResult(null);
@@ -1075,13 +1075,13 @@ const AllCourseRunsView: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm">
+        <div className="p-3 bg-danger-bg text-danger rounded-lg text-sm">
           {error}
         </div>
       )}
 
       {pageMissingGrn.length > 0 && (
-        <div className="p-3 rounded-lg text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
+        <div className="p-3 rounded-lg text-sm bg-warning-bg text-warning border border-amber-200 dark:border-amber-800">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <div className="font-medium">
@@ -1116,7 +1116,7 @@ const AllCourseRunsView: React.FC = () => {
                   setCreatingGrn(false);
                 }
               }}
-              className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-60"
+              className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-amber-700 hover:bg-amber-800 text-white disabled:opacity-60"
             >
               {creatingGrn ? 'Creating…' : 'Create missing GRN invoices'}
             </button>
@@ -1154,7 +1154,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
                 <th colSpan={7} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-pink-300 dark:border-pink-600 ${groupHeaderColors.sfc}`}>SFC Claims</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-emerald-300 dark:border-emerald-600 ${groupHeaderColors.grant_pay}`}>Grant Payment</th>
-                <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-gray-300 dark:border-gray-600 ${groupHeaderColors.fees}`}>Fees</th>
+                <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-strong ${groupHeaderColors.fees}`}>Fees</th>
               </tr>
               {/* Column Headers */}
               <tr className="border-b border-default bg-surface-elevated">
@@ -1318,8 +1318,8 @@ const AllCourseRunsView: React.FC = () => {
                         const style = type === 'DA'
                           ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
                           : type === 'COMPANY'
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+                            ? 'bg-info-bg text-primary'
+                            : 'bg-success-bg text-success';
                         return (
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${style}`}>
                             {type === 'NON-DA' ? 'Non-DA' : type === 'COMPANY' ? 'Company' : 'DA'}
@@ -1335,7 +1335,7 @@ const AllCourseRunsView: React.FC = () => {
                       {r.invoice_drive_web_view_link ? (
                         <button
                           onClick={() => window.open(r.invoice_drive_web_view_link!, '_blank', 'noreferrer')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-success-bg text-success hover:bg-green-100 dark:hover:bg-green-900/40"
                         >
                           <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
                           View
@@ -1346,7 +1346,7 @@ const AllCourseRunsView: React.FC = () => {
                       {r.grn_drive_web_view_link ? (
                         <button
                           onClick={() => window.open(r.grn_drive_web_view_link!, '_blank', 'noreferrer')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-info-bg text-primary hover:bg-blue-100 dark:hover:bg-blue-900/40"
                         >
                           <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
                           View
@@ -1408,14 +1408,14 @@ const AllCourseRunsView: React.FC = () => {
                     </td>
                     <td className={cell}>
                       {r.sfc_claim_payment_status ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.sfc_claim_payment_status === 'PAID' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300'}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.sfc_claim_payment_status === 'PAID' ? 'bg-success-bg text-success' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                           {r.sfc_claim_payment_status}
                         </span>
                       ) : '-'}
                     </td>
                     <td className={cell}>
                       {r.qbo_sfc_status ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.qbo_sfc_status === 'Paid' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.qbo_sfc_status === 'Paid' ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
                           {r.qbo_sfc_status}
                         </span>
                       ) : '-'}
@@ -1479,7 +1479,7 @@ const AllCourseRunsView: React.FC = () => {
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
             style={{ backdropFilter: 'blur(8px)' }}
           >
-            <div className="w-full max-w-md mx-4 rounded-2xl bg-white dark:bg-gray-800 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="w-full max-w-md mx-4 rounded-2xl bg-surface shadow-2xl overflow-hidden border border-default">
               <div
                 className={`h-1 ${fmsInvProgressDone ? (allFailed ? 'bg-red-500' : 'bg-emerald-500') : 'bg-amber-500'}`}
               />
@@ -1488,18 +1488,18 @@ const AllCourseRunsView: React.FC = () => {
                   className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${
                     fmsInvProgressDone
                       ? allFailed
-                        ? 'bg-red-100 dark:bg-red-900/30'
-                        : 'bg-emerald-100 dark:bg-emerald-900/30'
-                      : 'bg-amber-100 dark:bg-amber-900/30'
+                        ? 'bg-danger-bg'
+                        : 'bg-success-bg'
+                      : 'bg-warning-bg'
                   }`}
                 >
                   {fmsInvProgressDone ? (
                     allFailed ? (
-                      <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-7 h-7 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     ) : (
-                      <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-7 h-7 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     )
@@ -1507,14 +1507,14 @@ const AllCourseRunsView: React.FC = () => {
                     <div className="animate-spin rounded-full h-7 w-7 border-[3px] border-amber-200 border-t-amber-500" />
                   )}
                 </div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-base font-semibold text-on-surface">
                   {fmsInvProgressDone
                     ? allFailed
                       ? 'Generation failed'
                       : 'Invoices generated!'
                     : 'Generating invoices…'}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+                <p className="text-xs text-muted mt-1 text-center">
                   {fmsInvProgressDone
                     ? `Completed in ${fmtInvDuration(elapsed)}`
                     : `Processing ${fmsInvProgressTotal} invoice(s) in QuickBooks, please wait…`}
@@ -1539,24 +1539,24 @@ const AllCourseRunsView: React.FC = () => {
 
               {fmsInvProgressDone && (
                 <div className="px-6 pt-3 pb-1">
-                  <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 divide-x divide-gray-200 dark:divide-gray-600 overflow-hidden">
+                  <div className="flex rounded-lg border border-default divide-x divide-default overflow-hidden">
                     <div className="flex-1 py-3 text-center">
-                      <div className="text-base font-bold text-emerald-500">{fmsInvProgressSucceeded}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Completed</div>
+                      <div className="text-base font-bold text-success">{fmsInvProgressSucceeded}</div>
+                      <div className="text-[10px] text-muted font-medium mt-0.5">Completed</div>
                     </div>
                     <div className="flex-1 py-3 text-center">
                       <div
-                        className={`text-base font-bold ${fmsInvProgressFailed > 0 ? 'text-red-400' : 'text-gray-400'}`}
+                        className={`text-base font-bold ${fmsInvProgressFailed > 0 ? 'text-red-400' : 'text-muted'}`}
                       >
                         {fmsInvProgressFailed}
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Issues</div>
+                      <div className="text-[10px] text-muted font-medium mt-0.5">Issues</div>
                     </div>
                     <div className="flex-1 py-3 text-center">
-                      <div className="text-base font-bold text-gray-700 dark:text-gray-300">
+                      <div className="text-base font-bold text-on-surface-secondary">
                         {fmtInvDuration(elapsed)}
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Duration</div>
+                      <div className="text-[10px] text-muted font-medium mt-0.5">Duration</div>
                     </div>
                   </div>
                 </div>
@@ -1568,13 +1568,13 @@ const AllCourseRunsView: React.FC = () => {
                     type="button"
                     onClick={() => setShowFmsInvProgress(false)}
                     className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${
-                      allFailed ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'
+                      allFailed ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-700 hover:bg-emerald-800'
                     }`}
                   >
                     Done
                   </button>
                 ) : (
-                  <p className="text-center text-[11px] text-gray-500 dark:text-gray-400">
+                  <p className="text-center text-[11px] text-muted">
                     Invoice ID and number appear in the table when each job finishes.
                   </p>
                 )}
@@ -1589,24 +1589,24 @@ const AllCourseRunsView: React.FC = () => {
         const allFailed = fmsSendDone && fmsSendSucceeded === 0 && fmsSendFailed > 0;
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" style={{ backdropFilter: 'blur(8px)' }}>
-            <div className="w-full max-w-md mx-4 rounded-2xl bg-white dark:bg-gray-800 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="w-full max-w-md mx-4 rounded-2xl bg-surface shadow-2xl overflow-hidden border border-default">
               <div className={`h-1 ${fmsSendDone ? (allFailed ? 'bg-red-500' : 'bg-emerald-500') : 'bg-amber-500'}`} />
               <div className="flex flex-col items-center pt-7 pb-2 px-6">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${fmsSendDone ? (allFailed ? 'bg-red-100 dark:bg-red-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30') : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${fmsSendDone ? (allFailed ? 'bg-danger-bg' : 'bg-success-bg') : 'bg-warning-bg'}`}>
                   {fmsSendDone ? (
                     allFailed ? (
-                      <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      <svg className="w-7 h-7 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     ) : (
-                      <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      <svg className="w-7 h-7 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                     )
                   ) : (
                     <div className="animate-spin rounded-full h-7 w-7 border-[3px] border-amber-200 border-t-amber-500" />
                   )}
                 </div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-base font-semibold text-on-surface">
                   {fmsSendDone ? (allFailed ? 'Send failed' : 'Invoices sent!') : 'Sending invoices…'}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+                <p className="text-xs text-muted mt-1 text-center">
                   {fmsSendDone ? `Completed in ${fmtInvDuration(elapsed)}` : `Sending ${fmsSendTotal} email(s) from QuickBooks, please wait…`}
                 </p>
               </div>
@@ -1626,18 +1626,18 @@ const AllCourseRunsView: React.FC = () => {
 
               {fmsSendDone && (
                 <div className="px-6 pt-3 pb-1">
-                  <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 divide-x divide-gray-200 dark:divide-gray-600 overflow-hidden">
+                  <div className="flex rounded-lg border border-default divide-x divide-default overflow-hidden">
                     <div className="flex-1 py-3 text-center">
-                      <div className="text-base font-bold text-emerald-500">{fmsSendSucceeded}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Sent</div>
+                      <div className="text-base font-bold text-success">{fmsSendSucceeded}</div>
+                      <div className="text-[10px] text-muted font-medium mt-0.5">Sent</div>
                     </div>
                     <div className="flex-1 py-3 text-center">
-                      <div className={`text-base font-bold ${fmsSendFailed > 0 ? 'text-red-400' : 'text-gray-400'}`}>{fmsSendFailed}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Failed</div>
+                      <div className={`text-base font-bold ${fmsSendFailed > 0 ? 'text-red-400' : 'text-muted'}`}>{fmsSendFailed}</div>
+                      <div className="text-[10px] text-muted font-medium mt-0.5">Failed</div>
                     </div>
                     <div className="flex-1 py-3 text-center">
-                      <div className="text-base font-bold text-gray-700 dark:text-gray-300">{fmtInvDuration(elapsed)}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Duration</div>
+                      <div className="text-base font-bold text-on-surface-secondary">{fmtInvDuration(elapsed)}</div>
+                      <div className="text-[10px] text-muted font-medium mt-0.5">Duration</div>
                     </div>
                   </div>
                 </div>
@@ -1648,12 +1648,12 @@ const AllCourseRunsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowFmsSendProgress(false)}
-                    className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                    className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-700 hover:bg-emerald-800'}`}
                   >
                     Done
                   </button>
                 ) : (
-                  <p className="text-center text-[11px] text-gray-500 dark:text-gray-400">
+                  <p className="text-center text-[11px] text-muted">
                     QuickBooks will email the invoice to each learner.
                   </p>
                 )}
@@ -1666,14 +1666,14 @@ const AllCourseRunsView: React.FC = () => {
       {/* Import Course Run Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+          <div className="bg-surface rounded-lg shadow-xl w-full max-w-md border border-default">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Import Course Run</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <h3 className="text-lg font-semibold text-on-surface mb-1">Import Course Run</h3>
+              <p className="text-sm text-muted mb-4">
                 Enter a Course Run ID to fetch its details from SSG and save it to the database.
               </p>
 
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                 Course Run ID
               </label>
               <input
@@ -1685,7 +1685,7 @@ const AllCourseRunsView: React.FC = () => {
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && !importLoading && void handleImportRun()}
                 placeholder="e.g. 1067907"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 mb-4"
+                className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 mb-4"
                 autoFocus
               />
 
@@ -1693,8 +1693,8 @@ const AllCourseRunsView: React.FC = () => {
                 <div
                   className={`rounded-md p-3 mb-4 text-sm ${
                     importResult.success
-                      ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
-                      : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'
+                      ? 'bg-success-bg border border-green-200 text-success dark:border-green-700'
+                      : 'bg-danger-bg border border-red-200 text-danger dark:border-red-700'
                   }`}
                 >
                   <p className="font-medium">{importResult.message}</p>

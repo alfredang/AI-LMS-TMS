@@ -5,12 +5,12 @@ import { useCw, clearPersistedExtraction } from './CwContext';
 
 // ─── Data Table (matches Streamlit's st.dataframe) ───
 const DataTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => (
-  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+  <div className="overflow-x-auto rounded-lg border border-default">
     <table className="w-full text-sm">
       <thead>
-        <tr className="bg-gray-50 dark:bg-gray-800">
+        <tr className="bg-surface-elevated">
           {headers.map((h, i) => (
-            <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+            <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider border-b border-default">
               {h}
             </th>
           ))}
@@ -18,9 +18,9 @@ const DataTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers,
       </thead>
       <tbody>
         {rows.map((row, i) => (
-          <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+          <tr key={i} className="border-b border-default last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
             {row.map((cell, j) => (
-              <td key={j} className="px-4 py-3 text-gray-700 dark:text-gray-300">{cell}</td>
+              <td key={j} className="px-4 py-3 text-on-surface-secondary">{cell}</td>
             ))}
           </tr>
         ))}
@@ -33,11 +33,11 @@ const DataTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers,
 const Expander: React.FC<{ title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({ title, defaultOpen = false, children }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="border border-default rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface bg-surface-elevated hover:bg-surface-hover transition-colors"
       >
         <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -201,9 +201,9 @@ const CwExtractCourseInfo: React.FC = () => {
             if (table) {
               return (
                 <div key={idx}>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Course Overview</h3>
+                  <h3 className="text-2xl font-bold text-on-surface mb-4">Course Overview</h3>
                   <DataTable headers={table.headers} rows={table.rows} />
-                  <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                  <hr className="mt-6 border-default" />
                 </div>
               );
             }
@@ -222,9 +222,9 @@ const CwExtractCourseInfo: React.FC = () => {
 
             return (
               <div key={idx}>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Course Overview</h3>
+                <h3 className="text-2xl font-bold text-on-surface mb-4">Course Overview</h3>
                 <DataTable headers={['Field', 'Value']} rows={rows} />
-                <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                <hr className="mt-6 border-default" />
               </div>
             );
           }
@@ -233,9 +233,9 @@ const CwExtractCourseInfo: React.FC = () => {
           if (titleLower.includes('what this course is about') || titleLower.includes('course is about')) {
             return (
               <div key={idx}>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">What This Course Is About</h3>
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{section.content.replace(/\*\*/g, '')}</p>
-                <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                <h3 className="text-2xl font-bold text-on-surface mb-3">What This Course Is About</h3>
+                <p className="text-on-surface-secondary leading-relaxed">{section.content.replace(/\*\*/g, '')}</p>
+                <hr className="mt-6 border-default" />
               </div>
             );
           }
@@ -247,16 +247,16 @@ const CwExtractCourseInfo: React.FC = () => {
               .map(l => l.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '').trim());
             return (
               <div key={idx}>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">What You'll Learn</h3>
+                <h3 className="text-2xl font-bold text-on-surface mb-3">What You'll Learn</h3>
                 <ul className="space-y-2">
                   {items.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-gray-700 dark:text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-on-surface-secondary">
                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
                       {item}
                     </li>
                   ))}
                 </ul>
-                <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                <hr className="mt-6 border-default" />
               </div>
             );
           }
@@ -285,22 +285,22 @@ const CwExtractCourseInfo: React.FC = () => {
             if (luBlocks.length > 0) {
               return (
                 <div key={idx}>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{section.title}</h3>
+                  <h3 className="text-2xl font-bold text-on-surface mb-4">{section.title}</h3>
                   <div className="space-y-2">
                     {luBlocks.map((lu, i) => (
                       <Expander key={i} title={lu.title} defaultOpen={false}>
                         {lu.content.split('\n').map((line, li) => {
                           const cleaned = line.replace(/\*\*/g, '');
-                          if (line.match(/^\*\*[^*]+\*\*/)) return <p key={li} className="font-semibold text-gray-900 dark:text-white mt-3 mb-1">{cleaned}</p>;
-                          if (line.match(/^[-•]\s/)) return <p key={li} className="text-gray-700 dark:text-gray-300 pl-4 py-0.5">• {cleaned.replace(/^[-•]\s*/, '')}</p>;
-                          if (line.match(/^\s+[-•]\s/)) return <p key={li} className="text-gray-600 dark:text-gray-400 pl-8 py-0.5">• {cleaned.replace(/^\s+[-•]\s*/, '')}</p>;
-                          if (line.trim()) return <p key={li} className="text-gray-700 dark:text-gray-300 py-0.5">{cleaned}</p>;
+                          if (line.match(/^\*\*[^*]+\*\*/)) return <p key={li} className="font-semibold text-on-surface mt-3 mb-1">{cleaned}</p>;
+                          if (line.match(/^[-•]\s/)) return <p key={li} className="text-on-surface-secondary pl-4 py-0.5">• {cleaned.replace(/^[-•]\s*/, '')}</p>;
+                          if (line.match(/^\s+[-•]\s/)) return <p key={li} className="text-on-surface-secondary pl-8 py-0.5">• {cleaned.replace(/^\s+[-•]\s*/, '')}</p>;
+                          if (line.trim()) return <p key={li} className="text-on-surface-secondary py-0.5">{cleaned}</p>;
                           return null;
                         })}
                       </Expander>
                     ))}
                   </div>
-                  <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                  <hr className="mt-6 border-default" />
                 </div>
               );
             }
@@ -308,16 +308,16 @@ const CwExtractCourseInfo: React.FC = () => {
             // No sub-blocks, render as formatted text
             return (
               <div key={idx}>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{section.title}</h3>
+                <h3 className="text-2xl font-bold text-on-surface mb-4">{section.title}</h3>
                 <Expander title={section.title} defaultOpen={true}>
                   {section.content.split('\n').map((line, i) => {
                     const cleaned = line.replace(/\*\*/g, '');
-                    if (line.match(/^[-•]\s/)) return <p key={i} className="text-gray-700 dark:text-gray-300 pl-4 py-0.5">• {cleaned.replace(/^[-•]\s*/, '')}</p>;
-                    if (line.trim()) return <p key={i} className="text-gray-700 dark:text-gray-300 py-0.5">{cleaned}</p>;
+                    if (line.match(/^[-•]\s/)) return <p key={i} className="text-on-surface-secondary pl-4 py-0.5">• {cleaned.replace(/^[-•]\s*/, '')}</p>;
+                    if (line.trim()) return <p key={i} className="text-on-surface-secondary py-0.5">{cleaned}</p>;
                     return null;
                   })}
                 </Expander>
-                <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                <hr className="mt-6 border-default" />
               </div>
             );
           }
@@ -328,9 +328,9 @@ const CwExtractCourseInfo: React.FC = () => {
             if (table) {
               return (
                 <div key={idx}>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Instructional Methods & Duration</h3>
+                  <h3 className="text-2xl font-bold text-on-surface mb-4">Instructional Methods & Duration</h3>
                   <DataTable headers={table.headers} rows={table.rows} />
-                  <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                  <hr className="mt-6 border-default" />
                 </div>
               );
             }
@@ -342,9 +342,9 @@ const CwExtractCourseInfo: React.FC = () => {
             if (table) {
               return (
                 <div key={idx}>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Assessment Methods & Duration</h3>
+                  <h3 className="text-2xl font-bold text-on-surface mb-4">Assessment Methods & Duration</h3>
                   <DataTable headers={table.headers} rows={table.rows} />
-                  <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                  <hr className="mt-6 border-default" />
                 </div>
               );
             }
@@ -354,11 +354,11 @@ const CwExtractCourseInfo: React.FC = () => {
           if (titleLower.includes('course overview description') || titleLower.includes('description')) {
             return (
               <div key={idx}>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{section.title}</h3>
+                <h3 className="text-2xl font-bold text-on-surface mb-3">{section.title}</h3>
                 {section.content.split('\n\n').map((para, i) => (
-                  <p key={i} className="text-gray-700 dark:text-gray-300 leading-relaxed mb-3">{para.replace(/\*\*/g, '').trim()}</p>
+                  <p key={i} className="text-on-surface-secondary leading-relaxed mb-3">{para.replace(/\*\*/g, '').trim()}</p>
                 ))}
-                <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                <hr className="mt-6 border-default" />
               </div>
             );
           }
@@ -368,9 +368,9 @@ const CwExtractCourseInfo: React.FC = () => {
           if (table) {
             return (
               <div key={idx}>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{section.title}</h3>
+                <h3 className="text-2xl font-bold text-on-surface mb-4">{section.title}</h3>
                 <DataTable headers={table.headers} rows={table.rows} />
-                <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+                <hr className="mt-6 border-default" />
               </div>
             );
           }
@@ -378,21 +378,21 @@ const CwExtractCourseInfo: React.FC = () => {
           // ── Default: formatted text ──
           return (
             <div key={idx}>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{section.title}</h3>
+              <h3 className="text-2xl font-bold text-on-surface mb-3">{section.title}</h3>
               {section.content.split('\n').map((line, i) => {
                 const cleaned = line.replace(/\*\*/g, '');
-                if (line.match(/^[-•]\s/)) return <p key={i} className="text-gray-700 dark:text-gray-300 pl-4 py-0.5">• {cleaned.replace(/^[-•]\s*/, '')}</p>;
-                if (line.trim()) return <p key={i} className="text-gray-700 dark:text-gray-300 py-0.5">{cleaned}</p>;
+                if (line.match(/^[-•]\s/)) return <p key={i} className="text-on-surface-secondary pl-4 py-0.5">• {cleaned.replace(/^[-•]\s*/, '')}</p>;
+                if (line.trim()) return <p key={i} className="text-on-surface-secondary py-0.5">{cleaned}</p>;
                 return <div key={i} className="h-2" />;
               })}
-              <hr className="mt-6 border-gray-200 dark:border-gray-700" />
+              <hr className="mt-6 border-default" />
             </div>
           );
         })}
 
         {/* Course Context JSON (collapsible, bottom) */}
         <Expander title="Course Context JSON" defaultOpen={false}>
-          <pre className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-96 overflow-y-auto">
+          <pre className="text-xs text-muted whitespace-pre-wrap font-mono bg-surface-elevated rounded-lg p-4 max-h-96 overflow-y-auto">
             {cw.extractedResult}
           </pre>
         </Expander>
@@ -404,7 +404,7 @@ const CwExtractCourseInfo: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">Extract Course Info</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-muted mt-1">
           Upload an approved Course Proposal to extract key course information.
         </p>
       </div>
@@ -413,37 +413,37 @@ const CwExtractCourseInfo: React.FC = () => {
       <Card className="p-5 space-y-5">
         {/* File Upload */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload Course Proposal</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-2">Upload Course Proposal</label>
           <div
             onDrop={handleDrop}
             onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onClick={() => fileInputRef.current?.click()}
             className={`flex items-center justify-between px-4 py-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-              isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+              isDragging ? 'border-blue-500 bg-info-bg'
                 : fileName ? 'border-green-400 bg-green-50/10 dark:border-green-600'
-                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                : 'border-strong hover:border-gray-400'
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="w-10 h-10 rounded-full bg-surface-elevated flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
               </div>
               <div>
                 {fileName ? (
-                  <p className="text-sm font-medium text-green-600 dark:text-green-400">{fileName}</p>
+                  <p className="text-sm font-medium text-success">{fileName}</p>
                 ) : (
                   <>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Drag and drop file here</p>
-                    <p className="text-xs text-gray-400">Limit 200MB per file - DOCX, XLSX</p>
+                    <p className="text-sm font-medium text-on-surface-secondary">Drag and drop file here</p>
+                    <p className="text-xs text-muted">Limit 200MB per file - DOCX, XLSX</p>
                   </>
                 )}
               </div>
             </div>
             <button type="button"
-              className="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-500 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="px-4 py-2 text-sm font-medium border border-strong rounded-lg text-on-surface-secondary hover:bg-surface-hover"
               onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
             >
               Browse files
@@ -454,13 +454,13 @@ const CwExtractCourseInfo: React.FC = () => {
           </div>
           {fileName && (
             <div className="flex items-center justify-between mt-2 px-1">
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-muted">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                {fileName} <span className="text-xs text-gray-400">{fileSize}</span>
+                {fileName} <span className="text-xs text-muted">{fileSize}</span>
               </div>
-              <button onClick={handleRemoveFile} className="text-gray-400 hover:text-red-500 transition-colors">
+              <button onClick={handleRemoveFile} className="text-muted hover:text-red-500 transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -472,25 +472,25 @@ const CwExtractCourseInfo: React.FC = () => {
         {/* TGS + URL */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Course Ref Code (TGS) <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+              Course Ref Code (TGS) <span className="text-danger">*</span>
             </label>
             <input type="text" value={tgsRefCode} onChange={e => setTgsRefCode(e.target.value)}
               placeholder="e.g. TGS-2024001234"
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course URL (Optional)</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course URL (Optional)</label>
             <input type="text" value={courseUrl} onChange={e => setCourseUrl(e.target.value)}
               placeholder="e.g. https://www.myskillsfuture.gov.sg/..."
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
 
         {error && (
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+          <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
             {error}
           </div>
         )}
@@ -507,7 +507,7 @@ const CwExtractCourseInfo: React.FC = () => {
             <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
             <p className="text-sm text-blue-300">AI Agent extracting course information... (approximately 40-60 seconds)</p>
           </div>
-          <p className="text-xs text-gray-400 mt-1">You can navigate to other pages. Results will be ready when you return.</p>
+          <p className="text-xs text-muted mt-1">You can navigate to other pages. Results will be ready when you return.</p>
         </div>
       )}
 
@@ -523,8 +523,8 @@ const CwExtractCourseInfo: React.FC = () => {
           navigation between Generator pages AND browser refresh. The Clear
           button removes the saved data so the user can start fresh. */}
       {!loading && cw.extractedResult && (
-        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-elevated border border-default">
+          <p className="text-xs text-muted">
             Extraction is saved — it will stay available across pages and browser refreshes for 7 days.
           </p>
           <button
@@ -540,7 +540,7 @@ const CwExtractCourseInfo: React.FC = () => {
               setElapsedTime(0);
               setError('');
             }}
-            className="px-3 py-1.5 rounded-md text-xs font-semibold border border-red-300 dark:border-red-800 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            className="px-3 py-1.5 rounded-md text-xs font-semibold border border-red-300 dark:border-red-800 text-danger hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
           >
             Clear Extraction
           </button>

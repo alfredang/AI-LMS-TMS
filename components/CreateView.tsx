@@ -102,12 +102,12 @@ const AiToolPage: React.FC<{
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="space-y-6">
                     <div>
-                        <label htmlFor="course-select" className="block text-lg font-medium text-gray-700 dark:text-gray-300">1. Select Course</label>
+                        <label htmlFor="course-select" className="block text-lg font-medium text-on-surface-secondary">1. Select Course</label>
                         <select
                             id="course-select"
                             value={selectedCourseId}
                             onChange={e => setSelectedCourseId(e.target.value)}
-                            className="mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                            className="mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="" disabled>-- Choose a course --</option>
                             {allCourses.map(course => (
@@ -116,30 +116,30 @@ const AiToolPage: React.FC<{
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="topic" className="block text-lg font-medium text-gray-700 dark:text-gray-300">2. Topic / Subject</label>
+                        <label htmlFor="topic" className="block text-lg font-medium text-on-surface-secondary">2. Topic / Subject</label>
                         <input
                             type="text"
                             id="topic"
                             value={topic}
                             onChange={e => setTopic(e.target.value)}
                             placeholder={`e.g., 'React Hooks' for ${tool.title}`}
-                            className="mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
+                            className="mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary dark:placeholder-gray-400"
                         />
                     </div>
                     <div>
-                        <label htmlFor="prompt-template" className="block text-lg font-medium text-gray-700 dark:text-gray-300">3. Prompt Template / Instruction (Optional)</label>
+                        <label htmlFor="prompt-template" className="block text-lg font-medium text-on-surface-secondary">3. Prompt Template / Instruction (Optional)</label>
                         <textarea
                             id="prompt-template"
                             value={promptTemplate}
                             onChange={e => setPromptTemplate(e.target.value)}
                             placeholder="e.g., 'Keep the tone formal.' or 'Explain it like I'm five.'"
-                            className="mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm h-24 focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
+                            className="mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm h-24 focus:outline-none focus:ring-2 focus:ring-primary dark:placeholder-gray-400"
                         />
                     </div>
                     <Button onClick={handleGenerate} disabled={isLoading || !selectedCourseId || !topic.trim()}>
                         {isLoading ? 'Generating...' : tool.buttonText}
                     </Button>
-                    {error && <p className="text-red-500 mt-2">{error}</p>}
+                    {error && <p className="text-danger mt-2">{error}</p>}
                 </div>
             </Card>
 
@@ -152,7 +152,7 @@ const AiToolPage: React.FC<{
             {generatedContent && (
                 <Card className="mt-8 p-6 dark:bg-gray-800 dark:border-gray-700">
                     <h3 className="text-2xl font-bold mb-4 dark:text-white">Generated Result</h3>
-                    <div className="prose max-w-none bg-gray-50 dark:bg-gray-900 dark:text-gray-300 p-4 rounded-md" dangerouslySetInnerHTML={{ __html: generatedContent }} />
+                    <div className="prose max-w-none bg-surface-elevated dark:text-gray-300 p-4 rounded-md" dangerouslySetInnerHTML={{ __html: generatedContent }} />
                 </Card>
             )}
         </div>
@@ -216,8 +216,8 @@ const LessonPlanGenerator: React.FC<{ tool: AiTool, onBack: () => void }> = ({ t
         }
     };
 
-    const inputClasses = "mt-1 block w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white dark:border-gray-600";
-    const labelClasses = "block text-lg font-medium text-gray-700 dark:text-gray-300";
+    const inputClasses = "mt-1 block w-full px-4 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary";
+    const labelClasses = "block text-lg font-medium text-on-surface-secondary";
     const subLabelClasses = "block text-sm font-medium text-gray-700 dark:text-gray-400";
 
     return (
@@ -267,9 +267,9 @@ const LessonPlanGenerator: React.FC<{ tool: AiTool, onBack: () => void }> = ({ t
                         <div>
                             <label className={labelClasses}>5. Breaks</label>
                             <div className="space-y-2 mt-2">
-                                <div className="flex items-center"><input type="checkbox" id="morning-break" checked={includeMorningBreak} onChange={e => setIncludeMorningBreak(e.target.checked)} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" /><label htmlFor="morning-break" className="ml-2 text-sm dark:text-gray-300">Morning Break</label></div>
-                                <div className="flex items-center"><input type="checkbox" id="lunch-break" checked={includeLunchBreak} onChange={e => setIncludeLunchBreak(e.target.checked)} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" /><label htmlFor="lunch-break" className="ml-2 text-sm dark:text-gray-300">Lunch Break</label></div>
-                                <div className="flex items-center"><input type="checkbox" id="afternoon-break" checked={includeAfternoonBreak} onChange={e => setIncludeAfternoonBreak(e.target.checked)} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" /><label htmlFor="afternoon-break" className="ml-2 text-sm dark:text-gray-300">Afternoon Break</label></div>
+                                <div className="flex items-center"><input type="checkbox" id="morning-break" checked={includeMorningBreak} onChange={e => setIncludeMorningBreak(e.target.checked)} className="h-4 w-4 text-primary focus:ring-primary border-strong rounded" /><label htmlFor="morning-break" className="ml-2 text-sm dark:text-gray-300">Morning Break</label></div>
+                                <div className="flex items-center"><input type="checkbox" id="lunch-break" checked={includeLunchBreak} onChange={e => setIncludeLunchBreak(e.target.checked)} className="h-4 w-4 text-primary focus:ring-primary border-strong rounded" /><label htmlFor="lunch-break" className="ml-2 text-sm dark:text-gray-300">Lunch Break</label></div>
+                                <div className="flex items-center"><input type="checkbox" id="afternoon-break" checked={includeAfternoonBreak} onChange={e => setIncludeAfternoonBreak(e.target.checked)} className="h-4 w-4 text-primary focus:ring-primary border-strong rounded" /><label htmlFor="afternoon-break" className="ml-2 text-sm dark:text-gray-300">Afternoon Break</label></div>
                             </div>
                         </div>
                         <div>
@@ -279,7 +279,7 @@ const LessonPlanGenerator: React.FC<{ tool: AiTool, onBack: () => void }> = ({ t
                         <Button onClick={handleGenerate} disabled={isLoading || !selectedCourseId || !keyTopics.trim()}>
                             {isLoading ? 'Generating...' : tool.buttonText}
                         </Button>
-                        {error && <p className="text-red-500 mt-2">{error}</p>}
+                        {error && <p className="text-danger mt-2">{error}</p>}
                     </Card>
                 </div>
                 <div className="lg:col-span-2">
@@ -287,7 +287,7 @@ const LessonPlanGenerator: React.FC<{ tool: AiTool, onBack: () => void }> = ({ t
                     {generatedContent && (
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-2xl font-bold mb-4 dark:text-white">Generated Lesson Plan</h3>
-                            <div className="prose max-w-none bg-gray-50 dark:bg-gray-900 dark:text-gray-300 p-4 rounded-md" dangerouslySetInnerHTML={{ __html: generatedContent }} />
+                            <div className="prose max-w-none bg-surface-elevated dark:text-gray-300 p-4 rounded-md" dangerouslySetInnerHTML={{ __html: generatedContent }} />
                         </Card>
                     )}
                 </div>
@@ -301,7 +301,7 @@ const LessonPlanGenerator: React.FC<{ tool: AiTool, onBack: () => void }> = ({ t
 const AuthoringToolCard: React.FC<{ tool: AiTool; onClick: () => void }> = ({ tool, onClick }) => (
     <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700">
         <h3 className="text-xl font-bold mb-2 dark:text-white">{tool.title}</h3>
-        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 flex-grow">{tool.description}</p>
+        <p className="text-on-surface-secondary text-sm mb-4 flex-grow">{tool.description}</p>
         <Button onClick={onClick} variant="primary">
             {tool.buttonText}
         </Button>
@@ -430,7 +430,7 @@ const CreateView: React.FC = () => {
                     {trainerGenAiCategories.map(cat => (
                         <Card key={cat.title} className="p-6 flex flex-col dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-2 dark:text-white">{cat.title}</h3>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{cat.description}</p>
+                            <p className="text-on-surface-secondary text-sm mb-4">{cat.description}</p>
                             <div className="flex flex-wrap gap-2 mt-auto">
                                 {cat.items.map(item => (
                                     <a

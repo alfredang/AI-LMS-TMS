@@ -52,9 +52,9 @@ const SKILLS_FRAMEWORK_LINKS: { label: string; href: string }[] = [
     { label: 'Latest CP',   href: 'https://www.tpgateway.gov.sg/plan-courses/course-accreditation' },
 ];
 
-const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
-const inactiveIconClass = 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white';
-const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
+const inactiveClass = 'text-on-surface hover:bg-surface-hover';
+const inactiveIconClass = 'text-on-surface-secondary group-hover:text-on-surface';
+const subItemClass = 'text-muted hover:bg-surface-hover hover:text-on-surface';
 
 const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collapsed = false }) => {
     const { developerPage, setDeveloperPage, setEditingCourse, setSelectedCourse, setCourseEditMode } = useLms();
@@ -88,7 +88,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
             title={collapsed ? label : undefined}
             onClick={(e) => { e.preventDefault(); navigateTo(page); }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
-                developerPage === page ? 'bg-primary/10 text-primary' : inactiveClass
+                developerPage === page ? 'nav-item-active' : inactiveClass
             }`}
         >
             <Icon
@@ -107,7 +107,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
             href="#"
             onClick={(e) => { e.preventDefault(); navigateTo(page); }}
             className={`group flex items-center gap-2.5 w-full rounded-lg ${extraIndent ? 'pl-5 pr-2.5' : 'px-2.5'} py-2 text-[13px] font-medium transition-all duration-150 ${
-                developerPage === page ? 'bg-primary/10 text-primary' : subItemClass
+                developerPage === page ? 'nav-item-active' : subItemClass
             }`}
         >
             <span className="truncate">{label}</span>
@@ -149,25 +149,25 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                                 name={IconName.ChevronDown}
                                 className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                                     coursewareToolsOpen ? 'rotate-0' : '-rotate-90'
-                                } ${coursewareToolsActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+                                } ${coursewareToolsActive ? 'text-primary' : 'text-muted'}`}
                             />
                         )}
                     </button>
 
                     {!collapsed && coursewareToolsOpen && (
-                        <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                        <div className="ml-5 pl-3 border-l border-default space-y-0.5">
                             {/* SEO Meta Generator */}
                             <a
                                 href="#"
                                 onClick={(e) => { e.preventDefault(); navigateTo(DeveloperPage.SeoMetadata); }}
                                 className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${
-                                    developerPage === DeveloperPage.SeoMetadata ? 'bg-primary/10 text-primary' : subItemClass
+                                    developerPage === DeveloperPage.SeoMetadata ? 'nav-item-active' : subItemClass
                                 }`}
                             >
                                 <Icon
                                     name={IconName.Search}
                                     className={`w-4 h-4 flex-shrink-0 transition-colors ${
-                                        developerPage === DeveloperPage.SeoMetadata ? 'text-primary' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                                        developerPage === DeveloperPage.SeoMetadata ? 'text-primary' : 'text-on-surface-secondary group-hover:text-on-surface'
                                     }`}
                                 />
                                 <span className="truncate">SEO Meta Generator</span>
@@ -177,13 +177,13 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                             <button
                                 onClick={() => setCpOpen(prev => !prev)}
                                 className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${
-                                    cpPages.has(developerPage) ? 'bg-primary/10 text-primary' : subItemClass
+                                    cpPages.has(developerPage) ? 'nav-item-active' : subItemClass
                                 }`}
                             >
                                 <Icon
                                     name={IconName.FileText}
                                     className={`w-4 h-4 flex-shrink-0 transition-colors ${
-                                        cpPages.has(developerPage) ? 'text-primary' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                                        cpPages.has(developerPage) ? 'text-primary' : 'text-on-surface-secondary group-hover:text-on-surface'
                                     }`}
                                 />
                                 <span className="truncate">CP Generator</span>
@@ -191,19 +191,19 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                                     name={IconName.ChevronDown}
                                     className={`w-3.5 h-3.5 ml-auto flex-shrink-0 transition-transform duration-200 ${
                                         cpOpen ? 'rotate-0' : '-rotate-90'
-                                    } text-gray-400 dark:text-gray-500`}
+                                    } text-muted`}
                                 />
                             </button>
 
                             {cpOpen && (
-                                <div className="ml-4 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                                <div className="ml-4 pl-3 border-l border-default space-y-0.5">
                                     <button
                                         onClick={() => setCpPrepareOpen(prev => !prev)}
                                         className="group flex items-center gap-2 w-full rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted select-none"
                                     >
                                         <Icon
                                             name={IconName.ChevronDown}
-                                            className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-gray-400 dark:text-gray-500 ${
+                                            className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-muted ${
                                                 cpPrepareOpen ? 'rotate-0' : '-rotate-90'
                                             }`}
                                         />
@@ -217,7 +217,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                                     >
                                         <Icon
                                             name={IconName.ChevronDown}
-                                            className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-gray-400 dark:text-gray-500 ${
+                                            className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-muted ${
                                                 cpSubmitOpen ? 'rotate-0' : '-rotate-90'
                                             }`}
                                         />
@@ -231,13 +231,13 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                             <button
                                 onClick={() => setCwOpen(prev => !prev)}
                                 className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${
-                                    cwPages.has(developerPage) ? 'bg-primary/10 text-primary' : subItemClass
+                                    cwPages.has(developerPage) ? 'nav-item-active' : subItemClass
                                 }`}
                             >
                                 <Icon
                                     name={IconName.BookOpen}
                                     className={`w-4 h-4 flex-shrink-0 transition-colors ${
-                                        cwPages.has(developerPage) ? 'text-primary' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                                        cwPages.has(developerPage) ? 'text-primary' : 'text-on-surface-secondary group-hover:text-on-surface'
                                     }`}
                                 />
                                 <span className="truncate">Courseware Generator</span>
@@ -245,12 +245,12 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                                     name={IconName.ChevronDown}
                                     className={`w-3.5 h-3.5 ml-auto flex-shrink-0 transition-transform duration-200 ${
                                         cwOpen ? 'rotate-0' : '-rotate-90'
-                                    } text-gray-400 dark:text-gray-500`}
+                                    } text-muted`}
                                 />
                             </button>
 
                             {cwOpen && (
-                                <div className="ml-4 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                                <div className="ml-4 pl-3 border-l border-default space-y-0.5">
                                     {CW_ITEMS.map(({ page, label }) => renderSubItem(page, label))}
                                 </div>
                             )}
@@ -273,13 +273,13 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                                 name={IconName.ChevronDown}
                                 className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                                     skillsOpen ? 'rotate-0' : '-rotate-90'
-                                } text-gray-400 dark:text-gray-500`}
+                                } text-muted`}
                             />
                         )}
                     </button>
 
                     {!collapsed && skillsOpen && (
-                        <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                        <div className="ml-5 pl-3 border-l border-default space-y-0.5">
                             {SKILLS_FRAMEWORK_LINKS.map(({ label, href }) => (
                                 <a
                                     key={label}
@@ -289,7 +289,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                                     className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                                 >
                                     <span className="truncate">{label}</span>
-                                    <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </a>
                             ))}
                         </div>

@@ -16,7 +16,7 @@ import ManualDateInput from './ui/ManualDateInput';
 import { displayDateToIso, isoDateToDisplayValue } from '@lib/manualDateInput';
 
 const inputGhostClasses = (isTitle: boolean) =>
-    `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
+    `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-surface-hover focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
 
 const parseNumericInput = (value: unknown) => {
     if (value === null || value === undefined || value === '') return 0;
@@ -54,18 +54,18 @@ const formatDisplayValue = (value: unknown) => {
 
 const LinkField: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => (
     <div>
-        <div className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{label}</div>
+        <div className="block text-sm font-bold text-on-surface-secondary mb-1">{label}</div>
         {value ? (
             <a
                 href={value}
                 target="_blank"
                 rel="noreferrer"
-                className="block w-full px-3 py-2 text-blue-600 bg-white border border-gray-300 rounded-md shadow-sm hover:underline dark:bg-gray-700 dark:text-blue-300 dark:border-gray-600 break-all"
+                className="block w-full px-3 py-2 text-primary bg-surface border border-strong rounded-md shadow-sm hover:underline break-all"
             >
                 {value}
             </a>
         ) : (
-            <div className="block w-full px-3 py-2 text-gray-500 bg-white border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600">
+            <div className="block w-full px-3 py-2 text-muted bg-surface border border-strong rounded-md shadow-sm">
                 —
             </div>
         )}
@@ -79,12 +79,12 @@ const LinkCard: React.FC<{ label: string; value?: string | null }> = ({ label, v
             href={value}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+            className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
         >
-            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
             <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 dark:text-white">{label}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                <p className="font-semibold text-on-surface">{label}</p>
+                <p className="text-xs text-muted">Click to open</p>
             </div>
         </a>
     );
@@ -92,8 +92,8 @@ const LinkCard: React.FC<{ label: string; value?: string | null }> = ({ label, v
 
 const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
     <div>
-        <div className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{label}</div>
-        <div className="block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:text-white dark:border-gray-600 break-words">
+        <div className="block text-sm font-bold text-on-surface-secondary mb-1">{label}</div>
+        <div className="block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm break-words">
             {value || '—'}
         </div>
     </div>
@@ -102,7 +102,7 @@ const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> =
 // Chevron used by the developer-view collapsible section headers / side nav.
 const SectionChevron: React.FC<{ open: boolean; className?: string }> = ({ open, className }) => (
     <svg
-        className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''} ${className || ''}`}
+        className={`w-5 h-5 flex-shrink-0 text-muted transition-transform ${open ? 'rotate-90' : ''} ${className || ''}`}
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -223,7 +223,7 @@ const EditableTopicAccordion: React.FC<{
             : null;
 
         return (
-            <Card className="p-0 overflow-hidden bg-white dark:bg-gray-800">
+            <Card className="p-0 overflow-hidden bg-surface">
                 {/* Learning Unit Header — the entire header (except the text
                     input) is a drag source. Previously only the small grip
                     icon was draggable which made reordering very hard to hit. */}
@@ -231,10 +231,10 @@ const EditableTopicAccordion: React.FC<{
                     draggable
                     onDragStart={onSelfDragStart}
                     onDragEnd={onSelfDragEnd}
-                    className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 cursor-grab active:cursor-grabbing"
+                    className="p-4 flex items-center justify-between gap-2 bg-surface-elevated border-b dark:border-gray-600 cursor-grab active:cursor-grabbing"
                 >
                     <div className="p-1 flex-shrink-0">
-                        <Icon name={IconName.DragHandle} className="w-5 h-5 text-gray-400" />
+                        <Icon name={IconName.DragHandle} className="w-5 h-5 text-muted" />
                     </div>
                     <input
                         type="text"
@@ -248,10 +248,10 @@ const EditableTopicAccordion: React.FC<{
                         placeholder="Learning Unit Title"
                     />
                     <div className="flex items-center ml-auto flex-shrink-0">
-                        <button onClick={() => setSubtopicsOpen(!isSubtopicsOpen)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full">
+                        <button onClick={() => setSubtopicsOpen(!isSubtopicsOpen)} className="p-1.5 text-muted hover:bg-surface-hover rounded-full">
                             <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform ${isSubtopicsOpen ? 'rotate-180' : ''}`} />
                         </button>
-                        <button onClick={() => onDelete(topic.id)} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full">
+                        <button onClick={() => onDelete(topic.id)} className="p-1.5 text-danger hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full">
                             <Icon name={IconName.Delete} className="w-5 h-5" />
                         </button>
                     </div>
@@ -296,7 +296,7 @@ const EditableTopicAccordion: React.FC<{
                                             onDragEnd={onSubtopicDragEnd}
                                             className="cursor-grab p-1"
                                         >
-                                            <Icon name={IconName.Menu} className="w-5 h-5 text-gray-400" />
+                                            <Icon name={IconName.Menu} className="w-5 h-5 text-muted" />
                                         </div>
                                         <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
                                         <input
@@ -306,7 +306,7 @@ const EditableTopicAccordion: React.FC<{
                                             className={inputGhostClasses(false)}
                                             placeholder="Topic title"
                                         />
-                                        <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-muted hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <Icon name={IconName.Delete} className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -354,13 +354,13 @@ const EditableTopicAccordion: React.FC<{
                                                     'bg-green-50/50 dark:bg-green-900/10'
                                                 }`}
                                             >
-                                                <Icon name={IconName.Menu} className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                                                <Icon name={IconName.Menu} className="w-3.5 h-3.5 text-muted flex-shrink-0" />
                                                 <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded flex-shrink-0 ${
-                                                    rl.type === 'file' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                                    rl.type === 'document' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                                                    rl.type === 'youtube' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    rl.type === 'file' ? 'bg-info-bg text-primary' :
+                                                    rl.type === 'document' ? 'bg-warning-bg text-warning' :
+                                                    rl.type === 'youtube' ? 'bg-danger-bg text-danger' :
                                                     rl.type === 'activity' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
-                                                    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                    'bg-success-bg text-success'
                                                 }`}>
                                                     {rl.type === 'file' ? 'Web' : rl.type === 'document' ? 'Doc' : rl.type === 'youtube' ? 'YT' : rl.type === 'activity' ? 'Act' : 'Quiz'}
                                                 </span>
@@ -441,7 +441,7 @@ const EditableTopicAccordion: React.FC<{
                                                             setOpenQuizEditorId(rl.id);
                                                         }}
                                                         onMouseDown={(e) => e.stopPropagation()}
-                                                        className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1 text-xs rounded-md border border-green-200 dark:border-green-900/50 hover:border-green-400 dark:hover:border-green-700 bg-green-50/30 dark:bg-green-900/10 text-green-800 dark:text-green-300 font-medium transition-colors"
+                                                        className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1 text-xs rounded-md border border-green-200 dark:border-green-900/50 hover:border-green-400 dark:hover:border-green-700 bg-green-50/30 dark:bg-green-900/10 text-success font-medium transition-colors"
                                                     >
                                                         <span>
                                                             {rl.questions && rl.questions.length > 0
@@ -462,7 +462,7 @@ const EditableTopicAccordion: React.FC<{
                                                         className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                     />
                                                 )}
-                                                <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-gray-400 hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
+                                                <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-muted hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
                                                     <Icon name={IconName.Delete} className="w-3 h-3" />
                                                 </button>
                                                 {/* QuizEditorModal is NOT rendered here on purpose:
@@ -476,11 +476,11 @@ const EditableTopicAccordion: React.FC<{
                                             </div>
                                         ))}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ Web</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'document')} className="text-[10px] text-gray-400 hover:text-amber-500 px-1 py-0.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">+ Document</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-gray-400 hover:text-red-500 px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">+ YouTube</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'activity')} className="text-[10px] text-gray-400 hover:text-purple-500 px-1 py-0.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">+ Activity</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'quiz')} className="text-[10px] text-gray-400 hover:text-green-500 px-1 py-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">+ Quiz</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-muted hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ Web</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'document')} className="text-[10px] text-muted hover:text-amber-500 px-1 py-0.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">+ Document</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-muted hover:text-red-500 px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">+ YouTube</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'activity')} className="text-[10px] text-muted hover:text-purple-500 px-1 py-0.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">+ Activity</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'quiz')} className="text-[10px] text-muted hover:text-green-500 px-1 py-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">+ Quiz</button>
                                         </div>
                                     </div>
                                 </li>
@@ -502,7 +502,7 @@ const EditableTopicAccordion: React.FC<{
                                 }}
                                 onDrop={(e) => onSubtopicDropAtEnd(e, topic.id)}
                             >
-                                <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                                <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-on-surface-secondary hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
                                     {isSubtopicDragging ? 'Drop here to move topic' : 'Add Topic'}
                                 </Button>
@@ -1813,16 +1813,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         }
     };
 
-    const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-400";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
     return (
         <div>
             {/* Header */}
-            <div className={`z-20 bg-background flex flex-col gap-3 pb-2 border-b border-gray-200 dark:border-gray-700 ${isReadOnly ? 'mb-2' : 'pt-0 mb-4'}`}>
+            <div className={`z-20 bg-background flex flex-col gap-3 pb-2 border-b border-default ${isReadOnly ? 'mb-2' : 'pt-0 mb-4'}`}>
                 <div className={!isNewCourse ? 'space-y-0' : undefined}>
                     <h2 className={`font-bold dark:text-white ${!isNewCourse ? 'text-[1.625rem] leading-tight' : 'text-2xl'}`}>{isNewCourse ? 'Create Course' : course.title}</h2>
                     {!isNewCourse && course.courseCode && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0">{course.courseCode}</p>
+                        <p className="text-sm text-muted mt-0">{course.courseCode}</p>
                     )}
                 </div>
                 <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
@@ -1860,8 +1860,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             <h3 className="text-xl font-bold mb-4 dark:text-white">Course Details</h3>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
-                                    <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
+                                    <label className="block text-sm font-bold text-on-surface-secondary mb-2">Course Image</label>
+                                    <div className="relative aspect-video bg-surface-elevated rounded-xl overflow-hidden border border-default mb-3 shadow-sm">
                                         <img
                                             src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                             alt={course.title}
@@ -1902,8 +1902,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <ReadonlyValueField label="Course Type" value={course.courseType} />
                                 {/* Section menu — jumps to the matching card in the right column */}
                                 <div>
-                                    <span className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">On This Page</span>
-                                    <nav className="rounded-md border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-700">
+                                    <span className="block text-sm font-bold text-on-surface-secondary mb-1">On This Page</span>
+                                    <nav className="rounded-md border border-strong divide-y divide-default">
                                         {([
                                             ['view-learning-outcomes', 'Learning Outcomes'],
                                             ['view-courseware', 'Courseware'],
@@ -1915,7 +1915,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                 key={id}
                                                 type="button"
                                                 onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                                                className="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                className="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-hover"
                                             >
                                                 {label}
                                             </button>
@@ -1946,7 +1946,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     <div className="md:col-span-1 xl:col-span-2 space-y-6">
                         <Card id="view-learning-outcomes" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
-                            <div className="whitespace-pre-wrap rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <div className="whitespace-pre-wrap rounded-md border border-strong bg-surface px-3 py-2 text-on-surface">
                                 {course.learningOutcomes || '—'}
                             </div>
                         </Card>
@@ -1969,7 +1969,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <LinkCard label="Assessment Record Link" value={course.assessmentRecordLink} />
                                 <LinkCard label="Assessment Summary Record" value={course.assessmentSummaryRecordUrl} />
                                 {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.labSimulatorUrl, course.practiceExamUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
-                                    <div className="text-gray-500 dark:text-gray-400">No courseware links available.</div>
+                                    <div className="text-muted">No courseware links available.</div>
                                 )}
                             </div>
                         </Card>
@@ -2001,7 +2001,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         defaultOpen={false}
                                     />
                                 )) : (
-                                    <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
+                                    <div className="text-muted">No lessons available.</div>
                                 )}
                             </div>
                         </CollapsibleSection>
@@ -2019,7 +2019,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key]} value={method.link || legacyLink} />;
                                 })}
                                 {!Object.values(course.assessmentMethods || {}).some(m => m?.enabled) && (
-                                    <div className="text-gray-500 dark:text-gray-400">No assessment methods selected.</div>
+                                    <div className="text-muted">No assessment methods selected.</div>
                                 )}
                             </div>
                         </Card>
@@ -2028,9 +2028,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card id="view-approved-trainers" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Approved Trainers</h3>
                             {selectedApprovedTrainers.length > 0 ? (
-                                <div className={`overflow-x-auto rounded-md border border-gray-300 dark:border-gray-600 ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
+                                <div className={`overflow-x-auto rounded-md border border-strong ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
                                     <table className="min-w-full text-sm">
-                                        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                        <thead className="sticky top-0 bg-surface-elevated text-left text-xs uppercase text-muted">
                                             <tr>
                                                 <th className="px-3 py-2 w-10">#</th>
                                                 <th className="px-2 py-2 w-10" title="Favorite for this course">★</th>
@@ -2039,19 +2039,19 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                 <th className="px-3 py-2">Email</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tbody className="divide-y divide-default">
                                             {selectedApprovedTrainers.map((trainerName, index) => {
                                                 const contact = trainerContactByName.get(trainerName);
                                                 const isFavorite = favoriteTrainers.includes(trainerName);
                                                 return (
-                                                    <tr key={trainerName} className={isFavorite ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-900/40'}>
-                                                        <td className="px-3 py-2 font-semibold text-gray-500 dark:text-gray-400">{index + 1}.</td>
+                                                    <tr key={trainerName} className={isFavorite ? 'bg-warning-bg' : 'bg-surface'}>
+                                                        <td className="px-3 py-2 font-semibold text-muted">{index + 1}.</td>
                                                         <td className="px-2 py-2 text-lg leading-none">
-                                                            <span className={isFavorite ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}>{isFavorite ? '★' : '☆'}</span>
+                                                            <span className={isFavorite ? 'text-warning' : 'text-muted'}>{isFavorite ? '★' : '☆'}</span>
                                                         </td>
                                                         <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
-                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{contact?.telephone || '—'}</td>
-                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{contact?.email || '—'}</td>
+                                                        <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{contact?.telephone || '—'}</td>
+                                                        <td className="px-3 py-2 text-on-surface-secondary">{contact?.email || '—'}</td>
                                                     </tr>
                                                 );
                                             })}
@@ -2059,7 +2059,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     </table>
                                 </div>
                             ) : (
-                                <div className="text-gray-500 dark:text-gray-400">No approved trainers.</div>
+                                <div className="text-muted">No approved trainers.</div>
                             )}
                         </Card>
                     </div>
@@ -2077,10 +2077,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     >
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
+                                <label className="block text-sm font-bold text-on-surface-secondary mb-2">Course Image</label>
 
                                 {/* Image preview */}
-                                <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
+                                <div className="relative aspect-video bg-surface-elevated rounded-xl overflow-hidden border border-default mb-3 shadow-sm">
                                     <img
                                         src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                         alt={course.title}
@@ -2102,11 +2102,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                                 {/* Image URL input */}
                                 <div className="mb-3">
-                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                                    <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">
                                         Image URL Link
                                     </label>
                                     <div className="relative">
-                                        <Icon name={IconName.Link} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        <Icon name={IconName.Link} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
                                         <input
                                             type="url"
                                             placeholder="https://example.com/image.jpg"
@@ -2118,13 +2118,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                             className={`${inputClasses} pl-9 text-sm`}
                                         />
                                     </div>
-                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Paste a direct image URL, or use the options below.</p>
+                                    <p className="text-xs text-muted mt-1">Paste a direct image URL, or use the options below.</p>
                                 </div>
 
                                 {/* Divider */}
                                 <div className="flex items-center gap-2 mb-3">
                                     <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600" />
-                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">or</span>
+                                    <span className="text-xs text-muted font-medium">or</span>
                                     <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600" />
                                 </div>
 
@@ -2177,27 +2177,27 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
 
                             <div>
-                                <label htmlFor="title" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Course Title <span className="text-red-500">*</span>
+                                <label htmlFor="title" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Course Title <span className="text-danger">*</span>
                                 </label>
                                 <input type="text" id="title" name="title" value={course.title} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. React for Beginners" />
                             </div>
                             <div>
-                                <label htmlFor="courseCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Course Code (Original) <span className="text-red-500">*</span>
+                                <label htmlFor="courseCode" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Course Code (Original) <span className="text-danger">*</span>
                                 </label>
                                 <input type="text" id="courseCode" name="courseCode" value={course.courseCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. CRS-Q-0041188-1" />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <p className="text-xs text-muted mt-1">
                                     The code this course was first registered under. Keep it — it is what past
                                     enrolments and SSG records were created against.
                                 </p>
                             </div>
                             <div>
-                                <label htmlFor="newCourseCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <label htmlFor="newCourseCode" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                     Course Code (Current)
                                 </label>
                                 <input type="text" id="newCourseCode" name="newCourseCode" value={course.newCourseCode || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. TGS-2026064474" />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <p className="text-xs text-muted mt-1">
                                     The code currently in force — same as the original until a funding renewal
                                     issues a new one. This is the code shown on course cards and used for new
                                     SSG submissions. Both codes resolve to this same course.
@@ -2205,29 +2205,29 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                             {course.courseType === 'CASL' && (
                                 <div>
-                                    <label htmlFor="caslSkills" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                        CASL Skills <span className="text-red-500">*</span>
+                                    <label htmlFor="caslSkills" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                        CASL Skills <span className="text-danger">*</span>
                                     </label>
                                     <input type="text" id="caslSkills" name="caslSkills" value={course.caslSkills || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Data Analytics" />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    <p className="text-xs text-muted mt-1">
                                         CASL courses are not mapped to a TSC, so TSC Title and TSC Code are NA.
                                     </p>
                                 </div>
                             )}
                             <div>
-                                <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
+                                <label htmlFor="tscTitle" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-danger">*</span>}
                                 </label>
                                 <input type="text" id="tscTitle" name="tscTitle" value={course.courseType === 'CASL' ? CASL_NO_TSC : course.tscTitle} onChange={handleCourseChange} disabled={course.courseType === 'CASL'} className={`${inputClasses} disabled:opacity-60 disabled:cursor-not-allowed`} placeholder="e.g. Web Development" />
                             </div>
                             <div>
-                                <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
+                                <label htmlFor="tscCode" className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-danger">*</span>}
                                 </label>
                                 <input type="text" id="tscCode" name="tscCode" value={course.courseType === 'CASL' ? CASL_NO_TSC : course.tscCode} onChange={handleCourseChange} disabled={course.courseType === 'CASL'} className={`${inputClasses} disabled:opacity-60 disabled:cursor-not-allowed`} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
                             <div>
-                                <label htmlFor="fundingValidityStart" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <label htmlFor="fundingValidityStart" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                     Funding Validity Start Date
                                 </label>
                                 <ManualDateInput
@@ -2239,10 +2239,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     calendarLabel="Choose funding validity start date from calendar"
                                     validationAttempted={dateValidationAttempted}
                                 />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date from which the course funding is valid</p>
+                                <p className="text-xs text-muted mt-1">Date from which the course funding is valid</p>
                             </div>
                             <div>
-                                <label htmlFor="fundingValidity" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <label htmlFor="fundingValidity" className="block text-sm font-bold text-on-surface-secondary mb-1">
                                     Funding Validity End Date
                                 </label>
                                 <ManualDateInput
@@ -2254,36 +2254,36 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     calendarLabel="Choose funding validity end date from calendar"
                                     validationAttempted={dateValidationAttempted}
                                 />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date until which the course funding is valid</p>
+                                <p className="text-xs text-muted mt-1">Date until which the course funding is valid</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Duration <span className="text-red-500">*</span>
+                                <label className="block text-sm font-bold text-on-surface-secondary mb-1">
+                                    Duration <span className="text-danger">*</span>
                                 </label>
-                                <div className="space-y-2 border border-gray-200 dark:border-gray-700 p-3 rounded-md bg-gray-50/50 dark:bg-gray-800/50">
+                                <div className="space-y-2 border border-default p-3 rounded-md bg-gray-50/50 dark:bg-gray-800/50">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label htmlFor="trainingHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                                                Training Hours <span className="text-red-500">*</span>
+                                            <label htmlFor="trainingHours" className="block text-xs font-medium text-on-surface-secondary mb-1">
+                                                Training Hours <span className="text-danger">*</span>
                                             </label>
                                             <input type="text" inputMode="decimal" id="trainingHours" name="trainingHours" value={course.trainingHours} onChange={handleCourseChange} className={inputClasses} placeholder="0" />
                                         </div>
                                         <div>
-                                            <label htmlFor="assessmentHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                                                Assessment Hours <span className="text-red-500">*</span>
+                                            <label htmlFor="assessmentHours" className="block text-xs font-medium text-on-surface-secondary mb-1">
+                                                Assessment Hours <span className="text-danger">*</span>
                                             </label>
                                             <input type="text" inputMode="decimal" id="assessmentHours" name="assessmentHours" value={course.assessmentHours} onChange={handleCourseChange} className={inputClasses} placeholder="0" />
                                         </div>
                                     </div>
                                     <div className="pt-2 text-right">
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                                        <p className="text-sm font-bold text-on-surface">
                                             Total Duration: <span className="text-primary font-bold">{Number(course.trainingHours) + Number(course.assessmentHours)} hours</span>
                                         </p>
                                     </div>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-bold text-on-surface-secondary mb-2">
                                     Mode of Learning
                                 </label>
                                 <div className="flex flex-col space-y-2">
@@ -2296,9 +2296,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                 value={mode}
                                                 checked={course.modeOfLearning.includes(mode)}
                                                 onChange={handleModeOfLearningChange}
-                                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600"
+                                                className="h-4 w-4 text-primary focus:ring-primary border-strong"
                                             />
-                                            <label htmlFor={`mode-${mode}`} className="ml-3 block text-sm text-gray-900 dark:text-gray-200">
+                                            <label htmlFor={`mode-${mode}`} className="ml-3 block text-sm text-on-surface">
                                                 {mode}
                                             </label>
                                         </div>
@@ -2306,8 +2306,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </div>
                             </div>
                             <div>
-                                <label htmlFor="courseType" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                                    Course Type <span className="text-red-500">*</span>
+                                <label htmlFor="courseType" className="block text-sm font-bold text-on-surface-secondary mb-2">
+                                    Course Type <span className="text-danger">*</span>
                                 </label>
                                 <select
                                     id="courseType"
@@ -2326,7 +2326,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     </CollapsibleSection>
                     {isDeveloperView && (
                         <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
-                            <h4 className="px-2 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Sections</h4>
+                            <h4 className="px-2 mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Sections</h4>
                             <nav className="space-y-0.5">
                                 {navSections.map(s => {
                                     const open = !collapsedSections.has(s.id);
@@ -2335,10 +2335,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                             key={s.id}
                                             type="button"
                                             onClick={() => scrollToSection(s.id)}
-                                            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors"
+                                            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors"
                                         >
                                             <span className="truncate">{s.label}</span>
-                                            <span className={`flex-shrink-0 text-[10px] ${open ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400'}`}>{open ? '▾' : '▸'}</span>
+                                            <span className={`flex-shrink-0 text-[10px] ${open ? 'text-muted' : 'text-muted'}`}>{open ? '▾' : '▸'}</span>
                                         </button>
                                     );
                                 })}
@@ -2369,7 +2369,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     >
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lesson Plan URL</label>
+                                <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Lesson Plan URL</label>
                                 <input
                                     type="url"
                                     id="lessonPlanUrl"
@@ -2380,7 +2380,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="learnerGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Guide URL</label>
+                                <label htmlFor="learnerGuideUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Learner Guide URL</label>
                                 <input
                                     type="url"
                                     id="learnerGuideUrl"
@@ -2391,7 +2391,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="facilitatorGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Facilitator Guide URL</label>
+                                <label htmlFor="facilitatorGuideUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Facilitator Guide URL</label>
                                 <input
                                     type="url"
                                     id="facilitatorGuideUrl"
@@ -2402,7 +2402,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="assessmentPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Plan URL</label>
+                                <label htmlFor="assessmentPlanUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Assessment Plan URL</label>
                                 <input
                                     type="url"
                                     id="assessmentPlanUrl"
@@ -2413,7 +2413,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="learnerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Slides URL</label>
+                                <label htmlFor="learnerSlidesUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Learner Slides URL</label>
                                 <input
                                     type="url"
                                     id="learnerSlidesUrl"
@@ -2424,7 +2424,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Slides URL</label>
+                                <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Trainer Slides URL</label>
                                 <input
                                     type="url"
                                     id="trainerSlidesUrl"
@@ -2436,7 +2436,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="activitiesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Activities/Lab URL</label>
+                                <label htmlFor="activitiesUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Activities/Lab URL</label>
                                 <input
                                     type="url"
                                     id="activitiesUrl"
@@ -2448,7 +2448,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="labSimulatorUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lab Simulator URL</label>
+                                <label htmlFor="labSimulatorUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Lab Simulator URL</label>
                                 <input
                                     type="url"
                                     id="labSimulatorUrl"
@@ -2458,10 +2458,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     className={inputClasses}
                                     placeholder="https://..."
                                 />
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Optional. When set, learners and trainers see a Lab Simulator link on the class page.</p>
+                                <p className="mt-1 text-xs text-muted">Optional. When set, learners and trainers see a Lab Simulator link on the class page.</p>
                             </div>
                             <div>
-                                <label htmlFor="practiceExamUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practice Exam URL</label>
+                                <label htmlFor="practiceExamUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Practice Exam URL</label>
                                 <input
                                     type="url"
                                     id="practiceExamUrl"
@@ -2471,10 +2471,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     className={inputClasses}
                                     placeholder="https://..."
                                 />
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Optional. When set, learners and trainers see a Practice Exam link on the class page.</p>
+                                <p className="mt-1 text-xs text-muted">Optional. When set, learners and trainers see a Practice Exam link on the class page.</p>
                             </div>
                             <div>
-                                <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>
+                                <label htmlFor="courseLink" className="block text-sm font-bold text-on-surface-secondary mb-1">Courseware Link</label>
                                 <input
                                     type="url"
                                     id="courseLink"
@@ -2485,7 +2485,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="brochureLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Brochure Link</label>
+                                <label htmlFor="brochureLink" className="block text-sm font-bold text-on-surface-secondary mb-1">Brochure Link</label>
                                 <input
                                     type="url"
                                     id="brochureLink"
@@ -2496,7 +2496,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="skillsfutureLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">SkillsFuture Link</label>
+                                <label htmlFor="skillsfutureLink" className="block text-sm font-bold text-on-surface-secondary mb-1">SkillsFuture Link</label>
                                 <input
                                     type="url"
                                     id="skillsfutureLink"
@@ -2507,7 +2507,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Record Link</label>
+                                <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-on-surface-secondary mb-1">Assessment Record Link</label>
                                 <input
                                     type="url"
                                     id="assessmentRecordLink"
@@ -2518,7 +2518,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="assessmentSummaryRecordUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Summary Record URL</label>
+                                <label htmlFor="assessmentSummaryRecordUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">Assessment Summary Record URL</label>
                                 <input
                                     type="url"
                                     id="assessmentSummaryRecordUrl"
@@ -2637,7 +2637,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         collapsed={collapsedSections.has('assessment-methods')}
                         onToggle={toggleSection}
                     >
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
+                        <p className="text-sm text-muted mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
                         <div className="space-y-3">
                             {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((methodKey) => {
                                 const methods = course.assessmentMethods || DEFAULT_ASSESSMENT_METHODS;
@@ -2652,9 +2652,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                     const updated = { ...methods, [methodKey]: { ...method, enabled: e.target.checked } };
                                                     setCourse(prev => ({ ...prev, assessmentMethods: updated }));
                                                 }}
-                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                className="w-4 h-4 rounded border-strong text-primary focus:ring-blue-500"
                                             />
-                                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ASSESSMENT_METHOD_LABELS[methodKey]}</span>
+                                            <span className="text-sm font-semibold text-on-surface">{ASSESSMENT_METHOD_LABELS[methodKey]}</span>
                                         </label>
                                         {method.enabled && (
                                             <div className="mt-2 ml-7">
@@ -2689,13 +2689,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 {/* Approved trainers — ORDERED table (order = invitation preference).
                                     ★ pins a favorite for this course to the front; rows drag to reorder. */}
                                 <div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                    <div className="text-sm text-muted mb-2">
                                         {selectedApprovedTrainers.length} approved trainer{selectedApprovedTrainers.length === 1 ? '' : 's'} — order is the invitation preference (drag rows to reorder; ★ favorites stay on top)
                                     </div>
                                     {selectedApprovedTrainers.length > 0 ? (
-                                        <div className={`overflow-x-auto rounded-md border border-gray-300 dark:border-gray-600 ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
+                                        <div className={`overflow-x-auto rounded-md border border-strong ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
                                             <table className="min-w-full text-sm">
-                                                <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                                <thead className="sticky top-0 bg-surface-elevated text-left text-xs uppercase text-muted">
                                                     <tr>
                                                         <th className="px-3 py-2 w-10">#</th>
                                                         <th className="px-2 py-2 w-10" title="Favorite for this course">★</th>
@@ -2705,7 +2705,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                         <th className="px-2 py-2 w-10"></th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                <tbody className="divide-y divide-default">
                                                     {selectedApprovedTrainers.map((trainerName, index) => {
                                                         const contact = trainerContactByName.get(trainerName);
                                                         const isFavorite = favoriteTrainers.includes(trainerName);
@@ -2729,19 +2729,19 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                                 onDrop={() => handleApprovedTrainerDrop(trainerName)}
                                                                 className={`cursor-grab ${
                                                                     approvedTrainerDropTarget === trainerName
-                                                                        ? 'bg-blue-100 dark:bg-blue-900/40'
+                                                                        ? 'bg-info-bg'
                                                                         : isFavorite
-                                                                        ? 'bg-amber-50 dark:bg-amber-900/10'
-                                                                        : 'bg-white dark:bg-gray-900/40'
+                                                                        ? 'bg-warning-bg'
+                                                                        : 'bg-surface'
                                                                 } ${draggedApprovedTrainer === trainerName ? 'opacity-60' : ''}`}
                                                                 title="Drag to reorder trainer"
                                                             >
-                                                                <td className="px-3 py-2 font-semibold text-gray-500 dark:text-gray-400">{index + 1}.</td>
+                                                                <td className="px-3 py-2 font-semibold text-muted">{index + 1}.</td>
                                                                 <td className="px-2 py-2">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => toggleFavoriteTrainer(trainerName)}
-                                                                        className={`text-lg leading-none ${isFavorite ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600 hover:text-amber-400'}`}
+                                                                        className={`text-lg leading-none ${isFavorite ? 'text-warning' : 'text-muted hover:text-amber-400'}`}
                                                                         title={isFavorite ? 'Unstar favorite' : 'Star as favorite for this course (moves to top)'}
                                                                         aria-label={`${isFavorite ? 'Unstar' : 'Star'} ${trainerName}`}
                                                                     >
@@ -2749,13 +2749,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                                     </button>
                                                                 </td>
                                                                 <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
-                                                                <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{contact?.telephone || '—'}</td>
-                                                                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{contact?.email || '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{contact?.telephone || '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface-secondary">{contact?.email || '—'}</td>
                                                                 <td className="px-2 py-2">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeApprovedTrainer(trainerName)}
-                                                                        className="font-bold leading-none text-gray-400 hover:text-red-500"
+                                                                        className="font-bold leading-none text-muted hover:text-red-500"
                                                                         aria-label={`Remove ${trainerName}`}
                                                                     >
                                                                         ×
@@ -2768,13 +2768,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                             </table>
                                         </div>
                                     ) : (
-                                        <div className="text-sm text-gray-500 dark:text-gray-400">No approved trainers yet — add one below.</div>
+                                        <div className="text-sm text-muted">No approved trainers yet — add one below.</div>
                                     )}
                                 </div>
 
                                 {/* Add trainer — results appear only while typing */}
                                 <div>
-                                    <label htmlFor="trainerSearch" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Add Trainer</label>
+                                    <label htmlFor="trainerSearch" className="block text-sm font-bold text-on-surface-secondary mb-1">Add Trainer</label>
                                     <input
                                         id="trainerSearch"
                                         type="text"
@@ -2786,23 +2786,23 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </div>
                                 {trainerSearch.trim() !== '' && (
                                     availableTrainerChoices.length > 0 ? (
-                                        <div className="max-h-80 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
+                                        <div className="max-h-80 overflow-y-auto rounded-md border border-strong">
                                             {availableTrainerChoices.map((trainer) => (
                                                 <button
                                                     key={trainer.user_id}
                                                     type="button"
                                                     onClick={() => addApprovedTrainer(trainer.trainer_name)}
-                                                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-hover"
                                                 >
                                                     <span className="dark:text-white">{trainer.trainer_name}</span>
-                                                    <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                    <span className="text-muted whitespace-nowrap">
                                                         {(trainer.telephone && trainer.telephone !== 'N/A') ? `${trainer.telephone} · ` : ''}{trainer.email}
                                                     </span>
                                                 </button>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="text-sm text-gray-500 dark:text-gray-400">No matching active trainer.</div>
+                                        <div className="text-sm text-muted">No matching active trainer.</div>
                                     )
                                 )}
                             </div>
@@ -2819,15 +2819,15 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         >
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
-                                    <label htmlFor="scheduleId" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Schedule ID</label>
+                                    <label htmlFor="scheduleId" className="block text-sm font-bold text-on-surface-secondary mb-1">Schedule ID</label>
                                     <input type="text" id="scheduleId" name="scheduleId" value={course.scheduleId || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. SCH-001" />
                                 </div>
                                 <div>
-                                    <label htmlFor="courseFee" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Fee ($)</label>
+                                    <label htmlFor="courseFee" className="block text-sm font-bold text-on-surface-secondary mb-1">Course Fee ($)</label>
                                     <input type="number" inputMode="decimal" id="courseFee" name="courseFee" value={course.courseFee ?? ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. 500" />
                                 </div>
                                 <div>
-                                    <label htmlFor="taxPercent" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Tax / GST Rate (%)</label>
+                                    <label htmlFor="taxPercent" className="block text-sm font-bold text-on-surface-secondary mb-1">Tax / GST Rate (%)</label>
                                     <input
                                         type="text"
                                         id="taxPercent"
@@ -2837,31 +2837,31 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         className={inputClasses}
                                         placeholder="e.g. 9"
                                     />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">From Company Setting</p>
+                                    <p className="text-xs text-muted mt-1">From Company Setting</p>
                                 </div>
                                 <div>
-                                    <label htmlFor="gstAmount" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">GST ($)</label>
+                                    <label htmlFor="gstAmount" className="block text-sm font-bold text-on-surface-secondary mb-1">GST ($)</label>
                                     <input type="text" id="gstAmount" value={formatCurrencyInput(computedGstAmount)} readOnly className={inputClasses} />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Computed as Course Fee × {companyGstRate}%</p>
+                                    <p className="text-xs text-muted mt-1">Computed as Course Fee × {companyGstRate}%</p>
                                 </div>
                                 <div>
-                                    <label htmlFor="courseFeesIncludeGst" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Fee Incl. GST ($)</label>
+                                    <label htmlFor="courseFeesIncludeGst" className="block text-sm font-bold text-on-surface-secondary mb-1">Course Fee Incl. GST ($)</label>
                                     <input type="text" id="courseFeesIncludeGst" value={formatCurrencyInput(computedCourseFeeIncludeGst)} readOnly className={inputClasses} />
                                 </div>
                                 <div>
-                                    <label htmlFor="afterNormalFunding" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">After Normal Funding ($)</label>
+                                    <label htmlFor="afterNormalFunding" className="block text-sm font-bold text-on-surface-secondary mb-1">After Normal Funding ($)</label>
                                     <input type="text" id="afterNormalFunding" value={formatCurrencyInput(computedAfterNormalFunding)} readOnly className={inputClasses} />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Using Company Setting rate of {companyNormalFundingRate}%</p>
+                                    <p className="text-xs text-muted mt-1">Using Company Setting rate of {companyNormalFundingRate}%</p>
                                 </div>
                                 <div>
-                                    <label htmlFor="afterMcesFunding" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">After MCES Funding ($)</label>
+                                    <label htmlFor="afterMcesFunding" className="block text-sm font-bold text-on-surface-secondary mb-1">After MCES Funding ($)</label>
                                     <input type="text" id="afterMcesFunding" value={formatCurrencyInput(computedAfterMcesFunding)} readOnly className={inputClasses} />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Using Company Setting rate of {companyMcesFundingRate}%</p>
+                                    <p className="text-xs text-muted mt-1">Using Company Setting rate of {companyMcesFundingRate}%</p>
                                 </div>
                                 <div className="sm:col-span-2 lg:col-span-3">
-                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                    <div className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                                         <div>
-                                            <p className="font-semibold text-sm text-gray-900 dark:text-white">UTAP Eligible</p>
+                                            <p className="font-semibold text-sm text-on-surface">UTAP Eligible</p>
                                             <p className="text-xs text-subtle">Mark whether this course is eligible for UTAP funding.</p>
                                         </div>
                                         <input
@@ -2869,7 +2869,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                             id="isUtapEligible"
                                             checked={!!course.isUtapEligible}
                                             onChange={(e) => setCourse(prev => ({ ...prev, isUtapEligible: e.target.checked }))}
-                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500"
                                         />
                                     </div>
                                 </div>
@@ -2884,7 +2884,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         collapsed={collapsedSections.has('course-settings')}
                         onToggle={toggleSection}
                     >
-                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                        <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                             <div>
                                 <p className="font-semibold text-sm">Enable Gaming Leaderboard</p>
                                 <p className="text-xs text-subtle">Allow learners to see a competitive leaderboard for this course.</p>

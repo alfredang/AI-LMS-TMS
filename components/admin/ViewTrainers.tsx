@@ -29,20 +29,20 @@ interface Trainer {
 const getStatusColor = (status: string | null) => {
   switch (status) {
     case 'Active':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+      return 'bg-success-bg text-success';
     case 'Inactive':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
+      return 'bg-surface-elevated text-gray-800 dark:text-gray-400';
     default:
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+      return 'bg-warning-bg text-warning';
   }
 };
 
 const getAccountStatusColor = (status: string | null) => {
   const normalised = (status || '').toLowerCase();
-  if (normalised === 'active') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+  if (normalised === 'active') return 'bg-success-bg text-success';
   if (normalised === 'inactive' || normalised === 'disabled' || normalised === 'suspended')
-    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
-  return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+    return 'bg-surface-elevated text-gray-800 dark:text-gray-400';
+  return 'bg-warning-bg text-warning';
 };
 
 const capitalise = (s: string | null) =>
@@ -221,7 +221,7 @@ const ViewTrainers: React.FC = () => {
   };
 
   const itemsPerPage = 50;
-  const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
+  const inputClasses = "w-full px-3 py-2 border border-strong rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400";
 
   const toggleCheckbox = (
     value: string,
@@ -365,7 +365,7 @@ const ViewTrainers: React.FC = () => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading trainers...</p>
+          <p className="mt-4 text-on-surface-secondary">Loading trainers...</p>
         </div>
       </div>
     );
@@ -404,7 +404,7 @@ const ViewTrainers: React.FC = () => {
       />
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
+        <h1 className="text-3xl font-bold text-on-surface">View Trainers</h1>
         <div className="flex gap-2">
           <Button
             variant="ghost"
@@ -419,7 +419,7 @@ const ViewTrainers: React.FC = () => {
             )}
             {syncingAllImages ? 'Syncing...' : 'Sync LinkedIn Images'}
           </Button>
-          <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+          <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-primary hover:bg-blue-50 dark:border-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
             Bulk Upload Trainers
           </Button>
@@ -432,12 +432,12 @@ const ViewTrainers: React.FC = () => {
 
       {/* Feedback messages */}
       {nricMessage && (
-        <div className={`px-4 py-2 rounded-md text-sm ${nricMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+        <div className={`px-4 py-2 rounded-md text-sm ${nricMessage.type === 'success' ? 'bg-success-bg border border-green-200 text-success dark:border-green-700' : 'bg-danger-bg border border-red-200 text-danger dark:border-red-700'}`}>
           {nricMessage.text}
         </div>
       )}
       {syncMessage && (
-        <div className={`px-4 py-2 rounded-md text-sm ${syncMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+        <div className={`px-4 py-2 rounded-md text-sm ${syncMessage.type === 'success' ? 'bg-success-bg border border-green-200 text-success dark:border-green-700' : 'bg-danger-bg border border-red-200 text-danger dark:border-red-700'}`}>
           {syncMessage.text}
         </div>
       )}
@@ -445,16 +445,16 @@ const ViewTrainers: React.FC = () => {
       {/* KPI Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-blue-600">{totalTrainers}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Trainers</p>
+          <p className="text-4xl font-bold text-primary">{totalTrainers}</p>
+          <p className="text-on-surface-secondary mt-1">Trainers</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-green-600">{aclpTrainers}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">ACLP Trainers</p>
+          <p className="text-4xl font-bold text-success">{aclpTrainers}</p>
+          <p className="text-on-surface-secondary mt-1">ACLP Trainers</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-purple-600">{nonAclpTrainers}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Non-ACLP Trainers</p>
+          <p className="text-4xl font-bold text-purple-700 dark:text-purple-300">{nonAclpTrainers}</p>
+          <p className="text-on-surface-secondary mt-1">Non-ACLP Trainers</p>
         </Card>
       </div>
 
@@ -462,10 +462,10 @@ const ViewTrainers: React.FC = () => {
       <Card className="p-6 mb-8 dark:bg-gray-800 dark:border-gray-700">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
           <div className="lg:col-span-2">
-            <label htmlFor="general-search" className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Search</label>
+            <label htmlFor="general-search" className="block text-sm font-medium text-on-surface-secondary">General Search</label>
             <div className="relative mt-1">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Icon name={IconName.User} className="w-5 h-5 text-gray-400" />
+                <Icon name={IconName.User} className="w-5 h-5 text-muted" />
               </div>
               <input
                 type="text"
@@ -490,7 +490,7 @@ const ViewTrainers: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               {/* Trainer Type checkboxes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trainer Type</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">Trainer Type</label>
                 <div className="flex flex-wrap gap-3">
                   {TRAINER_TYPES.map(t => (
                     <label key={t} className="flex items-center gap-2 cursor-pointer select-none">
@@ -498,20 +498,20 @@ const ViewTrainers: React.FC = () => {
                         type="checkbox"
                         checked={filterTrainerTypes.includes(t)}
                         onChange={() => toggleCheckbox(t, filterTrainerTypes, setFilterTrainerTypes)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                        className="w-4 h-4 rounded border-strong text-primary focus:ring-blue-500 dark:bg-gray-700"
                       />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{t}</span>
+                      <span className="text-sm text-on-surface-secondary">{t}</span>
                     </label>
                   ))}
                 </div>
                 {filterTrainerTypes.length > 0 && (
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterTrainerTypes.join(', ')}</p>
+                  <p className="mt-1 text-xs text-muted">Showing: {filterTrainerTypes.join(', ')}</p>
                 )}
               </div>
 
               {/* Trainer Status checkboxes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trainer Status</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">Trainer Status</label>
                 <div className="flex flex-wrap gap-3">
                   {TRAINER_STATUSES.map(s => (
                     <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
@@ -519,20 +519,20 @@ const ViewTrainers: React.FC = () => {
                         type="checkbox"
                         checked={filterTrainerStatuses.includes(s)}
                         onChange={() => toggleCheckbox(s, filterTrainerStatuses, setFilterTrainerStatuses)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                        className="w-4 h-4 rounded border-strong text-primary focus:ring-blue-500 dark:bg-gray-700"
                       />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{s}</span>
+                      <span className="text-sm text-on-surface-secondary">{s}</span>
                     </label>
                   ))}
                 </div>
                 {filterTrainerStatuses.length > 0 && (
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterTrainerStatuses.join(', ')}</p>
+                  <p className="mt-1 text-xs text-muted">Showing: {filterTrainerStatuses.join(', ')}</p>
                 )}
               </div>
 
               {/* Area of Expertise dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Area of Expertise</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-2">Area of Expertise</label>
                 <select
                   value={filterAreasOfExpertise[0] || ''}
                   onChange={(e) => {
@@ -556,27 +556,27 @@ const ViewTrainers: React.FC = () => {
       <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
         {paginatedTrainers.length > 0 ? (
           <>
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <table className="min-w-full divide-y divide-default">
+              <thead className="bg-surface-elevated">
                 <tr>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Tel</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Type</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Expertise</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Status</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Skills</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Certs</th>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Trainer Name</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Email</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Tel</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">NRIC</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Type</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Expertise</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Account</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">LinkedIn</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">CV</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Skills</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Certs</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-muted uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+              <tbody className="bg-surface divide-y divide-default">
                 {paginatedTrainers.map((trainer, index) => (
-                  <tr key={`${trainer.trainer_name}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr key={`${trainer.trainer_name}-${index}`} className="hover:bg-surface-hover">
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center">
                         <div
@@ -603,17 +603,17 @@ const ViewTrainers: React.FC = () => {
                           )}
                         </div>
                         <div className="ml-3">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{trainer.trainer_name}</div>
+                          <div className="text-sm font-medium text-on-surface">{trainer.trainer_name}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 dark:text-white">{trainer.email}</div>
+                      <div className="text-sm text-on-surface">{trainer.email}</div>
                       {trainer.secondary_email && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.secondary_email}</div>
+                        <div className="text-sm text-muted">{trainer.secondary_email}</div>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-muted">
                       {trainer.telephone || 'N/A'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
@@ -634,7 +634,7 @@ const ViewTrainers: React.FC = () => {
                           <button
                             onClick={() => handleSaveNric(trainer.user_id)}
                             disabled={savingNric}
-                            className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                            className="text-success hover:text-green-800 disabled:opacity-50"
                             title="Save"
                           >
                             <Icon name={IconName.Check} className="w-4 h-4" />
@@ -642,7 +642,7 @@ const ViewTrainers: React.FC = () => {
                           <button
                             onClick={() => setEditingNricId(null)}
                             disabled={savingNric}
-                            className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                            className="text-danger hover:text-red-700 disabled:opacity-50"
                             title="Cancel"
                           >
                             <Icon name={IconName.Close} className="w-4 h-4" />
@@ -650,15 +650,15 @@ const ViewTrainers: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-900 dark:text-white">
+                          <span className="text-sm text-on-surface">
                             {trainer.nric && trainer.nric !== 'N/A'
                               ? (visibleNrics.has(trainer.user_id) ? trainer.nric : maskNric(trainer.nric))
-                              : <span className="text-gray-400 italic">N/A</span>}
+                              : <span className="text-muted italic">N/A</span>}
                           </span>
                           {trainer.nric && trainer.nric !== 'N/A' && (
                             <button
                               onClick={() => toggleNricVisibility(trainer.user_id)}
-                              className="text-gray-400 hover:text-blue-500 transition-colors"
+                              className="text-muted hover:text-blue-500 transition-colors"
                               title={visibleNrics.has(trainer.user_id) ? 'Hide NRIC' : 'Show full NRIC'}
                             >
                               <Icon name={visibleNrics.has(trainer.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
@@ -669,7 +669,7 @@ const ViewTrainers: React.FC = () => {
                               setEditingNricId(trainer.user_id);
                               setNricEditValue(trainer.nric && trainer.nric !== 'N/A' ? trainer.nric : '');
                             }}
-                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                            className="text-muted hover:text-blue-500 transition-colors"
                             title="Edit NRIC"
                           >
                             <Icon name={IconName.Edit} className="w-4 h-4" />
@@ -677,7 +677,7 @@ const ViewTrainers: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-muted">{trainer.trainer_type || 'N/A'}</td>
                     <td className="px-3 py-2">
                       {(() => {
                         const areas = Array.isArray(trainer.areas_of_expertise)
@@ -685,15 +685,15 @@ const ViewTrainers: React.FC = () => {
                           : (typeof trainer.areas_of_expertise === 'string' ? JSON.parse(trainer.areas_of_expertise) : []);
                         return areas.length > 0 ? (
                           <div className="flex items-center gap-1 max-w-[200px]" title={areas.join(', ')}>
-                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 truncate max-w-[150px]">
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-info-bg text-info truncate max-w-[150px]">
                               {areas[0]}
                             </span>
                             {areas.length > 1 && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">+{areas.length - 1} more</span>
+                              <span className="text-xs text-muted whitespace-nowrap">+{areas.length - 1} more</span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
+                          <span className="text-sm text-muted">N/A</span>
                         );
                       })()}
                     </td>
@@ -707,13 +707,13 @@ const ViewTrainers: React.FC = () => {
                         {capitalise(trainer.account_status)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-muted">
                       {trainer.linkedin_url ? (
                         <a
                           href={trainer.linkedin_url.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1.5"
+                          className="text-primary hover:text-primary underline flex items-center gap-1.5"
                         >
                           <Icon name={IconName.Linkedin} className="w-4 h-4" />
                           View
@@ -722,13 +722,13 @@ const ViewTrainers: React.FC = () => {
                         'N/A'
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-muted">
                       {trainer.cv_folder_url ? (
                         <a
                           href={trainer.cv_folder_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1.5"
+                          className="text-primary hover:text-primary underline flex items-center gap-1.5"
                         >
                           <Icon name={IconName.Folder} className="w-4 h-4" />
                           Open
@@ -745,11 +745,11 @@ const ViewTrainers: React.FC = () => {
                             {trainer.skills_tags[0]}
                           </span>
                           {trainer.skills_tags.length > 1 && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">+{trainer.skills_tags.length - 1} more</span>
+                            <span className="text-xs text-muted whitespace-nowrap">+{trainer.skills_tags.length - 1} more</span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
+                        <span className="text-sm text-muted">N/A</span>
                       )}
                     </td>
                     {/* Certification Tags */}
@@ -760,20 +760,20 @@ const ViewTrainers: React.FC = () => {
                             {trainer.certification_tags[0]}
                           </span>
                           {trainer.certification_tags.length > 1 && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">+{trainer.certification_tags.length - 1} more</span>
+                            <span className="text-xs text-muted whitespace-nowrap">+{trainer.certification_tags.length - 1} more</span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
+                        <span className="text-sm text-muted">N/A</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-muted">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleSyncImage(trainer)}
                           disabled={uploadingImageFor === trainer.user_id}
                           title={uploadingImageFor === trainer.user_id ? 'Syncing image...' : 'Sync profile image'}
-                          className="inline-flex items-center justify-center p-1.5 rounded-md text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50"
+                          className="inline-flex items-center justify-center p-1.5 rounded-md text-purple-700 dark:text-purple-300 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50"
                         >
                           {uploadingImageFor === trainer.user_id ? (
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600" />
@@ -785,7 +785,7 @@ const ViewTrainers: React.FC = () => {
                           <button
                             onClick={() => handleStatusChange(trainer, 'Inactive')}
                             title="Deactivate trainer"
-                            className="inline-flex items-center justify-center p-1.5 rounded-md text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md text-danger hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
                           >
                             <Icon name={IconName.Close} className="w-4 h-4" />
                           </button>
@@ -793,7 +793,7 @@ const ViewTrainers: React.FC = () => {
                           <button
                             onClick={() => handleStatusChange(trainer, 'Active')}
                             title="Activate trainer"
-                            className="inline-flex items-center justify-center p-1.5 rounded-md text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md text-success hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
                           >
                             <Icon name={IconName.Check} className="w-4 h-4" />
                           </button>
@@ -806,21 +806,21 @@ const ViewTrainers: React.FC = () => {
             </table>
             {totalPages > 1 && (
               <div className="p-4 flex items-center justify-between border-t dark:border-gray-700">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted">
                   Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredTrainers.length)} of {filteredTrainers.length} trainers
                 </p>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setCurrentPage(1)}
                     disabled={currentPage === 1}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     First
                   </button>
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Prev
                   </button>
@@ -833,14 +833,14 @@ const ViewTrainers: React.FC = () => {
                     }, [])
                     .map((item, idx) =>
                       item === 'ellipsis' ? (
-                        <span key={`e${idx}`} className="px-2 text-gray-400">...</span>
+                        <span key={`e${idx}`} className="px-2 text-muted">...</span>
                       ) : (
                         <button
                           key={item}
                           onClick={() => setCurrentPage(item)}
                           className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${currentPage === item
                               ? 'bg-blue-600 text-white border-blue-600'
-                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                              : 'border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover'
                             }`}
                         >
                           {item}
@@ -850,14 +850,14 @@ const ViewTrainers: React.FC = () => {
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
                   </button>
                   <button
                     onClick={() => setCurrentPage(totalPages)}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-strong bg-surface text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Last
                   </button>
@@ -867,9 +867,9 @@ const ViewTrainers: React.FC = () => {
           </>
         ) : (
           <div className="text-center py-12">
-            <Icon name={IconName.User} className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No trainers found</h3>
-            <p className="text-gray-500 mb-6 dark:text-gray-400">
+            <Icon name={IconName.User} className="w-16 h-16 text-muted mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-on-surface mb-2">No trainers found</h3>
+            <p className="text-muted mb-6">
               {trainers.length === 0
                 ? "There are no trainers in the system yet."
                 : "No trainers match your current search criteria."}
@@ -881,20 +881,20 @@ const ViewTrainers: React.FC = () => {
       {/* Status Update Confirmation Dialog */}
       {showStatusConfirmation && selectedTrainer && targetStatus && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto">
+          <div className="bg-surface rounded-lg shadow-xl max-w-md w-full mx-auto">
             <div className="p-6">
               <div className="flex items-center gap-4 mb-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${targetStatus === 'Active' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${targetStatus === 'Active' ? 'bg-success-bg' : 'bg-danger-bg'}`}>
                   <Icon
                     name={targetStatus === 'Active' ? IconName.Check : IconName.Close}
-                    className={`w-6 h-6 ${targetStatus === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                    className={`w-6 h-6 ${targetStatus === 'Active' ? 'text-success' : 'text-danger'}`}
                   />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-on-surface">
                   {targetStatus === 'Active' ? 'Activate' : 'Deactivate'} Trainer
                 </h3>
               </div>
-              <p className="text-gray-700 dark:text-gray-300 mb-6">
+              <p className="text-on-surface-secondary mb-6">
                 Are you sure you want to {targetStatus.toLowerCase()} the trainer{' '}
                 <strong>"{selectedTrainer.trainer_name}"</strong>?
               </p>
@@ -909,7 +909,7 @@ const ViewTrainers: React.FC = () => {
                 <Button
                   onClick={confirmStatusUpdate}
                   disabled={isUpdatingStatus}
-                  className={`${targetStatus === 'Active' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                  className={`${targetStatus === 'Active' ? 'bg-green-700 hover:bg-green-800 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                 >
                   {isUpdatingStatus ? (
                     <>

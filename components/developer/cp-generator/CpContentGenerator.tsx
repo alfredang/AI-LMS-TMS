@@ -152,14 +152,14 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">{title}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+        <p className="text-sm text-muted mt-1">{description}</p>
       </div>
 
       {/* Course context — blue info box matching Streamlit's st.info() */}
       {cp.courseTitle && (
-        <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 text-sm">
-          <p className="text-gray-800 dark:text-gray-200">
-            <span className="font-semibold text-blue-700 dark:text-blue-300">Course:</span>{' '}
+        <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-info-bg px-4 py-3 text-sm">
+          <p className="text-on-surface">
+            <span className="font-semibold text-primary">Course:</span>{' '}
             {cp.courseTitle}
           </p>
           <p className="text-xs text-blue-700/70 dark:text-blue-300/70 mt-0.5">
@@ -174,7 +174,7 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
       {/* LU Sequencing type selector */}
       {section === 'lu_sequencing' && (
         <Card className="p-5">
-          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Sequencing Type</h3>
+          <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Sequencing Type</h3>
           <div className="flex flex-wrap gap-2">
             {LU_SEQUENCING_TYPES.map(type => (
               <button
@@ -183,7 +183,7 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   cp.luSequencingType === type
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
                 }`}
               >
                 {type}
@@ -196,7 +196,7 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
       {/* Generate / Regenerate — matches Streamlit's two-button pattern */}
       <div>
         {error && (
-          <div className="mb-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+          <div className="mb-3 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
             {error}
           </div>
         )}
@@ -207,7 +207,7 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
           <button
             onClick={handleGenerate}
             disabled={loading || !hasContent}
-            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-surface border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 transition-colors"
           >
             Regenerate
           </button>
@@ -218,19 +218,19 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
           appears between Generate and the AI-generated text once content exists. */}
       {section === 'lesson_plan' && hasContent && (
         <Card className="p-5">
-          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Downloads</h3>
+          <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Downloads</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               onClick={() => handleDownloadLessonPlan('docx')}
               disabled={downloading !== null}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-strong bg-surface text-on-surface hover:bg-surface-hover disabled:opacity-50 transition-colors"
             >
               Download Lesson Plan (.docx)
             </button>
             <button
               onClick={() => handleDownloadLessonPlan('pdf')}
               disabled={downloading !== null}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-strong bg-surface text-on-surface hover:bg-surface-hover disabled:opacity-50 transition-colors"
             >
               Download Lesson Plan (.pdf)
             </button>
@@ -242,7 +242,7 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
       {loading && (
         <Card className="p-8 text-center">
           <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Generating {title.toLowerCase()} with Claude AI...</p>
+          <p className="text-sm text-muted">Generating {title.toLowerCase()} with Claude AI...</p>
         </Card>
       )}
 
@@ -250,10 +250,10 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
       {isMethodSection && Object.keys(methodResults).length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Generated Results</h3>
+            <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">Generated Results</h3>
             <button
               onClick={() => handleCopy(Object.entries(methodResults).map(([k, v]) => `**${k}**\n${v}`).join('\n\n'))}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              className="text-xs text-primary hover:underline font-medium"
             >
               Copy All
             </button>
@@ -261,10 +261,10 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
           {Object.entries(methodResults).map(([method, text]) => (
             <Card key={method} className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-bold text-gray-900 dark:text-white">{method}</h4>
-                <button onClick={() => handleCopy(text)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Copy</button>
+                <h4 className="text-sm font-bold text-on-surface">{method}</h4>
+                <button onClick={() => handleCopy(text)} className="text-xs text-primary hover:underline">Copy</button>
               </div>
-              <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+              <pre className="text-sm text-on-surface-secondary whitespace-pre-wrap font-sans leading-relaxed bg-surface-elevated rounded-lg p-3">
                 {text}
               </pre>
             </Card>
@@ -276,15 +276,15 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
       {!isMethodSection && hasContent && (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Generated {title}</h4>
-            <button onClick={() => handleCopy(contentState.value)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Copy</button>
+            <h4 className="text-sm font-bold text-on-surface">Generated {title}</h4>
+            <button onClick={() => handleCopy(contentState.value)} className="text-xs text-primary hover:underline">Copy</button>
           </div>
           {/* Editable output */}
           <textarea
             value={contentState.value}
             onChange={e => contentState.setValue(e.target.value)}
             rows={Math.max(8, contentState.value.split('\n').length + 2)}
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans leading-relaxed"
+            className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans leading-relaxed"
           />
         </Card>
       )}
@@ -293,8 +293,8 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
       {!loading && !hasContent && (
         <Card className="p-8 text-center">
           <div className="text-4xl mb-3">📝</div>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{title}</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          <h3 className="text-lg font-bold text-on-surface mb-1">{title}</h3>
+          <p className="text-sm text-muted max-w-md mx-auto">
             Click the generate button above to create {title.toLowerCase()} content using Claude AI.
             Make sure you have filled in the Course Details first.
           </p>

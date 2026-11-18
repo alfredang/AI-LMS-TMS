@@ -4,8 +4,8 @@ import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
 import type { AdminTrainerRow } from '@/lib/trainers/adminTrainerRow';
 
-const inputClass = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400';
-const labelClass = 'block mb-1 text-xs font-medium text-gray-600 dark:text-gray-300';
+const inputClass = 'w-full px-3 py-2 text-sm border border-strong rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400';
+const labelClass = 'block mb-1 text-xs font-medium text-on-surface-secondary';
 
 const ChipInput: React.FC<{
   id: string;
@@ -26,9 +26,9 @@ const ChipInput: React.FC<{
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+    <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 border border-strong rounded-lg focus-within:ring-2 focus-within:ring-blue-500 dark:bg-gray-700">
       {values.map(v => (
-        <span key={v} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-full dark:bg-blue-900/30 dark:text-blue-300">
+        <span key={v} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-medium text-primary bg-info-bg rounded-full">
           {v}
           <button type="button" onClick={() => onChange(values.filter(x => x !== v))} className="rounded-full hover:bg-blue-100 dark:hover:bg-blue-800" aria-label={`Remove ${v}`}>
             <Icon name={IconName.Close} className="w-3 h-3" />
@@ -120,20 +120,20 @@ const SearchTrainersEditModal: React.FC<Props> = ({ trainer, domainSuggestions, 
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" onClick={() => !saving && onClose()}>
-      <div className="flex flex-col w-full max-w-3xl max-h-[92vh] bg-white shadow-2xl rounded-xl dark:bg-gray-800" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex flex-col w-full max-w-3xl max-h-[92vh] bg-surface shadow-2xl rounded-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-default">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit Trainer</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Login email: {trainer.email || '—'}</p>
+            <h3 className="text-lg font-bold text-on-surface">Edit Trainer</h3>
+            <p className="text-sm text-muted">Login email: {trainer.email || '—'}</p>
           </div>
-          <button onClick={onClose} disabled={saving} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" aria-label="Close">
+          <button onClick={onClose} disabled={saving} className="text-muted hover:text-gray-600 dark:hover:text-gray-300" aria-label="Close">
             <Icon name={IconName.Close} className="w-5 h-5" />
           </button>
         </div>
 
         <div className="flex-1 px-6 py-5 space-y-6 overflow-y-auto">
           <section>
-            <h4 className="mb-3 text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">Contact</h4>
+            <h4 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Contact</h4>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Full name *" htmlFor="et-name"><input id="et-name" className={inputClass} value={form.full_name} onChange={set('full_name')} /></Field>
               <Field label="Common name" htmlFor="et-common"><input id="et-common" className={inputClass} value={form.common_name} onChange={set('common_name')} /></Field>
@@ -145,7 +145,7 @@ const SearchTrainersEditModal: React.FC<Props> = ({ trainer, domainSuggestions, 
           </section>
 
           <section>
-            <h4 className="mb-3 text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">Personal</h4>
+            <h4 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Personal</h4>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Date of birth" htmlFor="et-dob"><input id="et-dob" type="date" className={inputClass} value={form.dob} onChange={set('dob')} /></Field>
               <Field label="Gender *" htmlFor="et-gender">
@@ -170,7 +170,7 @@ const SearchTrainersEditModal: React.FC<Props> = ({ trainer, domainSuggestions, 
           </section>
 
           <section>
-            <h4 className="mb-3 text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">Expertise</h4>
+            <h4 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Expertise</h4>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Trainer type *" htmlFor="et-type">
                 <select id="et-type" className={inputClass} value={form.trainer_type} onChange={set('trainer_type')}>
@@ -200,8 +200,8 @@ const SearchTrainersEditModal: React.FC<Props> = ({ trainer, domainSuggestions, 
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-default">
+          <p className="text-sm text-danger">{error}</p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">{saving ? 'Saving…' : 'Save changes'}</Button>

@@ -18,20 +18,14 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   className = ''
 }) => {
-  const baseClasses = 'font-medium rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
-  
+  // Shared design-system classes (styles/globals.css).
   const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
-    secondary: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
-    ghost: 'bg-transparent hover:bg-gray-100 border border-gray-300 focus:ring-gray-500 btn-ghost',
-    outline: 'border border-gray-300 bg-transparent hover:bg-gray-50 focus:ring-blue-500 btn-ghost'
+    primary: 'btn-primary',
+    secondary: 'btn-secondary',
+    ghost: 'btn-ghost',
+    outline: 'btn-outline'
   };
-  
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base'
-  };
+  const sizeClasses = { sm: 'btn-sm', md: '', lg: 'px-6 py-3 text-base' };
   
   const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
   
@@ -39,7 +33,7 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${className}`}
+      className={`btn ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${className}`}
     >
       {children}
     </button>
@@ -54,7 +48,7 @@ interface CardProps {
 
 export const Card: React.FC<CardProps> = ({ children, className = '' }) => {
   return (
-    <div className={`bg-white shadow-md rounded-lg ${className}`}>
+    <div className={`card ${className}`}>
       {children}
     </div>
   );
@@ -129,7 +123,7 @@ export const Spinner: React.FC<SpinnerProps> = ({ size = 'md', className = '' })
   };
   
   return (
-    <div className={`animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 ${sizeClasses[size]} ${className}`}></div>
+    <div className={`animate-spin rounded-full border-2 border-strong border-t-primary ${sizeClasses[size]} ${className}`}></div>
   );
 };
 
@@ -147,7 +141,7 @@ export const Switch: React.FC<SwitchProps> = ({ checked, onChange, disabled = fa
       type="button"
       className={`
         relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-        ${checked ? 'bg-blue-600' : 'bg-gray-200'}
+        ${checked ? 'bg-primary' : 'bg-surface-hover border border-strong'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className}
       `}

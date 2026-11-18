@@ -60,13 +60,13 @@ export const SwdaEnrolmentSection: React.FC<{
           onClick={() => setOpen(v => !v)}
           aria-expanded={open}
         >
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">SWDA Enrolment</h3>
-          <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <h3 className="text-xl font-bold text-on-surface">SWDA Enrolment</h3>
+          <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-primary flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         <button
           type="button"
           onClick={() => setZoomed(true)}
-          className="p-2 rounded-md text-blue-600 hover:bg-surface-elevated transition-colors flex-shrink-0"
+          className="p-2 rounded-md text-primary hover:bg-surface-elevated transition-colors flex-shrink-0"
           title="Show the enrolment QR code full screen"
           aria-label="Show the enrolment QR code full screen"
         >
@@ -82,7 +82,7 @@ export const SwdaEnrolmentSection: React.FC<{
             Their details appear in Enrolment Requests below for enrolment on TPGateway. This is not the attendance QR code.
           </p>
           {available === false && (
-            <p className="mt-3 text-sm text-amber-500">
+            <p className="mt-3 text-sm text-warning">
               This class does not take SWDA enrolment requests (a Non-WSQ course, or outside the enrolment window).
             </p>
           )}
@@ -94,7 +94,7 @@ export const SwdaEnrolmentSection: React.FC<{
               </div>
               <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                 <div className="flex flex-col items-center gap-3 w-full">
-                  <button type="button" className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm cursor-zoom-in" onClick={() => setZoomed(true)} title="Show full screen">
+                  <button type="button" className="bg-white p-3 rounded-xl border border-default shadow-sm cursor-zoom-in" onClick={() => setZoomed(true)} title="Show full screen">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={qrSrc(url, 200)} alt="SWDA enrolment QR code" className="w-36 h-36 object-contain" />
                   </button>
@@ -123,7 +123,7 @@ export const SwdaEnrolmentSection: React.FC<{
                     <button
                       type="button"
                       onClick={() => { void (onViewEnrolments ?? onViewEnrolmentsAsAdmin)?.(); }}
-                      className="w-full inline-flex items-center justify-center gap-2 text-sm font-medium border border-indigo-500 text-indigo-400 hover:bg-indigo-500/10 rounded-lg py-2 transition-colors"
+                      className="w-full inline-flex items-center justify-center gap-2 text-sm font-medium border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10 rounded-lg py-2 transition-colors"
                       title={onViewEnrolments ? "Open this class's SWDA Enrolment list on E-Attendance" : "Open this class's SWDA Enrolment list (Admin → Check Attendance)"}
                     >
                       <Icon name={IconName.ClipboardCheck} className="w-4 h-4" />View Enrolments
@@ -168,7 +168,7 @@ export const SwdaEnrolmentSection: React.FC<{
             />
           </div>
           {ref && <p className="text-base md:text-2xl text-white font-medium text-center">{ref}</p>}
-          <p className="text-xs md:text-sm text-gray-300 break-all text-center">{url}</p>
+          <p className="text-xs md:text-sm text-muted break-all text-center">{url}</p>
         </div>,
         document.body
       )}

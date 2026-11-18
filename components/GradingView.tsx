@@ -37,7 +37,7 @@ const getStatusColor = (status: string) => {
         case 'Competent': return 'bg-green-100 text-green-800 border-green-200';
         case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
         case 'Not Yet Competent': return 'bg-red-100 text-red-800 border-red-200';
-        default: return 'bg-gray-100 text-gray-800 border-gray-200';
+        default: return 'bg-gray-100 text-on-surface border-default';
     }
 };
 
@@ -235,7 +235,7 @@ const GradingView: React.FC<GradingViewProps> = ({ onBack }) => {
             <div className="flex justify-center items-center py-10">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading grading data...</p>
+                    <p className="text-on-surface-secondary">Loading grading data...</p>
                 </div>
             </div>
         );
@@ -244,7 +244,7 @@ const GradingView: React.FC<GradingViewProps> = ({ onBack }) => {
     if (error) {
         return (
             <div className="text-center py-10">
-                <p className="text-red-600 mb-4">{error}</p>
+                <p className="text-danger mb-4">{error}</p>
                 <Button onClick={fetchGradingData}>Try Again</Button>
             </div>
         );
@@ -261,27 +261,27 @@ const GradingView: React.FC<GradingViewProps> = ({ onBack }) => {
                 Back to Course Details
             </Button>
             <h2 className="text-3xl font-bold mb-2">Grading Roster</h2>
-            <p className="text-xl text-blue-600 font-semibold mb-6">{selectedCourse.title}</p>
+            <p className="text-xl text-primary font-semibold mb-6">{selectedCourse.title}</p>
 
             <Card className="p-0 overflow-hidden">
                 <div className="overflow-x-auto">
                     {(learners.length > 0 && assessments.length > 0) ? (
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-default">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">Learner Name</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider sticky left-0 bg-gray-50 z-10">Learner Name</th>
                                     {assessments.map((assessment: Assessment) => (
-                                        <th key={assessment.assessment_id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <th key={assessment.assessment_id} className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             {assessment.assessment_title}
-                                            <span className="block text-gray-400 font-normal">{assessment.assessment_category}</span>
+                                            <span className="block text-muted font-normal">{assessment.assessment_category}</span>
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-default">
                                 {learners.map((learner: Learner) => (
                                     <tr key={learner.learner_email}>
-                                        <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-white font-medium text-gray-900 z-10 border-r">
+                                        <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-white font-medium text-on-surface z-10 border-r">
                                             {learner.learner_name}
                                         </td>
                                         {assessments.map((assessment: Assessment) => {
@@ -297,7 +297,7 @@ const GradingView: React.FC<GradingViewProps> = ({ onBack }) => {
                                                                     <Icon name={IconName.FileText} className="w-5 h-5 text-blue-500 flex-shrink-0 mt-1" />
                                                                     <div>
                                                                         <p className="font-semibold text-sm leading-tight break-all">{submission.submission_file}</p>
-                                                                        <p className="text-xs text-gray-500">
+                                                                        <p className="text-xs text-muted">
                                                                             {submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : 'N/A'}
                                                                         </p>
                                                                     </div>
@@ -316,7 +316,7 @@ const GradingView: React.FC<GradingViewProps> = ({ onBack }) => {
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                             <div className="text-sm text-gray-500 italic text-center py-2 h-[84px] flex items-center justify-center">Not Submitted</div>
+                                                             <div className="text-sm text-muted italic text-center py-2 h-[84px] flex items-center justify-center">Not Submitted</div>
                                                         )}
                                                         
                                                         {submission?.submission_file && (
@@ -339,7 +339,7 @@ const GradingView: React.FC<GradingViewProps> = ({ onBack }) => {
                             </tbody>
                         </table>
                     ) : (
-                        <p className="text-center text-gray-500 py-10">
+                        <p className="text-center text-muted py-10">
                             {learners.length === 0 ? "No learners are enrolled in this class yet." : "No assessments have been added to this course."}
                         </p>
                     )}

@@ -57,7 +57,7 @@ export default function AiProviderPage() {
     <Head><title>AI Provider | Tertiary LMS/TMS</title></Head>
     <main className="min-h-screen bg-slate-100 px-5 py-12 text-slate-900">
       <div className="mx-auto max-w-2xl space-y-6 rounded-xl bg-white p-6 shadow-sm">
-        <a className="text-blue-700 underline" href="/">← LMS/TMS home</a>
+        <a className="text-primary underline" href="/">← LMS/TMS home</a>
         <h1 className="text-2xl font-bold">AI Provider</h1>
         <p>Choose the provider for AI chat, draft and content generation, courseware, assessments, SEO, audits and supporting-document analysis.</p>
         <p className="rounded bg-slate-100 p-3">Active provider: <strong>{settings ? settings.provider === 'openai' ? `OpenAI OAuth · ${settings.model}` : `Claude OAuth · ${CLAUDE_MODEL}` : 'Loading…'}</strong></p>

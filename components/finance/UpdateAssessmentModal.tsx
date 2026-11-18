@@ -136,7 +136,7 @@ export const UpdateAssessmentPanel: React.FC<UpdateAssessmentPanelProps> = ({ en
                 <h2 className="text-xl font-bold dark:text-white">Update Assessment</h2>
                 <button
                     onClick={onClose}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none px-2"
+                    className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none px-2"
                     title="Close and clear selection"
                 >
                     &times;
@@ -144,39 +144,39 @@ export const UpdateAssessmentPanel: React.FC<UpdateAssessmentPanelProps> = ({ en
             </div>
 
             {loading && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 py-6">
+                <div className="flex items-center gap-2 text-sm text-on-surface-secondary py-6">
                     <BrailleSpinner /> Loading selected enrolments…
                 </div>
             )}
 
             {error && (
-                <Card className="p-4 mb-4 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700">
-                    <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</pre>
+                <Card className="p-4 mb-4 border-red-300 bg-danger-bg dark:border-red-700">
+                    <pre className="text-sm text-danger whitespace-pre-wrap">{error}</pre>
                 </Card>
             )}
 
             {!loading && (
                 <>
                     {/* Preview card: who's selected, before the full editable table */}
-                    <Card className="p-4 mb-6 bg-gray-50 dark:bg-gray-800/50">
-                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                    <Card className="p-4 mb-6 bg-surface-elevated">
+                        <h3 className="text-sm font-bold text-on-surface-secondary mb-3 flex items-center gap-2">
                             Selected People ({rows.length})
                             {fetchingMore && <BrailleSpinner />}
                         </h3>
                         {rows.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No enrolments left in this batch.</p>
+                            <p className="text-sm text-muted">No enrolments left in this batch.</p>
                         ) : (
                             <div className="flex flex-wrap gap-2">
                                 {rows.map((r) => (
                                     <span
                                         key={r.enrolmentId}
-                                        className="inline-flex items-center gap-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full pl-3 pr-1.5 py-1"
+                                        className="inline-flex items-center gap-2 text-xs bg-surface border border-strong rounded-full pl-3 pr-1.5 py-1"
                                     >
-                                        <span className="font-medium text-gray-800 dark:text-gray-100">{r.traineeFullName || 'Unknown'}</span>
-                                        <span className="text-gray-400">·</span>
-                                        <span className="text-gray-500 dark:text-gray-400">{r.rawCols[COL.COURSE_TITLE] || r.courseCode || '—'}</span>
-                                        <span className="text-gray-400">·</span>
-                                        <span className="font-mono text-gray-500 dark:text-gray-400">{r.enrolmentId}</span>
+                                        <span className="font-medium text-on-surface">{r.traineeFullName || 'Unknown'}</span>
+                                        <span className="text-muted">·</span>
+                                        <span className="text-muted">{r.rawCols[COL.COURSE_TITLE] || r.courseCode || '—'}</span>
+                                        <span className="text-muted">·</span>
+                                        <span className="font-mono text-muted">{r.enrolmentId}</span>
                                         <button
                                             onClick={() => setRowsAndSyncSelection((prev) => prev.filter((x) => x.enrolmentId !== r.enrolmentId))}
                                             className="text-red-400 hover:text-red-600 dark:hover:text-red-300 px-1"

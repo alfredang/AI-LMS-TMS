@@ -13,8 +13,8 @@ interface AlertDescriptionProps {
 
 export const Alert: React.FC<AlertProps> = ({ children, variant = 'default', className = '' }) => {
   const variantStyles = {
-    default: 'border-blue-200 bg-blue-50 text-blue-900',
-    destructive: 'border-red-200 bg-red-50 text-red-900'
+    default: 'border-info bg-info-bg text-on-surface',
+    destructive: 'border-danger bg-danger-bg text-on-surface'
   };
 
   return (

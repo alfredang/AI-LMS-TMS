@@ -157,7 +157,7 @@ const SeoGeneratorView: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">SEO Metadata Generator</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-muted mt-1">
           Generate SEO-optimized meta titles, descriptions, keywords, course descriptions, and job roles using AI.
         </p>
       </div>
@@ -167,14 +167,14 @@ const SeoGeneratorView: React.FC = () => {
         <div className="space-y-4">
           {/* Type Selector */}
           <Card className="p-5">
-            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Select Course Type</h3>
+            <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Select Course Type</h3>
             <div className="flex gap-3">
               <button
                 onClick={() => { setSeoType('wsq'); setResult(''); setSections([]); setError(''); }}
                 className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
                   seoType === 'wsq'
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
                 }`}
               >
                 WSQ Course
@@ -184,7 +184,7 @@ const SeoGeneratorView: React.FC = () => {
                 className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
                   seoType === 'non-wsq'
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
                 }`}
               >
                 Non-WSQ Course
@@ -194,80 +194,80 @@ const SeoGeneratorView: React.FC = () => {
 
           {/* Input Fields */}
           <Card className="p-5 space-y-4">
-            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">
               {seoType === 'wsq' ? 'WSQ Course Details' : 'Course Details'}
             </h3>
 
             {seoType === 'wsq' ? (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                   <input
                     type="text"
                     value={courseTitle}
                     onChange={(e) => setCourseTitle(e.target.value)}
                     placeholder="e.g. Innovative Problem Solving with Generative AI"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learning Outcomes</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Learning Outcomes</label>
                   <textarea
                     value={learningOutcomes}
                     onChange={(e) => setLearningOutcomes(e.target.value)}
                     placeholder="List the learning outcomes..."
                     rows={5}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Topics</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Topics</label>
                   <textarea
                     value={topics}
                     onChange={(e) => setTopics(e.target.value)}
                     placeholder="List the course topics and outline..."
                     rows={5}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </>
             ) : (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                   <input
                     type="text"
                     value={courseName}
                     onChange={(e) => setCourseName(e.target.value)}
                     placeholder="e.g. Data Analytics with Python"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Topics and Outline</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Topics and Outline</label>
                   <textarea
                     value={keyTopics}
                     onChange={(e) => setKeyTopics(e.target.value)}
                     placeholder="List the course topics and outline..."
                     rows={5}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Highlights</label>
+                  <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Highlights</label>
                   <textarea
                     value={courseHighlights}
                     onChange={(e) => setCourseHighlights(e.target.value)}
                     placeholder="Key features, benefits, or selling points..."
                     rows={4}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </>
             )}
 
             {error && (
-              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+              <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
                 {error}
               </div>
             )}
@@ -283,22 +283,22 @@ const SeoGeneratorView: React.FC = () => {
           {loading && (
             <Card className="p-8 text-center">
               <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-              <p className="text-sm text-gray-500 dark:text-gray-400">Generating SEO metadata with Claude AI...</p>
+              <p className="text-sm text-muted">Generating SEO metadata with Claude AI...</p>
             </Card>
           )}
 
           {sections.length > 0 && (
             <>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Generated Results</h3>
+                <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">Generated Results</h3>
                 <div className="flex items-center gap-2">
-                  <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
+                  <div className="flex rounded-md overflow-hidden border border-strong">
                     <button
                       onClick={() => setViewMode('rendered')}
                       className={`px-2.5 py-1 text-xs font-medium transition-colors ${
                         viewMode === 'rendered'
                           ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          : 'bg-surface text-on-surface-secondary hover:bg-surface-hover'
                       }`}
                     >
                       Rendered
@@ -308,7 +308,7 @@ const SeoGeneratorView: React.FC = () => {
                       className={`px-2.5 py-1 text-xs font-medium transition-colors ${
                         viewMode === 'html'
                           ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          : 'bg-surface text-on-surface-secondary hover:bg-surface-hover'
                       }`}
                     >
                       HTML
@@ -320,8 +320,8 @@ const SeoGeneratorView: React.FC = () => {
                   aria-label={copiedAll ? 'Copied' : 'Copy all'}
                   className={`p-1.5 rounded-md transition-colors ${
                     copiedAll
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                      ? 'text-success'
+                      : 'text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20'
                   }`}
                 >
                   {copiedAll ? CheckIcon : CopyIcon}
@@ -331,22 +331,22 @@ const SeoGeneratorView: React.FC = () => {
               {sections.map((section, i) => (
                 <Card key={i} className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-bold text-gray-900 dark:text-white">{section.label}</h4>
+                    <h4 className="text-sm font-bold text-on-surface">{section.label}</h4>
                     <button
                       onClick={() => handleCopySection(section, i)}
                       title={copiedIdx === i ? 'Copied' : 'Copy'}
                       aria-label={copiedIdx === i ? 'Copied' : 'Copy'}
                       className={`p-1.5 rounded-md transition-colors ${
                         copiedIdx === i
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                          ? 'text-success'
+                          : 'text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20'
                       }`}
                     >
                       {copiedIdx === i ? CheckIcon : CopyIcon}
                     </button>
                   </div>
                   {viewMode === 'html' ? (
-                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <pre className="text-sm text-on-surface-secondary whitespace-pre-wrap font-mono leading-relaxed bg-surface-elevated rounded-lg p-3">
                       {sectionToHtml(section.content)}
                     </pre>
                   ) : (() => {
@@ -354,7 +354,7 @@ const SeoGeneratorView: React.FC = () => {
                     const isBulletList = lines.length > 1 && lines.every(l => /^[-*]\s+/.test(l));
                     if (isBulletList) {
                       return (
-                        <ul className="list-disc pl-6 text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1">
+                        <ul className="list-disc pl-6 text-sm text-on-surface-secondary leading-relaxed bg-surface-elevated rounded-lg p-3 space-y-1">
                           {lines.map((l, j) => (
                             <li key={j}>{l.replace(/^[-*]\s+/, '')}</li>
                           ))}
@@ -362,7 +362,7 @@ const SeoGeneratorView: React.FC = () => {
                       );
                     }
                     return (
-                      <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                      <pre className="text-sm text-on-surface-secondary whitespace-pre-wrap font-sans leading-relaxed bg-surface-elevated rounded-lg p-3">
                         {section.content}
                       </pre>
                     );
@@ -375,10 +375,10 @@ const SeoGeneratorView: React.FC = () => {
           {!loading && sections.length === 0 && (
             <Card className="p-8 text-center">
               <div className="text-4xl mb-3">{seoType === 'wsq' ? '🏛️' : '🌐'}</div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+              <h3 className="text-lg font-bold text-on-surface mb-1">
                 {seoType === 'wsq' ? 'SEO for WSQ Course' : 'SEO for Non-WSQ Course'}
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+              <p className="text-sm text-muted max-w-md mx-auto">
                 {seoType === 'wsq'
                   ? 'Fill in the WSQ course details and generate SEO-optimized metadata including meta title with WSQ prefix, keywords, description with funding info, course description, and job roles.'
                   : 'Fill in the course details and generate SEO metadata with region-specific meta titles (Singapore, Malaysia, International), keywords, description, course description, and job roles.'}

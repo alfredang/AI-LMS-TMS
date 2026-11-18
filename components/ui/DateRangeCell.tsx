@@ -207,19 +207,19 @@ const DateRangeCell: React.FC<{
     <div
       ref={popupRef}
       style={{ top: pos.top, left: pos.left }}
-      className="fixed z-[9999] rounded-xl shadow-2xl p-4 w-72 select-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600"
+      className="fixed z-[9999] rounded-xl shadow-2xl p-4 w-72 select-none bg-surface border border-default"
     >
       {/* Month nav */}
       <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">‹</button>
-        <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{CAL_MONTHS[viewMonth]} {viewYear}</span>
-        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">›</button>
+        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-on-surface-secondary text-lg font-bold leading-none">‹</button>
+        <span className="text-sm font-bold text-on-surface">{CAL_MONTHS[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-on-surface-secondary text-lg font-bold leading-none">›</button>
       </div>
 
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 mb-1">
         {CAL_DAYS.map(d => (
-          <div key={d} className="text-center text-[10px] font-semibold text-gray-400 dark:text-gray-500 py-1">{d}</div>
+          <div key={d} className="text-center text-[10px] font-semibold text-muted py-1">{d}</div>
         ))}
       </div>
 
@@ -241,7 +241,7 @@ const DateRangeCell: React.FC<{
                     ? 'ring-2 ring-primary text-primary font-bold'
                     : isSel
                     ? 'bg-primary text-white font-bold'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200',
+                    : 'hover:bg-surface-hover text-on-surface-secondary',
                 ].join(' ')}
               >
                 {day}
@@ -263,7 +263,7 @@ const DateRangeCell: React.FC<{
                   ? 'bg-primary text-white font-bold rounded-full'
                   : inRng
                   ? 'bg-primary/15 text-primary rounded-none'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full',
+                  : 'hover:bg-surface-hover text-on-surface-secondary rounded-full',
               ].join(' ')}
             >
               {day}
@@ -284,14 +284,14 @@ const DateRangeCell: React.FC<{
                   'flex-1 text-[11px] py-1 rounded-md font-medium transition-colors',
                   multiMode === m
                     ? 'bg-primary text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600',
+                    : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover',
                 ].join(' ')}
               >
                 {m === 'toggle' ? 'Pick days' : 'Add range'}
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-2 italic">
+          <p className="text-[10px] text-muted text-center mt-2 italic">
             {multiMode === 'range'
               ? (rangeAnchor ? 'Now click the end date to add the whole span' : 'Click the start date of the range')
               : 'Click days to add or remove them'}
@@ -299,7 +299,7 @@ const DateRangeCell: React.FC<{
           <div className="flex items-center justify-between mt-2">
             <button
               onClick={() => { onChange(''); setRangeAnchor(''); }}
-              className="text-[11px] text-gray-400 hover:text-red-400 transition-colors"
+              className="text-[11px] text-muted hover:text-red-400 transition-colors"
             >
               Clear all
             </button>
@@ -315,7 +315,7 @@ const DateRangeCell: React.FC<{
         <>
           {/* Hint */}
           {!singleDate && (
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-3 italic">
+            <p className="text-[10px] text-muted text-center mt-3 italic">
               {phase === 'start' ? 'Select start date' : 'Select end date — or same date for single day'}
             </p>
           )}
@@ -324,7 +324,7 @@ const DateRangeCell: React.FC<{
           {rawStart && (
             <button
               onClick={() => { onChange(''); setOpen(false); }}
-              className="mt-2 w-full text-[11px] text-gray-400 hover:text-red-400 transition-colors text-center"
+              className="mt-2 w-full text-[11px] text-muted hover:text-red-400 transition-colors text-center"
             >
               Clear
             </button>

@@ -161,7 +161,7 @@ export function useCourseFeeCheck(actionLabel = 'Continue anyway') {
       onConfirm={() => close(true)}
       onCancel={() => close(false)}
     >
-      <ul className="space-y-3 text-sm text-gray-700 dark:text-gray-200">
+      <ul className="space-y-3 text-sm text-on-surface-secondary">
         {issues.map(issue => {
           const key = keyOf(issue);
           const s = rowState[key];
@@ -171,13 +171,13 @@ export function useCourseFeeCheck(actionLabel = 'Continue anyway') {
               className={`rounded-md border px-3 py-2 ${s?.fixed ? 'border-emerald-300 dark:border-emerald-700' : 'border-orange-200 dark:border-orange-800/60'}`}
             >
               <div className="font-semibold">{issue.courseTitle || issue.courseReferenceNumber}</div>
-              {issue.courseReferenceNumber && <div className="text-xs text-gray-500 dark:text-gray-400">{issue.courseReferenceNumber}</div>}
+              {issue.courseReferenceNumber && <div className="text-xs text-muted">{issue.courseReferenceNumber}</div>}
               <div className="mt-1">{describe(issue)}</div>
 
               {!s?.fixed && issue.problem !== 'no_qbo_product' && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-1">
-                    <span className="text-xs text-gray-600 dark:text-gray-300">Correct fee (before GST) $</span>
+                    <span className="text-xs text-on-surface-secondary">Correct fee (before GST) $</span>
                     <input
                       type="number"
                       min="0"
@@ -185,11 +185,11 @@ export function useCourseFeeCheck(actionLabel = 'Continue anyway') {
                       inputMode="decimal"
                       value={s?.input ?? ''}
                       onChange={e => patchRow(key, { input: e.target.value, result: undefined })}
-                      className="w-28 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-sm"
+                      className="w-28 rounded border border-strong bg-surface px-2 py-1 text-sm"
                       disabled={s?.saving}
                     />
                   </label>
-                  <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                  <label className="flex items-center gap-1 text-xs text-on-surface-secondary">
                     <input
                       type="checkbox"
                       checked={!!s?.updateQuickBooks}
@@ -209,7 +209,7 @@ export function useCourseFeeCheck(actionLabel = 'Continue anyway') {
                 </div>
               )}
               {s?.result && (
-                <div className={`mt-1 text-xs ${s.result.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>
+                <div className={`mt-1 text-xs ${s.result.ok ? 'text-success' : 'text-danger'}`}>
                   {s.result.text}
                 </div>
               )}
@@ -218,7 +218,7 @@ export function useCourseFeeCheck(actionLabel = 'Continue anyway') {
         })}
       </ul>
       {!allFixed && (
-        <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">
+        <p className="mt-3 text-sm text-on-surface-secondary">
           Check the fee on SSG, enter it and save — the course then uses it for every future enrolment and invoice.
           You can also continue without fixing it: enrolment is not affected, but the invoice for that course will not
           generate until the fees agree.

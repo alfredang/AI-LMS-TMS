@@ -9,8 +9,8 @@ import Head from 'next/head';
 interface CourseInfo { title: string; courseRunId: string; startDate: string | null; endDate: string | null }
 
 const inputCls = (err?: string) =>
-  `w-full px-3 py-2.5 rounded-lg border text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-    err ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+  `w-full px-3 py-2.5 rounded-lg border text-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+    err ? 'border-red-500' : 'border-strong'
   }`;
 
 const fmtDay = (ymd: string | null) => {
@@ -69,40 +69,40 @@ export default function PracticeExamSelfRegisterPage() {
 
   let body: React.ReactNode;
   if (loadError) {
-    body = <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>;
+    body = <p className="text-sm text-danger">{loadError}</p>;
   } else if (!course) {
-    body = <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
+    body = <p className="text-sm text-muted">Loading…</p>;
   } else if (!available) {
-    body = <p className="text-sm text-gray-700 dark:text-gray-300">This class is not open for practice exam registration. Please ask your trainer.</p>;
+    body = <p className="text-sm text-on-surface-secondary">This class is not open for practice exam registration. Please ask your trainer.</p>;
   } else if (done) {
     body = (
-      <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 space-y-2">
-        <p className="font-semibold text-green-800 dark:text-green-300">You are registered, {name.trim()}.</p>
+      <div className="rounded-lg bg-success-bg border border-green-200 dark:border-green-800 p-4 space-y-2">
+        <p className="font-semibold text-success">You are registered, {name.trim()}.</p>
         <p className="text-sm text-green-900 dark:text-green-200">
           {done.emailSent
             ? <>We have emailed the practice exam link to <b>{email.trim().toLowerCase()}</b>. Open it and sign in with the one-time code sent to the same inbox, then start practising.</>
             : <>You were already registered for this practice exam with <b>{email.trim().toLowerCase()}</b>. Use the link in the email you received earlier, and sign in with the one-time code sent to that inbox.</>}
         </p>
-        <p className="text-xs text-green-800 dark:text-green-300">No email after a few minutes? Check your spam folder, or ask your trainer.</p>
+        <p className="text-xs text-success">No email after a few minutes? Check your spam folder, or ask your trainer.</p>
       </div>
     );
   } else {
     body = (
       <form onSubmit={submit} className="space-y-4" noValidate>
         <div>
-          <label htmlFor="pe-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full name</label>
+          <label htmlFor="pe-name" className="block text-sm font-medium text-on-surface-secondary mb-1">Full name</label>
           <input id="pe-name" type="text" autoComplete="name" value={name} onChange={e => setName(e.target.value)}
             aria-invalid={!!fieldErrors.name} aria-describedby={fieldErrors.name ? 'pe-name-err' : undefined} className={inputCls(fieldErrors.name)} />
-          {fieldErrors.name && <p id="pe-name-err" className="text-xs text-red-500 mt-1">{fieldErrors.name}</p>}
+          {fieldErrors.name && <p id="pe-name-err" className="text-xs text-danger mt-1">{fieldErrors.name}</p>}
         </div>
         <div>
-          <label htmlFor="pe-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+          <label htmlFor="pe-email" className="block text-sm font-medium text-on-surface-secondary mb-1">Email</label>
           <input id="pe-email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" value={email} onChange={e => setEmail(e.target.value)}
             aria-invalid={!!fieldErrors.email} aria-describedby={fieldErrors.email ? 'pe-email-err' : undefined} className={inputCls(fieldErrors.email)} />
-          {fieldErrors.email && <p id="pe-email-err" className="text-xs text-red-500 mt-1">{fieldErrors.email}</p>}
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use an email you can open now: the exam link and your sign-in code are sent there.</p>
+          {fieldErrors.email && <p id="pe-email-err" className="text-xs text-danger mt-1">{fieldErrors.email}</p>}
+          <p className="text-xs text-muted mt-1">Use an email you can open now: the exam link and your sign-in code are sent there.</p>
         </div>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         <button type="submit" disabled={busy || !name.trim() || !email.trim()}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg disabled:opacity-50">
           {busy ? 'Registering…' : 'Register for the practice exam'}
@@ -117,22 +117,22 @@ export default function PracticeExamSelfRegisterPage() {
         <title>Practice Exam Registration</title>
         <meta name="robots" content="noindex" />
       </Head>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4">
-        <div className="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-xl shadow p-6 space-y-5">
+      <div className="min-h-screen bg-surface-elevated py-6 px-4">
+        <div className="max-w-md mx-auto bg-surface rounded-xl shadow p-6 space-y-5">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Practice Exam Registration</h1>
+            <h1 className="text-xl font-bold text-on-surface">Practice Exam Registration</h1>
             {course && (
-              <dl className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5">
-                <dt className="text-gray-500 dark:text-gray-400">Practice exam</dt>
-                <dd className="font-medium text-gray-900 dark:text-white">{examTitle || '—'}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Course</dt>
-                <dd className="text-gray-700 dark:text-gray-200">{course.title}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Course run</dt>
-                <dd className="text-gray-700 dark:text-gray-200 font-mono">{course.courseRunId}</dd>
+              <dl className="mt-3 rounded-lg border border-default bg-surface-elevated px-4 py-3 text-sm grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5">
+                <dt className="text-muted">Practice exam</dt>
+                <dd className="font-medium text-on-surface">{examTitle || '—'}</dd>
+                <dt className="text-muted">Course</dt>
+                <dd className="text-on-surface-secondary">{course.title}</dd>
+                <dt className="text-muted">Course run</dt>
+                <dd className="text-on-surface-secondary font-mono">{course.courseRunId}</dd>
                 {course.startDate && (
                   <>
-                    <dt className="text-gray-500 dark:text-gray-400">Class dates</dt>
-                    <dd className="text-gray-700 dark:text-gray-200">
+                    <dt className="text-muted">Class dates</dt>
+                    <dd className="text-on-surface-secondary">
                       {fmtDay(course.startDate)}{course.endDate && course.endDate !== course.startDate ? ` to ${fmtDay(course.endDate)}` : ''}
                     </dd>
                   </>

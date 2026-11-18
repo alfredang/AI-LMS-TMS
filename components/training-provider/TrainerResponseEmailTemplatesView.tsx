@@ -125,7 +125,7 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">Trainer Response Email Templates</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-muted mt-1">
           Configure the follow-up emails sent when a trainer accepts or declines an invitation.
         </p>
       </div>
@@ -136,8 +136,8 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
           onClick={() => setActiveTab('accept')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeTab === 'accept'
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              ? 'bg-green-700 text-white'
+              : 'bg-gray-200 text-on-surface-secondary dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
           Accept Email
@@ -147,7 +147,7 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeTab === 'decline'
               ? 'bg-red-600 text-white'
-              : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              : 'bg-gray-200 text-on-surface-secondary dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
           Decline Email
@@ -156,17 +156,17 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
 
       {/* Save Message */}
       {saveMessage && (
-        <div className={`px-4 py-2 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+        <div className={`px-4 py-2 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-success-bg border border-green-200 text-success dark:border-green-700' : 'bg-danger-bg border border-red-200 text-danger dark:border-red-700'}`}>
           {saveMessage.text}
         </div>
       )}
 
       {/* Available Variables */}
       <Card className="p-4">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Available Variables</p>
+        <p className="text-sm font-medium text-on-surface-secondary mb-2">Available Variables</p>
         <div className="flex flex-wrap gap-2">
           {VARIABLES.map(v => (
-            <span key={v.key} className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300" title={v.desc}>
+            <span key={v.key} className="px-2 py-1 text-xs font-mono bg-surface-elevated rounded text-on-surface-secondary" title={v.desc}>
               {`{${v.key}}`}
             </span>
           ))}
@@ -189,25 +189,25 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Subject</label>
             <input
               type="text"
               value={currentSubject}
               onChange={(e) => setCurrentSubject(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="w-full px-3 py-2 border border-strong rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Body</label>
             <textarea
               value={currentBody}
               onChange={(e) => setCurrentBody(e.target.value)}
               rows={14}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
+              className="w-full px-3 py-2 border border-strong rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
               CC List <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <textarea
@@ -215,9 +215,9 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
               onChange={(e) => setCurrentCc(e.target.value)}
               rows={2}
               placeholder="ops@example.com, finance@example.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
+              className="w-full px-3 py-2 border border-strong rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-muted">
               Comma- or newline-separated. These addresses are CC'd whenever the {activeTab === 'accept' ? 'accept' : 'decline'} acknowledgement email is sent. Invalid entries are silently dropped.
             </p>
           </div>
@@ -227,9 +227,9 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
       {/* Preview */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold dark:text-white mb-4">Preview</h3>
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <p className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Subject: {previewSubject}</p>
-          <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+        <div className="bg-surface border border-default rounded-lg p-6">
+          <p className="text-sm font-bold text-on-surface mb-4">Subject: {previewSubject}</p>
+          <div className="text-sm text-on-surface-secondary whitespace-pre-wrap leading-relaxed">
             {previewBody}
           </div>
         </div>

@@ -65,30 +65,30 @@ const CwGenerateBrochure: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">Generate Brochure</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-muted mt-1">
           Generate a WSQ course brochure PDF by scraping a course URL.
         </p>
       </div>
 
       <Card className="p-5 space-y-4">
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Brochure Source</h3>
+        <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">Brochure Source</h3>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course URL</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course URL</label>
           <input
             type="text"
             value={cw.courseUrl}
             onChange={e => cw.setCourseUrl(e.target.value)}
             placeholder="https://www.tertiarycourses.com.sg/course-page.html"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-muted mt-1">
             Required for PDF Brochure — the page is scraped for title, outcomes, topics, fees, and TSC info.
           </p>
         </div>
 
         {error && (
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+          <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
             {error}
           </div>
         )}
@@ -101,7 +101,7 @@ const CwGenerateBrochure: React.FC = () => {
       {pdfLoading && (
         <Card className="p-8 text-center">
           <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Generating Brochure from the URL...</p>
+          <p className="text-sm text-muted">Generating Brochure from the URL...</p>
         </Card>
       )}
 
@@ -109,8 +109,8 @@ const CwGenerateBrochure: React.FC = () => {
         <Card className="p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-gray-900 dark:text-white">Brochure PDF Ready</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <h4 className="text-sm font-bold text-on-surface">Brochure PDF Ready</h4>
+              <p className="text-xs text-muted mt-0.5">
                 {pdfInfo.courseTitle} {pdfInfo.tgsRef ? `· ${pdfInfo.tgsRef}` : ''}
               </p>
             </div>
@@ -118,7 +118,7 @@ const CwGenerateBrochure: React.FC = () => {
           </div>
 
           {pdfInfo.courseData && (
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-600 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-on-surface-secondary pt-2 border-t border-default">
               <div><span className="font-semibold">TSC Code:</span> {pdfInfo.courseData.tsc_code || 'N/A'}</div>
               <div><span className="font-semibold">Framework:</span> {pdfInfo.courseData.tsc_framework || 'N/A'}</div>
               <div><span className="font-semibold">Duration:</span> {pdfInfo.courseData.duration_hrs}hrs ({pdfInfo.courseData.session_days} days)</div>
@@ -133,8 +133,8 @@ const CwGenerateBrochure: React.FC = () => {
       {!pdfLoading && !pdfInfo && (
         <Card className="p-8 text-center">
           <div className="text-4xl mb-3">📰</div>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Brochure Generator</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          <h3 className="text-lg font-bold text-on-surface mb-1">Brochure Generator</h3>
+          <p className="text-sm text-muted max-w-md mx-auto">
             Paste a course URL and click <strong>Generate Brochure PDF</strong> to scrape the page and render a WSQ-standard brochure.
           </p>
         </Card>

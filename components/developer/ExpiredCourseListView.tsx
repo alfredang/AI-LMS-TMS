@@ -46,10 +46,10 @@ const classifyRenewStatus = (value?: string | null): RenewClass => {
 };
 
 const RENEW_BADGE_CLASSES: Record<RenewClass, string> = {
-  Approved: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  Waiting: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  Rejected: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  'Not Set': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  Approved: 'bg-success-bg text-success',
+  Waiting: 'bg-warning-bg text-warning',
+  Rejected: 'bg-danger-bg text-danger',
+  'Not Set': 'bg-surface-elevated text-on-surface-secondary',
 };
 
 type RenewFilter = 'All' | RenewClass;
@@ -89,12 +89,12 @@ const ExpiredCourseListView: React.FC = () => {
   );
 
   if (loading || featureEnabled === null) {
-    return <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">Loading courses…</div>;
+    return <div className="px-6 py-8 text-center text-muted">Loading courses…</div>;
   }
 
   if (error) {
     return (
-      <div className="px-6 py-8 text-center text-red-600 dark:text-red-400">
+      <div className="px-6 py-8 text-center text-danger">
         Could not load courses: {String(error)}
       </div>
     );
@@ -106,28 +106,28 @@ const ExpiredCourseListView: React.FC = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
-          <p className="text-4xl font-bold text-red-600 dark:text-red-400">{expiredCourses.length}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Expired Courses</p>
+          <p className="text-4xl font-bold text-danger">{expiredCourses.length}</p>
+          <p className="text-on-surface-secondary mt-1">Expired Courses</p>
         </Card>
         <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
-          <p className="text-4xl font-bold text-green-600 dark:text-green-400">{renewedCount}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Renewed</p>
+          <p className="text-4xl font-bold text-success">{renewedCount}</p>
+          <p className="text-on-surface-secondary mt-1">Renewed</p>
         </Card>
         <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
-          <p className="text-4xl font-bold text-gray-700 dark:text-gray-200">{expiredCourses.length - renewedCount}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Not Renewed</p>
+          <p className="text-4xl font-bold text-on-surface-secondary">{expiredCourses.length - renewedCount}</p>
+          <p className="text-on-surface-secondary mt-1">Not Renewed</p>
         </Card>
       </div>
 
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="px-6 py-4 border-b border-default">
+          <h4 className="text-lg font-semibold text-on-surface">
             Expired Funding Validity
-            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-danger-bg text-danger">
               {visibleCourses.length}
             </span>
           </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-on-surface-secondary">
             Courses whose funding validity end date has already passed, oldest first — including courses re-typed to Non-WSQ when their funding lapsed.
           </p>
 
@@ -137,12 +137,12 @@ const ExpiredCourseListView: React.FC = () => {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search title or course code…"
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-strong bg-surface text-on-surface"
             />
             <select
               value={renewFilter}
               onChange={e => setRenewFilter(e.target.value as RenewFilter)}
-              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              className="px-3 py-2 text-sm rounded-lg border border-strong bg-surface text-on-surface"
             >
               <option value="All">All Renew Statuses</option>
               <option value="Approved">{featureEnabled ? 'Approved' : 'Approved / Renewed'}</option>
@@ -154,7 +154,7 @@ const ExpiredCourseListView: React.FC = () => {
         </div>
 
         {visibleCourses.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="px-6 py-8 text-center text-muted">
             {expiredCourses.length === 0
               ? 'No courses have expired funding validity. 🎉'
               : 'No expired courses match the current filters.'}
@@ -162,8 +162,8 @@ const ExpiredCourseListView: React.FC = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-gray-900/40">
-                <tr className="text-left text-gray-600 dark:text-gray-300">
+              <thead className="bg-surface-elevated">
+                <tr className="text-left text-on-surface-secondary">
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Code</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Expiry Date</th>
@@ -174,12 +174,12 @@ const ExpiredCourseListView: React.FC = () => {
                 {visibleCourses.map(({ course, expiry }) => {
                   const renewClass = classifyRenewStatus(course.renewedStatus);
                   return (
-                    <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
-                      <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.currentCourseCode || course.newCourseCode || course.courseCode || '—'}</td>
+                    <tr key={course.id} className="border-t border-default">
+                      <td className="px-3 py-1.5 font-medium text-on-surface max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{course.currentCourseCode || course.newCourseCode || course.courseCode || '—'}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap">
-                        <span className="font-semibold text-red-600 dark:text-red-400">{formatValidityDate(expiry)}</span>
-                        <span className="ml-2 text-gray-500 dark:text-gray-400">({daysAgo(expiry, today)}d ago)</span>
+                        <span className="font-semibold text-danger">{formatValidityDate(expiry)}</span>
+                        <span className="ml-2 text-muted">({daysAgo(expiry, today)}d ago)</span>
                       </td>
                       <td className="px-3 py-1.5 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${RENEW_BADGE_CLASSES[renewClass]}`}>

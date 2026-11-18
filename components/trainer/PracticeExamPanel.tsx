@@ -180,10 +180,10 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
         : 'flex items-center justify-between px-4 py-3 border-b border-default'}>
         <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2 text-left" aria-expanded={open}>
           {section
-            ? <h3 className="text-xl font-bold text-gray-900 dark:text-white">Practice Exam</h3>
+            ? <h3 className="text-xl font-bold text-on-surface">Practice Exam</h3>
             : <h2 className="text-sm font-semibold text-on-surface">Practice Exam</h2>}
           {data?.examCode && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+            <span className="px-2 py-0.5 text-xs rounded-full bg-info-bg text-primary">
               {data.examCode}
             </span>
           )}
@@ -229,8 +229,8 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
 
       {open && (
         <div className={section ? 'px-6 pb-6 pt-4 space-y-3 border-t' : 'px-4 py-3 space-y-3'}>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          {data?.warning && <p className="text-xs text-amber-600 dark:text-amber-400">{data.warning}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {data?.warning && <p className="text-xs text-warning">{data.warning}</p>}
 
           {data?.isStaff && !section && (
             <div className="flex flex-wrap items-end gap-2 text-xs">
@@ -267,7 +267,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
             </p>
           )}
 
-          {summary && <p className={`text-xs ${summary.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>{summary.text}</p>}
+          {summary && <p className={`text-xs ${summary.ok ? 'text-success' : 'text-danger'}`}>{summary.text}</p>}
 
           {data?.examCode && (
             learners.length === 0 ? (
@@ -296,7 +296,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
                             )}
                             {l.selfRegistered && (
                               <span
-                                className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-warning-bg text-warning"
                                 title="Registered from the Self-Register QR code with an email that is not on this class's list"
                               >
                                 Self-registered
@@ -307,13 +307,13 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
                           <td className="py-1.5 pr-3 text-on-surface-secondary">{fmtDate(l.registeredAt)}</td>
                           <td className="py-1.5 pr-3">
                             {r && !r.ok ? (
-                              <span className="text-red-500" title={r.error}>Failed: {r.error}</span>
+                              <span className="text-danger" title={r.error}>Failed: {r.error}</span>
                             ) : l.registeredAt ? (
-                              <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                              <span className="px-2 py-0.5 rounded-full bg-success-bg text-success">
                                 {l.signedIn ? 'Registered · signed in' : 'Registered'}
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Not registered</span>
+                              <span className="px-2 py-0.5 rounded-full bg-warning-bg text-warning">Not registered</span>
                             )}
                           </td>
                           <td className="py-1.5 text-right">
@@ -365,7 +365,7 @@ export function PracticeExamPanel({ courseRunUuid, variant = 'compact', id }: {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qrSrc(selfRegisterUrl, 1000)} alt="Practice Exam self-register QR code" className="block" style={{ width: 'min(62vh, 80vw)', height: 'min(62vh, 80vw)' }} />
           </div>
-          <div className="text-center text-sm text-gray-300" onClick={e => e.stopPropagation()}>
+          <div className="text-center text-sm text-muted" onClick={e => e.stopPropagation()}>
             <p className="break-all">
               {selfRegisterUrl}
               <button type="button" onClick={copyLink} className="ml-3 px-2 py-0.5 text-xs font-medium rounded border border-gray-500 text-gray-200 hover:bg-white/10">

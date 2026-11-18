@@ -19,13 +19,13 @@ const getStatusColor = (status: string) => {
     case 'Successful':
     case 'Full Payment':
     case 'Confirmed':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+      return 'bg-success-bg text-success';
     case 'Processing':
     case 'Reschedule':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+      return 'bg-info-bg text-info';
     case 'Pending':
     case 'In Progress':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+      return 'bg-warning-bg text-warning';
     case 'Overdue':
     case 'Rejected':
     case 'Unpaid':
@@ -33,9 +33,9 @@ const getStatusColor = (status: string) => {
     case 'Fail':
     case 'Failed':
     case 'Cancelled':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+      return 'bg-danger-bg text-danger';
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+      return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
   }
 };
 
@@ -299,7 +299,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading class details...</p>
+          <p className="mt-4 text-on-surface-secondary">Loading class details...</p>
         </div>
       </div>
     );
@@ -308,9 +308,9 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
   if (error || !classDetail) {
     return (
       <div className="text-center py-12">
-        <Icon name={IconName.InfoCircle} className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Class Details</h3>
-        <p className="text-gray-500 mb-6">
+        <Icon name={IconName.InfoCircle} className="w-16 h-16 text-muted mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-on-surface mb-2">Error Loading Class Details</h3>
+        <p className="text-muted mb-6">
           {error || 'The requested class details could not be found.'}
         </p>
         <Button variant="primary" onClick={() => setAdminPage(AdminPage.Dashboard)}>
@@ -369,13 +369,13 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
           <div>
             <p className="text-sm text-subtle">Class Type</p>
             <p className="font-semibold">
-              <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classDetail.operationalSummary.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classDetail.operationalSummary.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classDetail.operationalSummary.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classDetail.operationalSummary.classType || 'Physical'}</span>
+              <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classDetail.operationalSummary.classType || 'Physical') === 'Virtual' ? 'bg-info-bg text-info' : (classDetail.operationalSummary.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classDetail.operationalSummary.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-surface-elevated text-on-surface-secondary'}`}>{classDetail.operationalSummary.classType || 'Physical'}</span>
             </p>
           </div>
           {classDetail.operationalSummary.virtualMeetingLink && (
             <div>
               <p className="text-sm text-subtle">Google Meet</p>
-              <a href={classDetail.operationalSummary.virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm font-medium">{classDetail.operationalSummary.virtualMeetingLink}</a>
+              <a href={classDetail.operationalSummary.virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm font-medium">{classDetail.operationalSummary.virtualMeetingLink}</a>
             </div>
           )}
           <div>
@@ -409,61 +409,61 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       <h3 className="text-2xl font-bold mb-4">Enrolled Learners</h3>
       <Card className="p-0 overflow-x-auto">
         {classDetail.enrolledLearners && classDetail.enrolledLearners.length > 0 ? (
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+          <table className="min-w-full divide-y divide-default">
+            <thead className="bg-surface-elevated">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Learner
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Company
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Sponsorship
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Nationality
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Age Group
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Payment Details
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Assessment
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Grant ID
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Claim ID
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-surface divide-y divide-default">
               {classDetail.enrolledLearners.map((learner, index) => {
                 const ageGroup = getAgeGroup(learner.dob);
                 return (
                   <tr key={index}>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <p className="font-medium text-gray-900 dark:text-white">{learner.learnerName}</p>
-                      <p className="text-gray-500 dark:text-gray-400">{learner.learnerEmail}</p>
-                      <p className="text-gray-500 dark:text-gray-400">{learner.learnerTel}</p>
+                      <p className="font-medium text-on-surface">{learner.learnerName}</p>
+                      <p className="text-muted">{learner.learnerEmail}</p>
+                      <p className="text-muted">{learner.learnerTel}</p>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-muted">
                       {learner.company || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-muted">
                       {learner.sponsorship || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-muted">
                       {learner.nationality || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-muted">
                       {ageGroup}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -476,10 +476,10 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                         {learner.assessment || 'Pending'}
                       </span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-muted font-mono">
                       {learner.grantId || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-muted font-mono">
                       {learner.claimId || 'N/A'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -496,7 +496,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                             setConfirmRemove({ name: learner.learnerName, email: learner.learnerEmail });
                           }}
                           disabled={removingEmail === learner.learnerEmail}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          className="text-danger hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
                           {removingEmail === learner.learnerEmail ? (
                             <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-500 mr-1"></div>Removing...</>
@@ -520,8 +520,8 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       {removeMessage && (
         <div className={`mt-4 p-3 rounded-md text-sm flex items-center justify-between ${
           removeMessage.type === 'success'
-            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300'
-            : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'
+            ? 'bg-success-bg border border-green-200 dark:border-green-700 text-success'
+            : 'bg-danger-bg border border-red-200 dark:border-red-700 text-danger'
         }`}>
           <span>{removeMessage.text}</span>
           <button onClick={() => setRemoveMessage(null)} className="ml-3 text-current opacity-60 hover:opacity-100">
@@ -533,12 +533,12 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       {/* Confirmation Modal */}
       {confirmRemove && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setConfirmRemove(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Remove Learner</h4>
-            <p className="text-gray-600 dark:text-gray-300 text-sm mb-1">
+          <div className="bg-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h4 className="text-lg font-semibold text-on-surface mb-2">Remove Learner</h4>
+            <p className="text-on-surface-secondary text-sm mb-1">
               Are you sure you want to remove <strong>{confirmRemove.name}</strong> from this class?
             </p>
-            <p className="text-gray-500 dark:text-gray-400 text-xs mb-6">
+            <p className="text-muted text-xs mb-6">
               This will set their enrolment status to "Admin Removed". Their account will not be deleted.
             </p>
             <div className="flex justify-end gap-3">
@@ -559,12 +559,12 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       {/* Submission Conflict Modal — learner has assessment submissions */}
       {submissionConflict && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSubmissionConflict(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <h4 className="text-lg font-semibold text-yellow-700 dark:text-yellow-400 mb-2">⚠️ Assessment Submissions Found</h4>
-            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+          <div className="bg-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h4 className="text-lg font-semibold text-warning mb-2">⚠️ Assessment Submissions Found</h4>
+            <p className="text-on-surface-secondary text-sm mb-4">
               {submissionConflict.detail}
             </p>
-            <p className="text-gray-500 dark:text-gray-400 text-xs mb-6">
+            <p className="text-muted text-xs mb-6">
               You can force-remove the learner, but their assessment submissions will remain orphaned.
             </p>
             <div className="flex justify-end gap-3">
@@ -619,12 +619,12 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
         {showEnrolmentSearch && (
           <Card className="p-6">
             {enrolmentError && (
-              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md">
+              <div className="mb-4 p-4 bg-danger-bg border border-red-200 dark:border-red-700 rounded-md">
                 <div className="flex">
                   <Icon name={IconName.InfoCircle} className="w-5 h-5 text-red-400 mr-2 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h4>
-                    <p className="text-sm text-red-700 dark:text-red-400 mt-1">{enrolmentError}</p>
+                    <h4 className="text-sm font-medium text-danger">Error</h4>
+                    <p className="text-sm text-danger mt-1">{enrolmentError}</p>
                   </div>
                 </div>
               </div>
@@ -635,9 +635,9 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 {/* Search Info */}
                 <div>
                   <h4 className="text-lg font-semibold mb-3">Search Status</h4>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                  <div className="bg-surface-elevated p-4 rounded-md">
                     <div className="text-sm">
-                      <span className="font-medium text-gray-600 dark:text-gray-300">Course Run ID:</span>
+                      <span className="font-medium text-on-surface-secondary">Course Run ID:</span>
                       <p className="font-mono mt-1">{classDetail?.operationalSummary?.courseRunId || 'N/A'}</p>
                     </div>
                   </div>
@@ -646,8 +646,8 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 {/* Response Data */}
                 <div>
                   <h4 className="text-lg font-semibold mb-3">Search Results Raw Data</h4>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md max-h-96 overflow-auto">
-                    <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                  <div className="bg-surface-elevated p-4 rounded-md max-h-96 overflow-auto">
+                    <pre className="text-sm text-on-surface whitespace-pre-wrap">
                       {JSON.stringify(enrolmentData, null, 2)}
                     </pre>
                   </div>
@@ -656,10 +656,10 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 {/* Summary */}
                 <div>
                   <h4 className="text-lg font-semibold mb-3">Summary</h4>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-100 dark:border-blue-800">
+                  <div className="bg-info-bg p-4 rounded-md border border-blue-100 dark:border-blue-800">
                     <div className="flex items-center">
                       <Icon name={IconName.InfoCircle} className="w-5 h-5 text-blue-400 dark:text-blue-300 mr-2" />
-                      <span className="text-blue-800 dark:text-blue-300">
+                      <span className="text-info">
                         Found {enrolmentData.length} enrolment record(s)
                       </span>
                     </div>
@@ -670,8 +670,8 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
 
             {!enrolmentLoading && !enrolmentError && !enrolmentData && (
               <div className="text-center py-8">
-                <Icon name={IconName.Eye} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400">Click "Search Enrolment Records" to fetch enrolment data for this course run.</p>
+                <Icon name={IconName.Eye} className="w-12 h-12 text-muted mx-auto mb-4" />
+                <p className="text-muted">Click "Search Enrolment Records" to fetch enrolment data for this course run.</p>
               </div>
             )}
           </Card>
