@@ -36,12 +36,12 @@ const OPTIONS: { value: ThemePreference; label: string; icon: React.ReactNode }[
 const HINT: Record<ThemePreference, string> = {
     light: 'Light theme on this device',
     dark: 'Dark theme on this device',
-    system: 'Follows your device setting',
+    system: 'Follows your device setting (default)',
 };
 
-/** Appearance row for every profile page: Light / Dark / System. Saved per browser. */
+/** Appearance row for every profile page: Light / Dark / System (the default). Saved per browser. */
 const ThemePreferencePicker: React.FC = () => {
-    const [pref, setPref] = useState<ThemePreference>('light');
+    const [pref, setPref] = useState<ThemePreference>('system');
 
     // Read after mount so the server and first client render agree, then
     // follow the header button when it changes the preference.

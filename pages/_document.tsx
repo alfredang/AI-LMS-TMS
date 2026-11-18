@@ -1,9 +1,9 @@
 import { Html, Head, Main, NextScript } from 'next/document'
 
-// Applies the saved Light / Dark / System preference before first paint, so a
-// light-theme user never sees a dark flash. Mirrors getThemePreference() /
-// resolveThemePreference() in utils/colorUtils.ts (same key, light by default).
-const THEME_INIT = `(function(){try{var p=localStorage.getItem('trainingProviderTheme');if(p!=='light'&&p!=='dark'&&p!=='system')p='light';var t=p==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;var d=document.documentElement;d.setAttribute('data-theme',t);if(t==='dark')d.classList.add('dark');else d.classList.remove('dark');}catch(e){}})();`
+// Applies the saved Light / Dark / System preference before first paint, so no
+// user sees a wrong-theme flash. Mirrors getThemePreference() /
+// resolveThemePreference() in utils/colorUtils.ts (same key, System by default).
+const THEME_INIT = `(function(){try{localStorage.removeItem('trainingProviderTheme');var p=localStorage.getItem('lmsThemePreference');if(p!=='light'&&p!=='dark'&&p!=='system')p='system';var t=p==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;var d=document.documentElement;d.setAttribute('data-theme',t);if(t==='dark')d.classList.add('dark');else d.classList.remove('dark');}catch(e){}})();`
 
 export default function Document() {
   return (

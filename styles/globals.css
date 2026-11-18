@@ -24,8 +24,8 @@
     --c-surface-elevated: 244 247 253;/* #f4f7fd table heads, inner panels */
     --c-surface-hover: 230 236 248;   /* #e6ecf8 */
     --c-text: 15 29 71;               /* #0f1d47 headings / primary text */
-    --c-text-2: 51 65 105;            /* #334169 body, labels */
-    --c-muted: 90 103 136;            /* #5a6788 hints, meta (5.6:1) */
+    --c-text-2: 30 42 82;             /* #1e2a52 body, labels (ai-mms --t2) */
+    --c-muted: 67 80 127;             /* #43507f hints, meta (ai-mms --t4, 7:1 on page) */
     --c-border: 211 220 238;          /* #d3dcee card / divider */
     --c-border-strong: 132 148 181;   /* #8494b5 inputs (3:1) */
     --c-primary: 47 91 230;           /* #2f5be6 fills (white text 5.6:1) */
@@ -180,7 +180,9 @@
   .icon-btn-round { @apply flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-strong bg-transparent text-on-surface-secondary transition-colors hover:border-primary hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40; }
 
   /* Overlays */
-  .dropdown-panel { @apply rounded-lg border border-default bg-surface shadow-pop; }
+  .dropdown-panel { @apply rounded-xl border border-default bg-surface shadow-pop; }
+  .dropdown-item { @apply flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-primary transition-colors hover:bg-surface-hover; }
+  .avatar { @apply inline-flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-elevated text-xs font-bold text-primary ring-2 ring-primary ring-offset-2 ring-offset-surface; }
   .modal-panel { @apply rounded-2xl border border-default bg-surface shadow-pop; }
 }
 

@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { View, UserRole, AdminPage, TrainerPage, DeveloperPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
-import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getFileUrl } from '@/lib/urlHelpers';
 import AdminSearchPalette from './admin/AdminSearchPalette';
 import FinanceSearchPalette from './finance/FinanceSearchPalette';
 import TrainingProviderSearchPalette from './training-provider/TrainingProviderSearchPalette';
+import UserAvatar from './common/UserAvatar';
 import HeaderThemeToggle from './common/HeaderThemeToggle';
 
 // ── Live SGT clock ───────────────────────────────────────────────────────────
@@ -47,10 +47,10 @@ const SgtClock: React.FC = () => {
       className="hidden sm:flex flex-col items-end leading-tight select-none pl-1"
       title="Current Singapore Time (GMT+8)"
     >
-      <span className="text-[10px] font-mono text-on-surface-secondary whitespace-nowrap">
+      <span className="text-xs text-on-surface whitespace-nowrap">
         {dateStr}
       </span>
-      <span className="text-[10px] font-mono font-semibold text-on-surface whitespace-nowrap">
+      <span className="text-xs font-bold tabular-nums text-on-surface whitespace-nowrap">
         {timeStr}
       </span>
     </div>
@@ -144,8 +144,8 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   ];
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-72 bg-surface rounded-lg shadow-2xl z-50 border border-default overflow-hidden">
-      <div className="p-4 bg-surface-elevated">
+    <div className="dropdown-panel absolute top-full right-0 mt-2 w-60 z-50 overflow-hidden">
+      <div className="p-2">
         {menuItems.map(item => (
           <a
             href="#"
@@ -159,13 +159,12 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               }
               onClose();
             }}
-            className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-surface-hover">
+            className="dropdown-item">
             <Icon name={item.icon} className="w-5 h-5" />
             <span>{item.label}</span>
           </a>
         ))}
-        <div className="border-t border-default my-1"></div>
-        <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-surface-hover rounded-md">
+        <button onClick={logout} className="dropdown-item">
           <Icon name={IconName.Logout} className="w-5 h-5" />
           <span>Logout</span>
         </button>
@@ -453,12 +452,13 @@ const Header: React.FC = () => {
 
             {/* Profile Button (all roles) */}
             <div className="relative" ref={profileRef}>
-              <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-surface-elevated flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
-                {currentUserProfile?.profilePictureUrl ? (
-                  <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Icon name={IconName.User} className="w-5 h-5 sm:w-6 sm:h-6 text-on-surface-secondary" />
-                )}
+              <button
+                onClick={() => setIsProfileOpen(prev => !prev)}
+                aria-label="Open profile menu"
+                aria-expanded={isProfileOpen}
+                className="flex rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                <UserAvatar name={currentUserProfile?.name} imageUrl={currentUserProfile?.profilePictureUrl} className="w-8 h-8 sm:w-10 sm:h-10" />
               </button>
               {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
             </div>

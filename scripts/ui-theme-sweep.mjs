@@ -65,7 +65,7 @@ for (const theme of THEMES) {
         localStorage.setItem('auth_token', token);
         localStorage.setItem('user_data', JSON.stringify({ id: userId, email: 'sweep@localhost', fullName: 'Theme Sweep', role, roles: allRoles }));
       }
-      localStorage.setItem('trainingProviderTheme', theme);
+      localStorage.setItem('lmsThemePreference', theme);
       for (const [k, v] of Object.entries(storage || {})) localStorage.setItem(k, v);
     }, { token: TOKEN, userId: USER_ID, role, theme, storage, allRoles: ALL_ROLES });
     const page = await ctx.newPage();

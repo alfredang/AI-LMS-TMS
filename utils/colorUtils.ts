@@ -7,8 +7,15 @@ export type ThemeMode = 'light' | 'dark';
 /** What the user picked on their profile; 'system' follows the device setting. */
 export type ThemePreference = ThemeMode | 'system';
 
-const THEME_STORAGE_KEY = 'trainingProviderTheme';
+// Only an explicit choice (profile Appearance picker or header sun/moon) is stored here.
+// The older 'trainingProviderTheme' key was also written automatically, so it is not a
+// real choice: it is dropped and everyone starts on System again (19 Nov 2026).
+const THEME_STORAGE_KEY = 'lmsThemePreference';
+const LEGACY_THEME_STORAGE_KEY = 'trainingProviderTheme';
 const COLOR_STORAGE_KEY = 'trainingProviderPrimaryColor';
+/** Every user (all roles) follows the device until they pick Light or Dark on their profile. */
+const DEFAULT_PREFERENCE: ThemePreference = 'system';
+/** Fallback when the device setting cannot be read (server render, no matchMedia). */
 const DEFAULT_THEME: ThemeMode = 'light';
 const DEFAULT_COLOR = '#3b82f6';
 
@@ -73,7 +80,7 @@ export const getCurrentTheme = (): ThemeMode => {
 /**
  * Applies the theme mode to the document
  */
-export const applyTheme = (theme: ThemeMode, persist: boolean = true): void => {
+export const applyTheme = (theme: ThemeMode, persist: boolean = false): void => {
     if (typeof document === 'undefined') return;
 
     // Temporarily disable transitions for instant theme switch
@@ -104,11 +111,12 @@ export const THEME_PREFERENCE_EVENT = 'themepreferencechange';
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
 let systemListener: ((e: MediaQueryListEvent) => void) | null = null;
 
-/** The stored preference ('light' | 'dark' | 'system'); light when nothing is stored. */
+/** The stored preference ('light' | 'dark' | 'system'); System when nothing is stored. */
 export const getThemePreference = (): ThemePreference => {
-    if (typeof window === 'undefined') return DEFAULT_THEME;
+    if (typeof window === 'undefined') return DEFAULT_PREFERENCE;
+    localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : DEFAULT_THEME;
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : DEFAULT_PREFERENCE;
 };
 
 /** The light/dark theme a preference resolves to right now. */
@@ -150,7 +158,7 @@ export const setThemePreference = (pref: ThemePreference): void => {
 export const toggleTheme = (): ThemeMode => {
     const currentTheme = getCurrentTheme();
     const newTheme: ThemeMode = currentTheme === 'dark' ? 'light' : 'dark';
-    applyTheme(newTheme);
+    setThemePreference(newTheme);
     return newTheme;
 };
 
@@ -305,7 +313,7 @@ export class ColorSchemeManager {
      */
     updateTheme(theme: ThemeMode): void {
         this.currentTheme = theme;
-        applyTheme(theme);
+        setThemePreference(theme);
     }
 
     /**
@@ -343,9 +351,10 @@ export class ColorSchemeManager {
      */
     resetToDefault(): void {
         this.updatePrimaryColor(DEFAULT_COLOR);
-        this.updateTheme(DEFAULT_THEME);
         localStorage.removeItem(COLOR_STORAGE_KEY);
         localStorage.removeItem(THEME_STORAGE_KEY);
+        applyPreference(DEFAULT_PREFERENCE);
+        this.currentTheme = resolveThemePreference(DEFAULT_PREFERENCE);
     }
 }
 

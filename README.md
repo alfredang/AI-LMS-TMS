@@ -78,7 +78,8 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 One shared style set serves every role (Admin, Training Provider, Finance, Payroll, Trainer, Developer, Learner):
 
-- **Light theme by default** (matching the ai-mms back office: blue-tinted page, white bordered cards, navy text, solid-blue active menu item), with Dark and System options from the header sun/moon button or Profile. Every text colour passes WCAG AA (4.5:1) in both themes.
+- **System theme by default** for every user and role: the app follows the device's light/dark setting until the user picks **Light** or **Dark** on their Profile (Appearance) or with the header sun/moon button; the choice is saved per browser (`lmsThemePreference`). The light theme matches the ai-mms back office (blue-tinted page, white bordered cards, navy text, solid-blue active menu item). Every text colour passes WCAG AA (4.5:1) in both themes.
+- **Header profile area** in the ai-mms style: profile photo (`components/common/UserAvatar.tsx`, initials when there is no photo; Drive-hosted photos are fetched with the session token via `hooks/useAuthedImageSrc.ts`), a white dropdown with My Profile / Help and Support / Logout, and a readable date and time.
 - **Tokens** (`styles/globals.css`) mapped into Tailwind (`tailwind.config.js`) — pages use semantic classes (`bg-surface`, `text-on-surface`, `text-muted`, `border-default`, `text-primary`, status colours) and shared component classes (`.card`, `.btn-*`, `.input`, `.table`, `.tabs`, `.chip-*`, `.nav-item`), never raw grey/hex colours.
 - **Tenant brand colour** is applied per theme with an automatic contrast adjustment (`utils/colorUtils.ts`).
 - **Checks**: `npm run check:design-tokens` blocks new raw colour classes (runs in lint and build); `scripts/ui-theme-sweep.mjs` screenshots each role in light and dark and counts colour-contrast violations.
