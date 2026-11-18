@@ -570,6 +570,11 @@ const CourseEditor: React.FC = () => {
     const [availableTrainers, setAvailableTrainers] = useState<TrainerOption[]>([]);
     const [trainerSearch, setTrainerSearch] = useState('');
     const [draggedApprovedTrainer, setDraggedApprovedTrainer] = useState<string | null>(null);
+    // Default trainer of this course (course.default_trainer_id): auto-assigned to every new
+    // class and always first in the approved list. Saved immediately, not with "Save Course".
+    const [defaultTrainerName, setDefaultTrainerName] = useState<string>('');
+    const [defaultTrainerBusy, setDefaultTrainerBusy] = useState(false);
+    const [defaultTrainerNote, setDefaultTrainerNote] = useState<{ ok: boolean; text: string } | null>(null);
     const [approvedTrainerDropTarget, setApprovedTrainerDropTarget] = useState<string | null>(null);
 
     // State to track preview URL for cleanup
@@ -685,6 +690,18 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         console.log('📝 CourseEditor: Mode:', courseEditMode, '| isNewCourse:', isNewCourse, '| Course ID:', course.id, '| hasRealId:', hasRealId);
     }, [courseEditMode, isNewCourse, course.id, hasRealId]);
 
+    // Load the course's default trainer (staff only; new courses have none yet).
+    useEffect(() => {
+        if (role !== UserRole.Admin && role !== UserRole.Developer) return;
+        if (isNewCourse || !course.id) return;
+        let cancelled = false;
+        fetch(`/api/course/default-trainer?courseId=${encodeURIComponent(course.id)}`)
+            .then(r => r.json())
+            .then(json => { if (!cancelled && json?.success) setDefaultTrainerName(json.trainer?.name || ''); })
+            .catch(() => { /* leave unset */ });
+        return () => { cancelled = true; };
+    }, [role, isNewCourse, course.id]);
+
     useEffect(() => {
         if (role !== UserRole.Admin && role !== UserRole.Developer) return;
         let cancelled = false;
@@ -795,6 +812,62 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         }
     });
 
+    // The default trainer always leads the approved list.
+    const defaultFirst = (names: string[]) => {
+        const d = defaultTrainerName.toLowerCase();
+        if (!d) return names;
+        const hit = names.find(n => n.toLowerCase() === d);
+        return hit ? [hit, ...names.filter(n => n !== hit)] : names;
+    };
+
+    // Set (or clear) the course's default trainer. Every new class, and the upcoming classes
+    // that have no trainer yet, are assigned to them and confirmed; no invitation is sent.
+    const toggleDefaultTrainer = async (trainerName: string) => {
+        if (!course.id || defaultTrainerBusy) return;
+        const clearing = defaultTrainerName.toLowerCase() === trainerName.toLowerCase();
+        const email = trainerContactByName.get(trainerName)?.email || '';
+        if (!clearing && !email) {
+            setDefaultTrainerNote({ ok: false, text: `${trainerName} has no LMS account email, so cannot be the default trainer.` });
+            return;
+        }
+        setDefaultTrainerBusy(true);
+        setDefaultTrainerNote(null);
+        try {
+            const res = await fetch('/api/course/default-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId: course.id, trainerEmail: clearing ? null : email, trainerId: null, applyToUpcoming: !clearing }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                setDefaultTrainerNote({ ok: false, text: json.error || 'Could not update the default trainer' });
+                return;
+            }
+            const applied: any[] = json.applied || [];
+            setDefaultTrainerName(clearing ? '' : trainerName);
+            if (!clearing) {
+                const reordered = [trainerName, ...selectedApprovedTrainers.filter(n => n !== trainerName)];
+                setCourse(prev => ({
+                    ...prev,
+                    approvedTrainers: reordered,
+                    numOfTrainers: reordered.length,
+                    trainersList: reordered.join(' | '),
+                    trainersEmailList: buildTrainersEmailList(reordered),
+                }));
+            }
+            setDefaultTrainerNote({
+                ok: true,
+                text: clearing
+                    ? `${trainerName} is no longer the default trainer. New classes will be created without a trainer.`
+                    : `${trainerName} is the default trainer: new classes are assigned to them and confirmed, with no invitation.${applied.length ? ` Assigned to ${applied.length} upcoming class${applied.length === 1 ? '' : 'es'} that had no trainer.` : ''}`,
+            });
+        } catch {
+            setDefaultTrainerNote({ ok: false, text: 'Request failed. Please try again.' });
+        } finally {
+            setDefaultTrainerBusy(false);
+        }
+    };
+
     // Star/unstar a trainer as a favorite for THIS course. Favorites are kept
     // at the FRONT of the approved order (stable within each group), so the
     // invitation cascade prefers them.
@@ -803,10 +876,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         const newFavs = favoriteTrainers.includes(name)
             ? favoriteTrainers.filter(n => n !== name)
             : [...favoriteTrainers, name];
-        const reordered = [
+        const reordered = defaultFirst([
             ...selectedApprovedTrainers.filter(n => newFavs.includes(n)),
             ...selectedApprovedTrainers.filter(n => !newFavs.includes(n)),
-        ];
+        ]);
         setCourse(prev => ({
             ...prev,
             favoriteTrainers: newFavs,
@@ -851,9 +924,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         const targetIndex = selectedApprovedTrainers.indexOf(targetName);
         if (draggedIndex < 0 || targetIndex < 0) return;
 
-        const updated = [...selectedApprovedTrainers];
-        const [movedTrainer] = updated.splice(draggedIndex, 1);
-        updated.splice(targetIndex, 0, movedTrainer);
+        const moved = [...selectedApprovedTrainers];
+        const [movedTrainer] = moved.splice(draggedIndex, 1);
+        moved.splice(targetIndex, 0, movedTrainer);
+        const updated = defaultFirst(moved);
 
         setCourse(prev => ({
             ...prev,
@@ -2702,6 +2776,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                         <th className="px-3 py-2">Trainer</th>
                                                         <th className="px-3 py-2">Telephone</th>
                                                         <th className="px-3 py-2">Email</th>
+                                                        <th className="px-3 py-2" title="Assigned automatically to every new class of this course">Default</th>
                                                         <th className="px-2 py-2 w-10"></th>
                                                     </tr>
                                                 </thead>
@@ -2709,6 +2784,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                     {selectedApprovedTrainers.map((trainerName, index) => {
                                                         const contact = trainerContactByName.get(trainerName);
                                                         const isFavorite = favoriteTrainers.includes(trainerName);
+                                                        const isDefaultTrainer = !!defaultTrainerName && defaultTrainerName.toLowerCase() === trainerName.toLowerCase();
                                                         return (
                                                             <tr
                                                                 key={trainerName}
@@ -2751,6 +2827,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                                 <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
                                                                 <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{contact?.telephone || '—'}</td>
                                                                 <td className="px-3 py-2 text-on-surface-secondary">{contact?.email || '—'}</td>
+                                                                <td className="px-3 py-2 whitespace-nowrap">
+                                                                    {!isNewCourse && course.id && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleDefaultTrainer(trainerName)}
+                                                                            disabled={defaultTrainerBusy}
+                                                                            aria-pressed={isDefaultTrainer}
+                                                                            title={isDefaultTrainer
+                                                                                ? 'Default trainer: every new class of this course is assigned to them and confirmed, with no invitation. Click to remove.'
+                                                                                : 'Make this the default trainer: every new class, and upcoming classes without a trainer, are assigned to them and confirmed, with no invitation.'}
+                                                                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium disabled:opacity-50 ${isDefaultTrainer ? 'bg-success-bg text-success' : 'border border-default text-muted hover:text-on-surface'}`}
+                                                                        >
+                                                                            {isDefaultTrainer ? '★ Default' : 'Set default'}
+                                                                        </button>
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-2 py-2">
                                                                     <button
                                                                         type="button"
@@ -2769,6 +2861,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         </div>
                                     ) : (
                                         <div className="text-sm text-muted">No approved trainers yet — add one below.</div>
+                                    )}
+                                    {defaultTrainerNote && (
+                                        <p className={`mt-2 text-xs ${defaultTrainerNote.ok ? 'text-success' : 'text-danger'}`}>{defaultTrainerNote.text}</p>
                                     )}
                                 </div>
 

@@ -5042,6 +5042,41 @@ export const AssignTrainerView: React.FC = () => {
         }
     };
 
+    // Star a trainer: make them the course's default trainer (course.default_trainer_id).
+    // Every new class of the course, and the upcoming classes that have no trainer yet, are
+    // assigned to them and confirmed; no invitation is sent. Starring the current default clears it.
+    const handleToggleDefaultTrainer = async (run: any, trainerId: string, trainerName: string) => {
+        if (!run?.courseId) return;
+        const clearing = run.defaultTrainerId === trainerId;
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/course/default-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId: run.courseId, trainerId: clearing ? null : trainerId, applyToUpcoming: !clearing }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                setMessage({ type: 'error', text: json.error || 'Could not update the default trainer' });
+                return;
+            }
+            const applied: any[] = json.applied || [];
+            setCourseRuns(prev => prev.map(r => r.courseId === run.courseId ? { ...r, defaultTrainerId: clearing ? null : trainerId } : r));
+            setMessage({
+                type: 'success',
+                text: clearing
+                    ? `${trainerName} is no longer the default trainer for ${run.courseTitle}.`
+                    : `${trainerName} is now the default trainer for ${run.courseTitle}${applied.length ? ` and was assigned to ${applied.length} upcoming class${applied.length === 1 ? '' : 'es'}` : ''}.`,
+            });
+            if (applied.length) fetchCourseRuns(search);
+        } catch {
+            setMessage({ type: 'error', text: 'Request failed. Please try again.' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const fetchExpandedRunTrainers = async (runId: string) => {
         setLoadingExpandedTrainers(true);
         try {
@@ -5477,14 +5512,30 @@ export const AssignTrainerView: React.FC = () => {
                                                                                     <span className="font-medium text-on-surface">{t.trainer_name}</span>
                                                                                     {t.trainer_email && <span className="text-muted ml-2">({t.trainer_email})</span>}
                                                                                 </div>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => handleRemoveSpecificTrainer(run.id, t.id, t.trainer_name)}
-                                                                                    disabled={saving}
-                                                                                    className="text-xs text-danger hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
-                                                                                >
-                                                                                    ✕ Remove
-                                                                                </button>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    {t.trainer_id && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleToggleDefaultTrainer(run, t.trainer_id, t.trainer_name)}
+                                                                                            disabled={saving}
+                                                                                            title={run.defaultTrainerId === t.trainer_id
+                                                                                                ? `${t.trainer_name} is the default trainer for ${run.courseTitle}. Click to remove the default.`
+                                                                                                : `Make ${t.trainer_name} the default trainer for ${run.courseTitle}: every new class, and the upcoming classes without a trainer, are assigned to them and confirmed without an invitation.`}
+                                                                                            aria-pressed={run.defaultTrainerId === t.trainer_id}
+                                                                                            className={`text-sm px-2 py-1 rounded transition-colors ${run.defaultTrainerId === t.trainer_id ? 'text-warning' : 'text-muted hover:text-warning'}`}
+                                                                                        >
+                                                                                            {run.defaultTrainerId === t.trainer_id ? '★ Default' : '☆'}
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleRemoveSpecificTrainer(run.id, t.id, t.trainer_name)}
+                                                                                        disabled={saving}
+                                                                                        className="text-xs text-danger hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
+                                                                                    >
+                                                                                        ✕ Remove
+                                                                                    </button>
+                                                                                </div>
                                                                             </div>
                                                                         ))}
                                                                     </div>

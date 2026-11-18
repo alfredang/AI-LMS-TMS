@@ -11,6 +11,7 @@ import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
+import { putDefaultTrainerFirst } from '@/lib/trainers/courseDefaultTrainer';
 
 // Configure formidable
 export const config = {
@@ -649,6 +650,10 @@ async function handler(
           [courseId, courseData.favoriteTrainers || null]
         );
       }
+
+      // The default trainer (course.default_trainer_id) always stays first in the
+      // approved trainer list, whatever order the editor saved.
+      await putDefaultTrainerFirst(courseId, client);
 
       // Persist the funding-validity START date. It lives on the history row of
       // the code currently in force (course_code_history.valid_from), not on the
