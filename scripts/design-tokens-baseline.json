@@ -57,7 +57,7 @@
   "components/admin/ViewLearners.tsx": 12,
   "components/admin/ViewTrainers.tsx": 20,
   "components/admin/WsqScheduleSyncView.tsx": 2,
-  "components/AiChatbot.tsx": 15,
+  "components/AiChatbot.tsx": 14,
   "components/analytics/AnalyticsCharts.tsx": 2,
   "components/BillingHistoryView.tsx": 3,
   "components/CalendarView.tsx": 3,

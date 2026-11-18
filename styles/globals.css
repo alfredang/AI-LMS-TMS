@@ -115,6 +115,21 @@
   .btn-danger { @apply bg-danger text-white hover:bg-danger/90; }
   .btn-sm { @apply px-3 py-1.5 text-xs; }
 
+  /* Disabled controls: one readable look everywhere (solid grey, muted text ≥4.8:1) instead of
+     fading the control with opacity, which left pale text on white. Overrides per-page
+     disabled:opacity-* / bg / text classes on purpose so every role looks the same. */
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    opacity: 1 !important;
+    background-color: rgb(var(--c-surface-elevated)) !important;
+    background-image: none !important;
+    color: rgb(var(--c-muted)) !important;
+    border-color: rgb(var(--c-border)) !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+  }
+  button:disabled svg { color: rgb(var(--c-muted)) !important; }
+
   /* Tables */
   .table { @apply w-full text-sm text-on-surface; }
   .table thead th { @apply border-b border-default bg-surface-elevated px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-secondary; }
@@ -232,6 +247,16 @@
   animation: none;
 }
 
+/* Support avatar in the chat launcher: a gentle bob (the button itself keeps the pulse ring). */
+.chat-avatar-bob {
+  animation: chat-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes chat-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 @keyframes chat-pulse {
   0%,
   100% {
@@ -254,6 +279,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .chat-avatar-bob,
   .chat-launcher,
   .chat-launcher::before {
     animation: none;

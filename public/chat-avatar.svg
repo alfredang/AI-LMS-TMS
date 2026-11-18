@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+<style>.eyes{animation:blink 4.5s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}@media (prefers-reduced-motion:reduce){.eyes{animation:none}}</style>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e0ecff"/><stop offset="100%" stop-color="#9cc0ff"/></linearGradient></defs>
+<circle cx="32" cy="32" r="32" fill="url(#bg)"/>
+<path d="M11 64c2-11 10-17 21-17s19 6 21 17z" fill="#1d5bf0"/>
+<path d="M26 47.5c2 2.2 4 3.2 6 3.2s4-1 6-3.2" fill="none" stroke="#bcd3ff" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="28" y="40" width="8" height="8" rx="3.5" fill="#f3c3a0"/>
+<circle cx="32" cy="30" r="15" fill="#ffdcc2"/>
+<path d="M17 30.5C16.4 19.6 23.4 13 32 13s15.6 6.6 15 17.5c-1.6-4.6-4.8-7.6-9-8.6-2.4 3.2-7.6 5.2-13.6 5.2-3.2 0-5.6 1.2-7.4 3.4z" fill="#3a2a22"/>
+<g class="eyes"><ellipse cx="26" cy="31.5" rx="2.3" ry="2.8" fill="#1b2433"/><ellipse cx="38" cy="31.5" rx="2.3" ry="2.8" fill="#1b2433"/><circle cx="26.9" cy="30.4" r="0.85" fill="#fff"/><circle cx="38.9" cy="30.4" r="0.85" fill="#fff"/></g>
+<ellipse cx="22.2" cy="36.4" rx="2.6" ry="1.6" fill="#ff9fb3" opacity="0.75"/><ellipse cx="41.8" cy="36.4" rx="2.6" ry="1.6" fill="#ff9fb3" opacity="0.75"/>
+<path d="M27.6 37.2q4.4 4.6 8.8 0" fill="none" stroke="#8a3b1e" stroke-width="1.7" stroke-linecap="round"/>
+<path d="M15.6 31a16.4 16.4 0 0 1 32.8 0" fill="none" stroke="#15306a" stroke-width="2.6" stroke-linecap="round"/>
+<rect x="12.6" y="27" width="5.6" height="10" rx="2.8" fill="#15306a"/><rect x="45.8" y="27" width="5.6" height="10" rx="2.8" fill="#15306a"/>
+<path d="M16 36.5c1 5.6 5 8.4 10.4 8.4" fill="none" stroke="#15306a" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="27" cy="44.9" r="2" fill="#25D366"/>
+</svg>

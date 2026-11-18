@@ -245,10 +245,10 @@ const AiChatbot: React.FC = () => {
                                     </svg>
                                 </button>
                             ) : (
-                                <span className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-                                    <svg aria-hidden="true" viewBox={channel.viewBox} fill="currentColor" className="w-4 h-4">
-                                        <path d={channel.path} />
-                                    </svg>
+                                <span className="relative w-9 h-9 shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src="/chat-avatar.svg" alt="" className="w-9 h-9 rounded-full" />
+                                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 ring-2 ring-white" aria-hidden="true" />
                                 </span>
                             )}
                             <div className="min-w-0">
@@ -442,11 +442,20 @@ const AiChatbot: React.FC = () => {
                         '--chat-accent-ring': channel.ring,
                     } as React.CSSProperties
                 }
-                className="chat-launcher flex w-14 h-14 rounded-full items-center justify-center transition hover:scale-105"
+                className="chat-launcher relative flex w-16 h-16 rounded-full items-center justify-center transition hover:scale-105"
             >
-                <svg aria-hidden="true" viewBox={channel.viewBox} fill="currentColor" className="w-7 h-7 text-white">
-                    <path d={channel.path} />
-                </svg>
+                {/* Support avatar (same as the ai-mms storefront launcher) with the channel as a corner badge */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/chat-avatar.svg" alt="" aria-hidden="true" className="chat-avatar-bob w-16 h-16 rounded-full" />
+                <span
+                    aria-hidden="true"
+                    style={{ backgroundColor: channel.accent }}
+                    className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white"
+                >
+                    <svg viewBox={channel.viewBox} fill="currentColor" className="w-3.5 h-3.5 text-white">
+                        <path d={channel.path} />
+                    </svg>
+                </span>
             </button>
         </div>
     );
