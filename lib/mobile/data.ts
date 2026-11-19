@@ -10,7 +10,8 @@ export async function mobileData(userId: string, role: string) {
     cr.start_date::text AS "startDate", cr.end_date::text AS "endDate", cr.class_type AS format,
     cr.virtual_meeting_link AS "meetingURL", concat_ws(', ', nullif(cr.venue_building,''),nullif(cr.venue_street,''),nullif(cr.venue_room,'')) AS venue,
     c.slides_url AS "slidesURL", c.learner_guide_url AS "guideURL", c.activities_url AS "activitiesURL",
-    CASE WHEN $2::boolean THEN c.trainer_slides_url ELSE NULL END AS "trainerSlidesURL"
+    CASE WHEN $2::boolean THEN c.trainer_slides_url ELSE NULL END AS "trainerSlidesURL",
+    cr.course_run_id AS "runCode", cr.class_status::text AS "classStatus"
     FROM course_run cr JOIN course c ON c.id=cr.course_id
     WHERE NOT coalesce(cr.is_deleted,false) AND lower(coalesce(cr.class_status::text,'')) NOT IN ('cancelled','canceled') AND ${access}
     ORDER BY cr.start_date DESC NULLS LAST`,[userId,trainer]);

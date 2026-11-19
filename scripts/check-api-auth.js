@@ -16,6 +16,7 @@ const API = path.join(__dirname, '..', 'pages', 'api');
 // decision — justify it in the PR.
 const PUBLIC = new Set([
   'mobile/auth.ts', // Public OTP entry point: registered learner/trainer only, DB rate limits and single-use codes.
+  'mobile/login.ts', // Public password sign-in for the apps: existing learner/trainer accounts only, DB rate limits.
   'health.ts', // liveness probe (no data)
   'app-version.ts',
   'favicon.png.ts',

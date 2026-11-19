@@ -10,6 +10,7 @@ export function ensureMobileSchema() {
     session_id uuid NOT NULL, starts_at timestamptz NOT NULL, days integer NOT NULL CHECK(days IN(1,3)),
     sent_at timestamptz, PRIMARY KEY(token,session_id,starts_at,days));
     CREATE TABLE IF NOT EXISTS mobile_deletion_request (
-    user_id uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE, requested_at timestamptz NOT NULL DEFAULT now());`)
+    user_id uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE, requested_at timestamptz NOT NULL DEFAULT now());
+    ALTER TABLE app_user ADD COLUMN IF NOT EXISTS theme_preference text;`)
     .catch(e => {ready=undefined; throw e;});
 }
