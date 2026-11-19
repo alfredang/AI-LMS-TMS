@@ -14,6 +14,8 @@
  */
 
 import { Readable } from 'stream';
+import { classMemberSql } from '../enrolment/classMembership';
+import { ensureClassMembershipTables } from '../enrolment/classMembershipTables';
 import type { drive_v3 } from 'googleapis';
 import pool from '../db';
 import { getDriveClient, extractGoogleFileId } from '../google-drive/drive-helpers';
@@ -167,6 +169,7 @@ export interface LearnerSummaryStatus {
 
 /** Every active learner in the run with their signing state (one row per learner). */
 export async function listSummaryRecords(courseRunId: string): Promise<LearnerSummaryStatus[]> {
+  await ensureClassMembershipTables();
   const r = await pool.query(
     `SELECT DISTINCT ON (au.id) au.id AS learner_user_id, au.full_name, au.email,
             asr.id AS asr_id
@@ -175,7 +178,7 @@ export async function listSummaryRecords(courseRunId: string): Promise<LearnerSu
        LEFT JOIN assessment_summary_record asr
          ON asr.course_run_id = e.course_run_id AND asr.learner_user_id = au.id
       WHERE e.course_run_id::text = $1
-        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+        AND ${classMemberSql('e')}
       ORDER BY au.id`,
     [courseRunId],
   );
@@ -197,10 +200,11 @@ export async function listSummaryRecords(courseRunId: string): Promise<LearnerSu
 }
 
 export async function isLearnerEnrolled(userId: string, courseRunId: string): Promise<boolean> {
+  await ensureClassMembershipTables();
   const r = await pool.query(
     `SELECT 1 FROM enrollment e
       WHERE e.user_id = $1 AND e.course_run_id::text = $2
-        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+        AND ${classMemberSql('e')}
       LIMIT 1`,
     [userId, courseRunId],
   );

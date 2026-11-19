@@ -1,6 +1,8 @@
 import pool from '../db';
 import { enrolLearner } from '../learner/selfEnrolment';
 import { ensureEnrolmentDetailRequestTable } from '../learner/enrolmentDetailRequest';
+import { classMemberSql } from '../enrolment/classMembership';
+import { ensureClassMembershipTables } from '../enrolment/classMembershipTables';
 import { labelSessions, sgtNow, toIsoDate } from './sessionLabel';
 
 // Take Attendance QR (E-Attendance page → session tabs). One QR per session: it encodes
@@ -125,6 +127,7 @@ const normName = (v: unknown) => String(v ?? '').toLowerCase().replace(/[^a-z0-9
 
 /** Everyone on the class: SSG enrolments, local enrolments and enrolment requests, merged per person. */
 async function loadRoster(runUuid: string, runCode: string): Promise<RosterPerson[]> {
+  await ensureClassMembershipTables();
   await ensureEnrolmentDetailRequestTable();
   const rows = (await pool.query(
     `SELECT UPPER(NULLIF(TRIM(se.trainee_nric), '')) AS nric, se.trainee_name AS name,
@@ -144,7 +147,7 @@ async function loadRoster(runUuid: string, runCode: string): Promise<RosterPerso
        JOIN app_user au ON au.id = e.user_id
        LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
       WHERE e.course_run_id = $1
-        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+        AND ${classMemberSql('e')}
      UNION ALL
      SELECT UPPER(r.nric), r.trainee_name, LOWER(r.email), r.contact_number, r.user_id, 3
        FROM enrolment_detail_request r
