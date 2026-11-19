@@ -63,7 +63,7 @@ SSG e-attendance itself is taken on MySkillsFuture with Singpass (`ssgAttendance
 
 A learner's file is first uploaded to the academy's Google Drive:
 `POST /api/upload/google-drive?studentName=&courseRunId=<runCode>` (multipart field `file`,
-100 MB) → `{ data: { fileUrl, folderId } }`. Then:
+100 MB) → `{ data: { fileUrl, studentFolderId } }`. Then (pass `studentFolderId` as `folderId`):
 
 - `POST /api/mobile/assessments` `{ action: "submit", runId, type, fileName, fileURL, folderId? }` → `201 { success, id }`.
   Enrolled learner, published assessment, Google Drive link only.
