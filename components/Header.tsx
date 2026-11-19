@@ -284,9 +284,9 @@ const Header: React.FC = () => {
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
-      { view: View.Dashboard, label: 'E-Attendance', icon: IconName.ClipboardCheck, trainerPage: TrainerPage.EAttendance },
-      { view: View.Dashboard, label: 'Ed Tools', icon: IconName.BookOpen, trainerPage: TrainerPage.EdTools },
-      { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
+      { view: View.Dashboard, label: 'Break Timer', icon: IconName.Clock, href: 'https://alfredang.github.io/musical-timer-countdown/' },
+      { view: View.Dashboard, label: 'Digital Whiteboard', icon: IconName.Edit, href: 'https://alfredang.github.io/whiteboard/' },
+      { view: View.Dashboard, label: 'Padlet', icon: IconName.Bookmark, href: 'https://alfredang.github.io/padlet/' },
     ],
     [UserRole.Developer]: [
       { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
