@@ -130,7 +130,6 @@
   "components/trainer/AssessmentSummarySection.tsx": 5,
   "components/trainer/AssessorSignatureForm.tsx": 3,
   "components/trainer/BlockchainToolsPage.tsx": 2,
-  "components/trainer/ClassFeedbackView.tsx": 31,
   "components/trainer/CyberSecurityToolsPage.tsx": 2,
   "components/trainer/DataAnalyticsToolsPage.tsx": 2,
   "components/trainer/DesignToolsPage.tsx": 2,

@@ -464,7 +464,7 @@ const ManagementCourseList: React.FC = () => {
                             <LearnerCardDetailRow label="End Date" value={new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
                         )}
                     </div>
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-default">
+                    <div className="flex items-center justify-end mt-4 pt-3 border-t border-default">
                         <Button size="sm">View Course</Button>
                     </div>
                 </div>

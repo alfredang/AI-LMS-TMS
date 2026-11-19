@@ -15,7 +15,7 @@ export default function ClassFeedbackPage() {
       <Head>
         <title>Post Course Feedback</title>
       </Head>
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <ClassFeedbackView runId={runId} ready={router.isReady} />
       </div>
     </div>
