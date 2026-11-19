@@ -1893,6 +1893,46 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </div>
       )}
 
+      {/* ── SSG e-attendance check for the selected session: three KPIs that should match ── */}
+      {selectedSession && (
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-on-surface">
+            SSG E-Attendance Check{selectedSessionLabel && <span className="font-normal text-on-surface-secondary"> · {selectedSessionLabel}</span>}
+          </h2>
+          <button
+            type="button"
+            onClick={() => handleFetchAttendance(selectedSession)}
+            disabled={isLoadingAttendance}
+            title="Fetch the latest e-attendance for this session from SSG"
+            className="flex items-center gap-1.5 px-3 py-2 border border-default text-on-surface-secondary rounded-lg text-sm font-medium hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshIcon className={`w-4 h-4 ${isLoadingAttendance ? 'animate-spin' : ''}`} />
+            {isLoadingAttendance ? 'Refreshing...' : 'Refresh E-Attendance'}
+          </button>
+        </div>
+        {/* Per-session KPIs — the three numbers should match */}
+        <SessionKpis kpis={sessionKpis} />
+
+        {attendanceError && (
+          <p className="text-sm text-danger flex items-center gap-1.5">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {attendanceError}
+          </p>
+        )}
+        {attendanceSuccess && !attendanceError && (
+          <p className="text-sm text-success flex items-center gap-1.5">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            {attendanceSuccess}
+          </p>
+        )}
+      </div>
+      )}
+
       {/* ── SWDA Enrolment: SSG enrolments + enrolment-form submissions (Pending), per class — collapsible ── */}
       <div id="swda-enrolment" className={`bg-surface rounded-lg border border-default shadow-sm scroll-mt-24 ${selectedCourseRunId ? '' : '[&>div:first-child]:border-b-0'}`}>
         <SectionHeader
@@ -2624,46 +2664,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         )}
         </>)}
       </div>
-
-      {/* ── SSG e-attendance check for the selected session: three KPIs that should match ── */}
-      {selectedSession && (
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-on-surface">
-            SSG E-Attendance Check{selectedSessionLabel && <span className="font-normal text-on-surface-secondary"> · {selectedSessionLabel}</span>}
-          </h2>
-          <button
-            type="button"
-            onClick={() => handleFetchAttendance(selectedSession)}
-            disabled={isLoadingAttendance}
-            title="Fetch the latest e-attendance for this session from SSG"
-            className="flex items-center gap-1.5 px-3 py-2 border border-default text-on-surface-secondary rounded-lg text-sm font-medium hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshIcon className={`w-4 h-4 ${isLoadingAttendance ? 'animate-spin' : ''}`} />
-            {isLoadingAttendance ? 'Refreshing...' : 'Refresh E-Attendance'}
-          </button>
-        </div>
-        {/* Per-session KPIs — the three numbers should match */}
-        <SessionKpis kpis={sessionKpis} />
-
-        {attendanceError && (
-          <p className="text-sm text-danger flex items-center gap-1.5">
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {attendanceError}
-          </p>
-        )}
-        {attendanceSuccess && !attendanceError && (
-          <p className="text-sm text-success flex items-center gap-1.5">
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            {attendanceSuccess}
-          </p>
-        )}
-      </div>
-      )}
 
       {/* ── Course Session Attendance (SSG QR / e-attendance records) ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
