@@ -196,7 +196,7 @@ const TrainerLayout: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
-          <div className={`${isCourseDetailView ? 'w-full lg:px-5' : 'max-w-6xl mx-auto lg:px-8'} px-4 sm:px-6 py-6`}>
+          <div className={`${isCourseDetailView ? 'w-full lg:px-5' : 'w-full lg:px-8'} px-4 sm:px-6 py-6`}>
             {renderContent()}
           </div>
         </main>
