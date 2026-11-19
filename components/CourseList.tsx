@@ -406,12 +406,12 @@ const ManagementCourseList: React.FC = () => {
                 onClick={handleClick}
                 className="group bg-surface border border-default rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col"
             >
-                <div className="relative overflow-hidden bg-surface-elevated" style={{ height: '170px' }}>
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-elevated">
                     <img
-                        src={getCourseImageUrl(course.imageUrl, course.id, course.title, { width: 380, height: 170 })}
+                        src={getCourseImageUrl(course.imageUrl, course.id, course.title, { width: 400, height: 225 })}
                         alt={course.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => { (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ width: 380, height: 170, title: course.title }); }}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => { (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ width: 400, height: 225, title: course.title }); }}
                     />
                 </div>
                 <div className="p-4 flex flex-col flex-grow">
