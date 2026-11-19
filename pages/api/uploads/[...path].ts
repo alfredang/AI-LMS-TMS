@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
 import fs from 'fs';
+import { isServableUpload } from '../../../lib/uploads/servable';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -12,6 +13,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     if (!filePath || !Array.isArray(filePath)) {
       return res.status(400).json({ message: 'Invalid file path' });
+    }
+
+    // Same answer as a missing file, so a probe learns nothing
+    if (!isServableUpload(filePath)) {
+      return res.status(404).json({ message: 'File not found' });
     }
 
     // Join the path segments
@@ -68,6 +74,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       '.doc': 'application/msword',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       '.txt': 'text/plain',
+      '.svg': 'image/svg+xml',
+      '.csv': 'text/csv',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.xlsm': 'application/vnd.ms-excel.sheet.macroEnabled.12',
+      '.ppt': 'application/vnd.ms-powerpoint',
+      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.zip': 'application/zip',
+      '.mp4': 'video/mp4',
     };
 
     const contentType = contentTypes[ext] || 'application/octet-stream';
@@ -78,6 +93,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // An uploaded SVG still shows in <img>, but can never run script when opened on its own.
+    if (ext === '.svg') res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    // Anything that is not an image, PDF or plain text downloads instead of rendering on this origin.
+    if (!contentType.startsWith('image/') && contentType !== 'application/pdf' && contentType !== 'text/plain') {
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(resolvedPath).replace(/[^\w.\- ()]/g, '_')}"`);
+    }
     res.setHeader('Content-Length', stats.size);
 
     // Stream the file

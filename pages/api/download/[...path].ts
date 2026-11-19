@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
+import { isServablePublicPath } from '../../../lib/uploads/servable';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS
@@ -22,6 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Construct the full file path
     const relativePath = filePath.join('/');
+    // Server-only files in the uploads volume (keys, certificates, config) are never downloadable
+    if (!isServablePublicPath(relativePath)) {
+      return res.status(404).json({ success: false, error: 'File not found' });
+    }
     const fullPath = path.join(process.cwd(), 'public', relativePath);
     
     // Security check: make sure the path is within the public directory
