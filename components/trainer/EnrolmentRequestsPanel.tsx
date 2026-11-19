@@ -69,6 +69,11 @@ export const EnrolmentRequestsPanel: React.FC<{
   const [qrZoomed, setQrZoomed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
+  // One company for the whole class (corporate run): applied to every pending company-sponsored request.
+  const [companyAllOpen, setCompanyAllOpen] = useState(false);
+  const [companyAll, setCompanyAll] = useState({ employerName: '', employerUen: '', employerContactName: '', employerContactEmail: '', employerContactNumber: '' });
+  const [companyAllMsg, setCompanyAllMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [companyAllBusy, setCompanyAllBusy] = useState(false);
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
 
   const load = useCallback(async (quiet = false) => {
@@ -174,6 +179,26 @@ export const EnrolmentRequestsPanel: React.FC<{
       setRowMsg(m => ({ ...m, [id]: { ok: false, text: 'Request failed. Please try again.' } }));
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const saveCompanyAll = async () => {
+    setCompanyAllBusy(true); setCompanyAllMsg(null);
+    try {
+      const res = await fetch('/api/enrolments/detail-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_employer_all', courseRunUuid, ...companyAll }),
+      });
+      const json = await res.json();
+      const ok = res.ok && json.success;
+      if (ok && json.data) setRequests(json.data);
+      setCompanyAllMsg({ ok, text: json.message || json.error || (ok ? 'Saved' : 'Failed') });
+      if (ok) { setCompanyAllOpen(false); onEnrolled?.(); }
+    } catch {
+      setCompanyAllMsg({ ok: false, text: 'Request failed. Please try again.' });
+    } finally {
+      setCompanyAllBusy(false);
     }
   };
 
@@ -298,6 +323,54 @@ export const EnrolmentRequestsPanel: React.FC<{
                   Enrol all pending on TPGateway ({pending})
                 </button>
               )}
+              {!bulk && !confirmAll && requests.some(r => r.sponsorshipType === 'Employer' && (r.status === 'submitted' || r.status === 'failed')) && (
+                <button
+                  disabled={!!busyId}
+                  onClick={() => { setCompanyAllOpen(v => !v); setCompanyAllMsg(null); }}
+                  title="One company sponsors the class: set its name, UEN and contact on every pending company-sponsored request"
+                  className={`${btn} bg-surface-elevated border border-default text-on-surface-secondary hover:bg-surface-hover`}
+                >
+                  Set company for all
+                </button>
+              )}
+              {companyAllMsg && !companyAllOpen && (
+                <span className={`text-xs ${companyAllMsg.ok ? 'text-success' : 'text-danger'}`}>{companyAllMsg.text}</span>
+              )}
+            </div>
+          )}
+          {companyAllOpen && pending > 0 && (
+            <div className="px-4 py-3 border-b border-default space-y-2">
+              <p className="text-xs text-on-surface-secondary">
+                Learners often type the company name, UEN and contact differently. Enter the sponsoring company once: it replaces these
+                details on every pending company-sponsored request of this class. A field left blank keeps what each learner typed.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                {([
+                  ['employerName', 'Company name'],
+                  ['employerUen', 'Company UEN'],
+                  ['employerContactName', 'Contact person'],
+                  ['employerContactEmail', 'Contact email'],
+                  ['employerContactNumber', 'Contact number'],
+                ] as const).map(([k, label]) => (
+                  <input
+                    key={k}
+                    value={companyAll[k]}
+                    onChange={e => setCompanyAll(f => ({ ...f, [k]: k === 'employerUen' ? e.target.value.toUpperCase().trim() : e.target.value }))}
+                    placeholder={label}
+                    aria-label={label}
+                    className="w-full px-2 py-1.5 text-xs rounded border border-strong bg-surface text-on-surface"
+                  />
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button disabled={companyAllBusy} onClick={saveCompanyAll} className={`${btn} bg-primary text-on-primary hover:bg-primary-hover`}>
+                  {companyAllBusy ? 'Saving…' : 'Apply to all company-sponsored'}
+                </button>
+                <button disabled={companyAllBusy} onClick={() => setCompanyAllOpen(false)} className={`${btn} bg-surface-elevated border border-default text-on-surface-secondary`}>
+                  Cancel
+                </button>
+                {companyAllMsg && <span className={`text-xs ${companyAllMsg.ok ? 'text-success' : 'text-danger'}`}>{companyAllMsg.text}</span>}
+              </div>
             </div>
           )}
           <div className="overflow-x-auto">

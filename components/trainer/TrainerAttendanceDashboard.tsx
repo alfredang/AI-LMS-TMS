@@ -3,6 +3,9 @@ import { useRouter } from 'next/router';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
 import { labelSessions, pickCurrentSession } from '../../lib/attendance/sessionLabel';
+import {
+  buildEnrolmentUploadRows, enrolmentUploadCsv, UPLOAD_TEMPLATE_SHEET, UPLOAD_TEMPLATE_URL,
+} from '../../lib/ssg/enrolmentUploadTemplate';
 
 interface Session {
   id: string;
@@ -1525,6 +1528,49 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     XLSX.writeFile(wb, `SWDA-Enrolment-${selectedCourse?.courseRunCode || 'class'}-${stamp}.xlsx`);
   };
 
+  // Learners who filled in the SWDA Enrolment form and are not on SWDA yet: the rows of the
+  // TPGateway Bulk Upload file.
+  const uploadLearners = enrolmentRequests.filter(r =>
+    (r.status === 'submitted' || r.status === 'failed') && !enrolmentRecords.some((item: any) => {
+      const t = (item?.enrolment ?? item)?.trainee ?? {};
+      return String(t?.id || t?.nric || '').trim().toUpperCase() === String(r.nric || '').toUpperCase();
+    }));
+  const [uploadTemplateNote, setUploadTemplateNote] = useState<string | null>(null);
+
+  /**
+   * Download the pending learners in SWDA's Enrolment Upload Template: the filled-in workbook
+   * (`xlsx`, upload tab only, as the template's instructions ask) or the CSV that TPGateway →
+   * Enrolments → Bulk Upload takes.
+   */
+  const downloadUploadTemplate = async (format: 'xlsx' | 'csv') => {
+    const runCode = selectedCourse?.courseRunCode || '';
+    const { rows, issues } = buildEnrolmentUploadRows(uploadLearners, runCode);
+    const save = (blob: Blob, name: string) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    const base = `SWDA-Enrolment-Upload-${runCode || 'class'}`;
+    if (format === 'csv') {
+      save(new Blob([enrolmentUploadCsv(rows)], { type: 'text/csv;charset=utf-8' }), `${base}.csv`);
+    } else {
+      const mod: any = await import('xlsx-populate/browser/xlsx-populate');
+      const XlsxPopulate = mod.default || mod;
+      const res = await fetch(UPLOAD_TEMPLATE_URL);
+      if (!res.ok) throw new Error('Could not load the SWDA template');
+      const wb = await XlsxPopulate.fromDataAsync(await res.arrayBuffer());
+      const sheet = wb.sheet(UPLOAD_TEMPLATE_SHEET);
+      rows.forEach((row, i) => row.forEach((v, col) => { if (v) sheet.row(i + 2).cell(col + 1).value(v); }));
+      for (const name of ['Version History', 'Instructions']) if (wb.sheet(name)) wb.deleteSheet(name);
+      save(await wb.outputAsync(), `${base}.xlsx`);
+    }
+    setUploadTemplateNote(
+      `${rows.length} learner${rows.length === 1 ? '' : 's'} in the SWDA upload file.` +
+      (issues.length ? ` TPGateway will reject ${issues.length} row${issues.length === 1 ? '' : 's'} until these are filled in — ${issues.join('; ')}.` : '')
+    );
+  };
+
   // Arrived from the class page's "View Enrolments": open and scroll to SWDA Enrolment once loaded.
   const scrollToEnrolmentsDone = useRef(false);
   useEffect(() => {
@@ -1861,6 +1907,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           loading={isLoadingEnrolments}
           right={
             <>
+              {/* Full NRICs are needed for the upload, so staff only */}
+              {isAdminMode && uploadLearners.length > 0 && (['xlsx', 'csv'] as const).map(fmt => (
+                <button
+                  key={fmt}
+                  onClick={() => { downloadUploadTemplate(fmt).catch(err => { console.error('SWDA template download failed:', err); setUploadTemplateNote('Could not create the SWDA upload file. Please try again.'); }); }}
+                  title={fmt === 'xlsx'
+                    ? `SWDA Enrolment Upload Template filled in with the ${uploadLearners.length} learners not on SWDA yet`
+                    : 'The same rows as CSV, ready for TPGateway → Enrolments → Bulk Upload'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
+                >
+                  {fmt === 'xlsx' ? `SWDA Template (${uploadLearners.length})` : 'SWDA CSV'}
+                </button>
+              ))}
               {enrolmentTableRows.length > 0 && (
                 <button
                   onClick={() => { downloadEnrolmentsExcel().catch(err => console.error('Excel download failed:', err)); }}
@@ -1888,6 +1947,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           }
         />
         {enrolmentsOpen && (<>
+        {uploadTemplateNote && (
+          <p className="px-4 py-2 text-xs text-on-surface-secondary border-b border-default">{uploadTemplateNote}</p>
+        )}
         {enrolmentError && (
           <p className="px-4 py-2 text-xs text-danger flex items-center gap-1.5 border-b border-default">
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

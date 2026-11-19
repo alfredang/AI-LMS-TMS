@@ -23,6 +23,9 @@ const REF_RE = /^[A-Z0-9][A-Z0-9-]{5,39}$/i;
  *        employerContactEmail, employerContactNumber }  → fill in / correct the company details of a
  *                                                 company-sponsored request (the form leaves the UEN
  *                                                 and contact optional; TPGateway needs them)
+ * POST { courseRunUuid, action: 'set_employer_all', ...company details }  → one company for the whole class
+ *                                                 (corporate run): writes the details given (blank ones are
+ *                                                 left as they are) to every pending company-sponsored request
  * POST { id, action: 'dismiss' | 'reopen' }
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -73,6 +76,41 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
     const { id, action, enrolmentRef } = (req.body || {}) as { id?: string; action?: string; enrolmentRef?: string };
+
+    if (action === 'set_employer_all') {
+      const courseRunUuid = String(req.body?.courseRunUuid || '').trim();
+      if (!UUID_RE.test(courseRunUuid)) return res.status(400).json({ success: false, error: 'courseRunUuid is required' });
+      if (!(await requireCourseRunTrainer(user, res, courseRunUuid))) return;
+      const e = cleanEmployerDetails(req.body);
+      const given = Object.values(e).some(Boolean);
+      // Validate only what was typed: a blank field keeps each learner's own value.
+      const fieldErrors = employerDetailErrors({ ...e, employerName: e.employerName || 'unchanged' }, { requireAll: false });
+      if (!given || Object.keys(fieldErrors).length) {
+        return res.status(400).json({ success: false, error: given ? Object.values(fieldErrors)[0] : 'Enter at least one company detail', fieldErrors });
+      }
+      const updated = await pool.query(
+        `UPDATE enrolment_detail_request
+            SET employer_name = COALESCE(NULLIF($2, ''), employer_name),
+                employer_uen = COALESCE(NULLIF($3, ''), employer_uen),
+                employer_contact_name = COALESCE(NULLIF($4, ''), employer_contact_name),
+                employer_contact_email = COALESCE(NULLIF($5, ''), employer_contact_email),
+                employer_contact_number = COALESCE(NULLIF($6, ''), employer_contact_number),
+                status = 'submitted', last_error = NULL, updated_at = NOW()
+          WHERE course_run_uuid = $1 AND sponsorship_type = 'Employer' AND status IN ('submitted', 'failed')`,
+        [courseRunUuid, e.employerName, e.employerUen, e.employerContactName, e.employerContactEmail, e.employerContactNumber]
+      );
+      const rows = (await pool.query(
+        `SELECT ${REQUEST_COLUMNS} FROM enrolment_detail_request
+          WHERE course_run_uuid = $1
+          ORDER BY CASE status WHEN 'submitted' THEN 0 WHEN 'failed' THEN 1 WHEN 'enrolled' THEN 2 ELSE 3 END, submitted_at`,
+        [courseRunUuid]
+      )).rows;
+      return res.status(200).json({
+        success: true, updated: updated.rowCount,
+        message: `Company details set on ${updated.rowCount} company-sponsored request${updated.rowCount === 1 ? '' : 's'}`,
+        data: rows.map(mapRequestRow),
+      });
+    }
     if (!id || !UUID_RE.test(id)) return res.status(400).json({ success: false, error: 'id is required' });
 
     const reqRow = (await pool.query(
