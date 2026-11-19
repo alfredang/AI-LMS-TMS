@@ -22,6 +22,10 @@ Same codebase deployed for multiple tenants on **Coolify** (self-hosted, not Ver
 
 **"Live ≠ localhost":** check `git status` and `git log origin/main..HEAD` first — usually uncommitted/unpushed work, not a runtime bug.
 
+**A push to `main` is a production deploy, and the build runs on the app + DB host.** For 5–10 minutes the live app can lose DB connections (OTP sign-in and self-registration fail with "timeout exceeded when trying to connect"). So: one change set = one push, never stack pushes, and do not deploy while a class session is running unless the user explicitly agrees. `.claude/hooks/guard-live-deploy.sh` blocks `git push` to main when a deploy is already queued/running or a session is in progress; its override (`LMS_DEPLOY_OK=1` prefix) is for the user's go-ahead only. When a class is live, prefer a data fix or wait for the break.
+
+**"Who is in this class" has one rule — do not re-derive it per screen.** A learner belongs to a run when the `enrollment` row is not *Admin Removed* / *Withdrawn*, and a row that is only *Cancelled* (the TPGateway enrolment was cancelled, usually to be re-created) still counts when the learner was marked present in the run. The grading roster (`pages/api/trainer/class-students.ts`) and the learner's class list (`pages/api/courses/enrolled.ts`) both apply it; any new roster, class list, certificate or assessment query must too. 2026-11-19: 18 of 32 learners vanished from grading and lost their class mid-session because each screen filtered `Cancelled` on its own.
+
 ## Commands
 
 ```bash
@@ -103,5 +107,5 @@ Symptom: homepage HTML loads, but `/api/health` hangs ~15s and the app logs `Con
 - **Skills:** `/lms-health-check` (health/liveness/perf + known auto-fix), `/lms-security-scan` (TLS, headers, DB exposure, firewall integrity, secret hygiene), `/daily-log` (every session: log production issues diagnosed/fixed to `.claude/daily-logs/YYYY-MM-DD.md`, gitignored; retrieve on request — "today's log", "what did we fix on <date>").
 - **Agents:** `lms-monitor` (scheduled health/perf/log monitor + DB auto-fix), `lms-security-scanner` (posture scan). Both sanitized; infra specifics come from env in the gitignored `.claude/settings.local.json`.
 - **Commands:** `/lms-status` (quick snapshot), `/lms-fix-db` (outage runbook).
-- **Hook:** `PreToolUse(Bash)` guard blocks `DROP/TRUNCATE` and writing inline DB creds to files (`.claude/hooks/guard-prod-db.sh`).
+- **Hooks:** `PreToolUse(Bash)` guards — `.claude/hooks/guard-prod-db.sh` blocks `DROP/TRUNCATE` and writing inline DB creds to files; `.claude/hooks/guard-live-deploy.sh` blocks a push to `main` while a deploy is running or a class is in session (needs `LMS_SSH_TARGET`, `LMS_DB_CONTAINER`, `LMS_COOLIFY_APP_UUID` in the ops env). Both parse the hook input with `/usr/bin/python3` (node is not on PATH in the hook shell).
 - **Ops env** (host/container/domain) lives in gitignored `.claude/settings.local.json`; sanitized tooling is pushed, secrets/infra are not.
