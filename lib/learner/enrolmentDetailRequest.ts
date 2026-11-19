@@ -104,25 +104,64 @@ export function validateEnrolmentDetails(body: any): { ok: true; data: Enrolment
   }
 
   if (data.sponsorshipType === 'Employer') {
-    data.employerName = clean(body?.employerName);
-    data.employerUen = clean(body?.employerUen).toUpperCase();
-    data.employerContactName = clean(body?.employerContactName);
-    data.employerContactEmail = clean(body?.employerContactEmail).toLowerCase();
-    data.employerContactNumber = digits(body?.employerContactNumber);
-    if (data.employerContactNumber.length === 10 && data.employerContactNumber.startsWith('65')) {
-      data.employerContactNumber = data.employerContactNumber.slice(2);
-    }
-    if (data.employerName.length < 2) errors.employerName = 'Enter the company name.';
-    if (!UEN_RE.test(data.employerUen)) errors.employerUen = 'Enter the company UEN, e.g. 201200696W.';
-    if (data.employerContactName.length < 2) errors.employerContactName = 'Enter the company contact person (e.g. HR).';
-    if (!EMAIL_RE.test(data.employerContactEmail)) errors.employerContactEmail = 'Enter a valid email address.';
-    if (!/^[3689]\d{7}$/.test(data.employerContactNumber)) errors.employerContactNumber = 'Enter an 8-digit Singapore number.';
+    Object.assign(data, cleanEmployerDetails(body));
+    // Only the company name is required: learners often do not know the UEN or the HR contact.
+    // Staff add what is missing (Enrolment Requests → Edit company) before enrolling on TPGateway.
+    Object.assign(errors, employerDetailErrors(data, { requireAll: false }));
   }
 
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data };
 }
 
 export const NRIC_PATTERN = NRIC_RE;
+
+export interface EmployerDetails {
+  employerName?: string | null;
+  employerUen?: string | null;
+  employerContactName?: string | null;
+  employerContactEmail?: string | null;
+  employerContactNumber?: string | null;
+}
+
+/**
+ * Field errors for the company details of a company-sponsored request. A value that is filled in
+ * must be valid; with `requireAll` (what TPGateway needs) a blank UEN or contact detail is an error too.
+ */
+export function employerDetailErrors(d: EmployerDetails, { requireAll }: { requireAll: boolean }): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const name = clean(d.employerName), uen = clean(d.employerUen), contact = clean(d.employerContactName);
+  const email = clean(d.employerContactEmail), phone = clean(d.employerContactNumber);
+  if (name.length < 2) errors.employerName = 'Enter the company name.';
+  if (uen ? !UEN_RE.test(uen) : requireAll) errors.employerUen = 'Enter the company UEN, e.g. 201200696W.';
+  if (contact ? contact.length < 2 : requireAll) errors.employerContactName = 'Enter the company contact person (e.g. HR).';
+  if (email ? !EMAIL_RE.test(email) : requireAll) errors.employerContactEmail = 'Enter a valid email address.';
+  if (phone ? !/^[3689]\d{7}$/.test(phone) : requireAll) errors.employerContactNumber = 'Enter an 8-digit Singapore number.';
+  return errors;
+}
+
+/** Normalise company details typed by a learner or by staff (blank stays blank). */
+export function cleanEmployerDetails(body: any): Required<{ [K in keyof EmployerDetails]: string }> {
+  let phone = digits(body?.employerContactNumber);
+  if (phone.length === 10 && phone.startsWith('65')) phone = phone.slice(2);
+  return {
+    employerName: clean(body?.employerName).replace(/\s+/g, ' ').slice(0, 200),
+    employerUen: clean(body?.employerUen).toUpperCase(),
+    employerContactName: clean(body?.employerContactName).replace(/\s+/g, ' ').slice(0, 200),
+    employerContactEmail: clean(body?.employerContactEmail).toLowerCase(),
+    employerContactNumber: phone,
+  };
+}
+
+/** The company details TPGateway needs that a company-sponsored request does not have yet. */
+export function missingEmployerDetails(row: any): string[] {
+  if (row?.sponsorship_type !== 'Employer') return [];
+  const missing: string[] = [];
+  if (!clean(row.employer_uen)) missing.push('company UEN');
+  if (!clean(row.employer_contact_name)) missing.push('contact person');
+  if (!clean(row.employer_contact_email)) missing.push('contact email');
+  if (!clean(row.employer_contact_number)) missing.push('contact number');
+  return missing;
+}
 
 export interface EnrolmentRunContext {
   id: string;
@@ -212,44 +251,150 @@ export async function isEnrolledByName(courseRunUuid: string, traineeName: strin
   return rows.some(r => normName(r.name) === n);
 }
 
+const INACTIVE_ENROLMENT_SQL = `('admin removed', 'cancelled', 'withdrawn')`;
+
+type LocalHit = { id: string; user_id: string };
+
+const answersTo = (acct: { email: string | null; secondary_email: string | null } | undefined, email: string) =>
+  !!acct && [acct.email, acct.secondary_email].some(e => String(e || '').toLowerCase() === email);
+
 /**
- * The local enrolment a request belongs to. Matches an active enrolment on the class by NRIC;
- * with `create`, otherwise finds or creates the learner's account by email and enrols them on
- * the class (same routine as self-registration). Links the request to it and fills blanks in
- * the learner's profile. Refuses when the email belongs to an account with a different NRIC
- * (e.g. a shared HR mailbox), so one learner's enrolment ref never lands on another's record.
+ * A learner whose class registration sits on an account that does not answer to the email they
+ * now give (they submitted the form again with another email): move the registration so that
+ * email signs in to the class. Only for a registration this form created and nobody has used —
+ * no SWDA enrolment ref on it, a learner-only account with no other class and no live session.
+ * Anything else stays where it is (an account with history is never handed to an email typed
+ * into a public form) and the learner is told which email to sign in with.
+ */
+async function moveRegistrationToEmail(hit: LocalHit, courseRunUuid: string, email: string): Promise<LocalHit> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = (await client.query(
+      `SELECT (e.raw_data->>'source' = 'enrolment-request' AND NULLIF(TRIM(e.enrolment_id), '') IS NULL
+               AND NOT EXISTS (SELECT 1 FROM enrollment o WHERE o.user_id = e.user_id AND o.id <> e.id)
+               AND NOT EXISTS (SELECT 1 FROM user_role_map m WHERE m.user_id = e.user_id AND m.role::text <> 'Learner')
+               AND NOT EXISTS (SELECT 1 FROM user_session s WHERE s.user_id = e.user_id)) AS movable
+         FROM enrollment e WHERE e.id = $1 FOR UPDATE`,
+      [hit.id]
+    )).rows[0];
+    if (!cur?.movable) { await client.query('ROLLBACK'); return hit; }
+
+    const owner = (await client.query<{ id: string; active: boolean }>(
+      `SELECT id, COALESCE(LOWER(account_status), 'active') = 'active' AS active
+         FROM app_user WHERE LOWER(email) = $1 OR LOWER(secondary_email) = $1 LIMIT 1`,
+      [email]
+    )).rows[0];
+
+    if (!owner) {
+      // Nobody has this email: the unused account simply takes it (a corrected typo).
+      await client.query(`UPDATE app_user SET email = $2, updated_at = NOW() WHERE id = $1`, [hit.user_id, email]);
+      await client.query(`UPDATE enrollment SET email = $2, updated_at = NOW() WHERE id = $1`, [hit.id, email]);
+      await client.query('COMMIT');
+      return hit;
+    }
+    if (!owner.active) { await client.query('ROLLBACK'); return hit; }
+
+    // The email already has an account (e.g. made when the learner signed in with it and saw no class).
+    const theirs = (await client.query<{ id: string; active: boolean }>(
+      `SELECT id, LOWER(COALESCE(enrolment_status, '')) NOT IN ${INACTIVE_ENROLMENT_SQL} AS active
+         FROM enrollment WHERE user_id = $1 AND course_run_id = $2 LIMIT 1`,
+      [owner.id, courseRunUuid]
+    )).rows[0];
+    if (theirs && !theirs.active) { await client.query('ROLLBACK'); return hit; }
+
+    let moved: LocalHit;
+    if (theirs) {
+      // Already on the class with that account: keep it and retire the unused duplicate.
+      await client.query(`UPDATE enrollment SET enrolment_status = 'Withdrawn', updated_at = NOW() WHERE id = $1`, [hit.id]);
+      moved = { id: theirs.id, user_id: owner.id };
+    } else {
+      await client.query(`UPDATE enrollment SET user_id = $2, email = $3, updated_at = NOW() WHERE id = $1`, [hit.id, owner.id, email]);
+      // Attendance rows follow the learner (keeps anything the trainer already marked).
+      await client.query(
+        `UPDATE course_attendance SET user_id = $2, nric = CASE WHEN nric = $4 THEN $5 ELSE nric END, updated_at = NOW()
+          WHERE user_id = $1 AND session_id IN (SELECT id FROM course_session WHERE course_run_id = $3)`,
+        [hit.user_id, owner.id, courseRunUuid, `_uid_${hit.user_id}`, `_uid_${owner.id}`]
+      );
+      await client.query(`INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`, [owner.id]);
+      moved = { id: hit.id, user_id: owner.id };
+    }
+    await client.query(`UPDATE app_user SET courses_updated_at = NOW() WHERE id = ANY($1::uuid[])`, [[hit.user_id, owner.id]]);
+    await client.query('COMMIT');
+    return moved;
+  } catch (e: any) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.warn('[enrolment-request] could not move the class registration:', e?.message);
+    return hit;
+  } finally {
+    client.release();
+  }
+}
+
+export type LocalEnrolmentResult =
+  | { ok: true; enrollmentUuid: string; userId: string; /** The email that signs in to this class registration. */ signInEmail: string }
+  | { ok: false; error: string };
+
+/**
+ * The local enrolment a request belongs to. Matches an active enrolment on the class by NRIC
+ * (or, with `matchName`, by exact name); with `create`, otherwise finds or creates the learner's
+ * account by email and enrols them on the class (same routine as self-registration). Links the
+ * request to it (when the row is a stored request) and fills blanks in the learner's profile.
+ * Refuses when the email belongs to an account with a different NRIC (e.g. a shared HR mailbox),
+ * so one learner's enrolment ref never lands on another's record.
+ *
+ * `signInEmail` is the email the learner must use to see the class: the one on the request when
+ * the account answers to it, otherwise the account's own email.
  */
 export async function resolveLocalEnrolment(
-  reqRow: any, { create }: { create: boolean }
-): Promise<{ ok: true; enrollmentUuid: string; userId: string } | { ok: false; error: string }> {
-  const find = async () => (await pool.query<{ id: string; user_id: string }>(
+  reqRow: any, { create, matchName = false }: { create: boolean; matchName?: boolean }
+): Promise<LocalEnrolmentResult> {
+  const email = String(reqRow.email || '').toLowerCase();
+  const find = async () => (await pool.query<LocalHit>(
     `SELECT e.id, e.user_id
        FROM enrollment e LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
       WHERE e.course_run_id = $1
         AND (e.id = $3 OR UPPER(COALESCE(NULLIF(e.nric, ''), lp.nric, '')) = $2)
-        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ${INACTIVE_ENROLMENT_SQL}
       ORDER BY (e.id = $3) DESC LIMIT 1`,
     [reqRow.course_run_uuid, reqRow.nric, reqRow.enrollment_uuid || null]
   )).rows[0];
+  const findByName = async () => {
+    const n = normName(reqRow.trainee_name);
+    if (n.length < 3) return undefined;
+    const rows = (await pool.query<LocalHit & { name: string | null }>(
+      `SELECT e.id, e.user_id, COALESCE(NULLIF(e.raw_data->'trainee'->>'fullName', ''), au.full_name) AS name
+         FROM enrollment e JOIN app_user au ON au.id = e.user_id
+        WHERE e.course_run_id = $1 AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ${INACTIVE_ENROLMENT_SQL}`,
+      [reqRow.course_run_uuid]
+    )).rows.filter(r => normName(r.name) === n);
+    return rows.length === 1 ? { id: rows[0].id, user_id: rows[0].user_id } : undefined;
+  };
+  const account = async (userId: string) => (await pool.query<{ email: string | null; secondary_email: string | null }>(
+    `SELECT email, secondary_email FROM app_user WHERE id = $1`, [userId]
+  )).rows[0];
 
-  let hit = await find();
+  let hit = (await find()) || (matchName ? await findByName() : undefined);
+  if (hit && create && email && !answersTo(await account(hit.user_id), email)) {
+    hit = await moveRegistrationToEmail(hit, reqRow.course_run_uuid, email);
+  }
   if (!hit) {
     if (!create) return { ok: false, error: 'No local enrolment for this learner on the class' };
     const clash = (await pool.query<{ nric: string | null }>(
       `SELECT NULLIF(lp.nric, '') AS nric
          FROM app_user au LEFT JOIN learner_profile lp ON lp.user_id = au.id
         WHERE LOWER(au.email) = $1 OR LOWER(au.secondary_email) = $1 LIMIT 1`,
-      [reqRow.email]
+      [email]
     )).rows[0];
     if (clash?.nric && clash.nric.toUpperCase() !== reqRow.nric) {
       return { ok: false, error: `The email ${reqRow.email} already belongs to another learner (different NRIC). Ask the learner for their own email, or enrol on the TPGateway portal and use Enter Ref.` };
     }
     const run = await getEnrolmentRunContext(reqRow.course_run_uuid);
     if (!run) return { ok: false, error: 'Class not found' };
-    const result = await enrolLearner({ fullName: reqRow.trainee_name, email: reqRow.email, run, source: 'enrolment-request' });
+    const result = await enrolLearner({ fullName: reqRow.trainee_name, email, run, source: 'enrolment-request' });
     if (result.outcome === 'account_inactive') return { ok: false, error: "The learner's account is inactive. Reactivate it first." };
     if (result.outcome === 'enrolment_withdrawn') return { ok: false, error: "The learner's enrolment on this class was withdrawn or removed. Restore it first." };
-    const e = (await pool.query<{ id: string; user_id: string }>(
+    const e = (await pool.query<LocalHit>(
       `SELECT id, user_id FROM enrollment WHERE user_id = $1 AND course_run_id = $2 LIMIT 1`,
       [result.userId, reqRow.course_run_uuid]
     )).rows[0];
@@ -257,7 +402,9 @@ export async function resolveLocalEnrolment(
     hit = e;
   }
 
-  await pool.query(`UPDATE enrolment_detail_request SET enrollment_uuid = $2, user_id = $3 WHERE id = $1`, [reqRow.id, hit.id, hit.user_id]);
+  if (reqRow.id) {
+    await pool.query(`UPDATE enrolment_detail_request SET enrollment_uuid = $2, user_id = $3 WHERE id = $1`, [reqRow.id, hit.id, hit.user_id]);
+  }
   // Fill blanks in the learner's profile (never overwrite what is already there).
   await pool.query(
     `INSERT INTO learner_profile (user_id, tel, nric, dob) VALUES ($1, $2, $3, $4::date)
@@ -267,7 +414,8 @@ export async function resolveLocalEnrolment(
        dob  = COALESCE(learner_profile.dob, EXCLUDED.dob)`,
     [hit.user_id, reqRow.contact_number, reqRow.nric, reqRow.date_of_birth]
   ).catch((e) => console.warn('[enrolment-request] profile backfill failed:', e?.message));
-  return { ok: true, enrollmentUuid: hit.id, userId: hit.user_id };
+  const acct = await account(hit.user_id);
+  return { ok: true, enrollmentUuid: hit.id, userId: hit.user_id, signInEmail: answersTo(acct, email) ? email : String(acct?.email || '') };
 }
 
 /** Column list for request reads — DOB as text so it never shifts through a JS Date. */

@@ -8,7 +8,8 @@ import { NATIONALITY_OPTIONS } from '../../lib/learner/nationality';
 // in every enrolment detail, and the class details the QR already knows are shown read-only.
 // On submit the server checks the class's SWDA enrolments by NRIC/FIN or exact name: a learner
 // already enrolled is told so and nothing is stored; anyone else's details go to staff for
-// enrolment on TPGateway, and they are registered on the class to sign in with an email code.
+// enrolment on TPGateway. Either way they are registered on the class, and the result screen sends
+// them to sign in with the exact email that opens it (or lets them correct that email).
 
 type Sponsorship = 'Individual' | 'Employer';
 
@@ -27,6 +28,15 @@ interface FormState {
   employerContactNumber: string;
 }
 
+/** How the learner signs in to the class after submitting. */
+interface SignIn {
+  registered: boolean;
+  /** True: the email they typed opens the class. False: another email (shown masked) does. */
+  withThisEmail: boolean;
+  email: string | null;
+  issue: string | null;
+}
+
 interface CourseInfo { title: string; code: string | null; courseRunId: string; startDate: string | null; endDate: string | null }
 
 const EMPTY: FormState = {
@@ -41,6 +51,7 @@ const inputCls = (err?: string) =>
   }`;
 const roCls = 'w-full min-h-[2.875rem] px-3 py-2.5 rounded-lg border border-slate-300 text-base bg-slate-100 text-slate-700 break-words';
 const labelCls = 'block text-sm font-semibold text-gray-900 mb-1.5';
+const hintCls = 'text-xs text-gray-600'; // design-tokens-allow (this public form is always white)
 
 const Field: React.FC<{ id: string; label: string; error?: string; children: React.ReactNode }> = ({ id, label, error, children }) => (
   <div>
@@ -73,8 +84,8 @@ export default function EnrolmentRequestPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [result, setResult] = useState<
     | null
-    | { kind: 'enrolled'; ref: string }
-    | { kind: 'submitted'; registered: boolean; email: string | null; issue: string | null }
+    | ({ kind: 'enrolled'; ref: string } & SignIn)
+    | ({ kind: 'submitted' } & SignIn)
   >(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -121,8 +132,11 @@ export default function EnrolmentRequestPage() {
         setError(json.error || 'Could not submit your details.');
         return;
       }
-      if (json.enrolled) { setResult({ kind: 'enrolled', ref: json.enrolmentRef || '' }); return; }
-      setResult({ kind: 'submitted', registered: !!json.registered, email: json.email || null, issue: json.registrationIssue || null });
+      const signIn: SignIn = {
+        registered: !!json.registered, withThisEmail: !!json.signInWithThisEmail,
+        email: json.email || null, issue: json.registrationIssue || null,
+      };
+      setResult(json.enrolled ? { kind: 'enrolled', ref: json.enrolmentRef || '', ...signIn } : { kind: 'submitted', ...signIn });
     } catch {
       setError('Could not submit your details. Please try again.');
     } finally {
@@ -131,6 +145,48 @@ export default function EnrolmentRequestPage() {
   };
 
   const startOver = () => { setForm(EMPTY); setFieldErrors({}); setError(null); setResult(null); };
+  // Back to the form with everything still filled in, to correct the email and submit again.
+  const changeEmail = () => {
+    setError(null); setResult(null);
+    setTimeout(() => { const el = document.getElementById('enr-email') as HTMLInputElement | null; el?.focus(); el?.select(); }, 100);
+  };
+
+  // What the learner does next: sign in with the email that opens the class.
+  const signInBlock = (r: SignIn) => (
+    <>
+      {r.registered && r.withThisEmail && (
+        <div className="rounded-lg border border-green-300 bg-green-50 p-4 space-y-3">
+          <p className="text-sm text-green-800">You are registered for this class. Sign in with this email to see your class and course materials:</p>
+          <p className="text-base font-semibold text-green-900 break-all">{r.email}</p>
+          <a
+            href={`/?signin=${encodeURIComponent(r.email || '')}`}
+            className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg"
+          >
+            Sign in to my class
+          </a>
+          <p className="text-xs text-green-800">
+            We email a one-time code to this address. Always sign in with this same email.{' '}
+            <button type="button" onClick={changeEmail} className="font-semibold underline">Wrong email? Change it</button>
+          </p>
+        </div>
+      )}
+      {r.registered && !r.withThisEmail && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
+          <p className="text-sm text-amber-800">
+            You are already registered for this class with another email{r.email ? <>: <strong className="break-all">{r.email}</strong></> : ''}.
+            Sign in with that email to see your class. To use a different email, ask your trainer.
+          </p>
+          <a href="/" className="inline-block text-sm font-medium text-amber-800 underline">Open the learning portal</a>
+        </div>
+      )}
+      {!r.registered && r.issue && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-1">
+          <p className="text-sm text-amber-800">{r.issue}</p>
+          <button type="button" onClick={changeEmail} className="text-sm font-semibold text-amber-800 underline">Use a different email</button>
+        </div>
+      )}
+    </>
+  );
   const employer = form.sponsorshipType === 'Employer';
   const dates = course
     ? [fmtDay(course.startDate), fmtDay(course.endDate)].filter(Boolean).filter((d, i, a) => a.indexOf(d) === i).join(' – ')
@@ -148,13 +204,14 @@ export default function EnrolmentRequestPage() {
       <div className="space-y-4">
         <div className="rounded-lg border border-green-300 bg-green-50 p-4">
           <p className="font-semibold text-green-800">You are already enrolled in this class.</p>
-          <p className="text-sm text-green-800 mt-1">There is nothing to submit.</p>
+          <p className="text-sm text-green-800 mt-1">There is nothing more to submit for your SWDA enrolment.</p>
         </div>
         <dl className="grid grid-cols-[7rem_1fr] gap-y-2 text-sm">
           <dt className="text-gray-500">Name</dt><dd className="font-medium text-gray-900">{form.traineeName}</dd>
           <dt className="text-gray-500">NRIC/FIN</dt><dd className="text-gray-900">{form.nric ? `${form.nric[0]}XXXX${form.nric.slice(-4)}` : ''}</dd>
           {result.ref && (<><dt className="text-gray-500">Enrolment ID</dt><dd className="font-mono text-gray-900">{result.ref}</dd></>)}
         </dl>
+        {signInBlock(result)}
         <button type="button" onClick={startOver} className="text-sm text-blue-700 hover:underline">Enrol someone else on this phone</button>
       </div>
     );
@@ -167,16 +224,7 @@ export default function EnrolmentRequestPage() {
             Your trainer or our admin team will complete your SWDA enrolment for this class. You do not need to do anything else for it.
           </p>
         </div>
-        {result.registered && (
-          <div className="rounded-lg border border-green-300 bg-green-50 p-4 space-y-2">
-            <p className="text-sm text-green-800">
-              You are registered for this class. Sign in to the learning portal with
-              {result.email ? <> <strong>{result.email}</strong></> : ' your email'} and the one-time code we email you.
-            </p>
-            <a href="/" className="inline-block text-sm font-medium text-green-800 underline">Open the learning portal</a>
-          </div>
-        )}
-        {!result.registered && result.issue && <p className="text-sm text-amber-700">{result.issue}</p>}
+        {signInBlock(result)}
         <button type="button" onClick={startOver} className="text-sm text-blue-700 hover:underline">Enrol someone else on this phone</button>
       </div>
     );
@@ -210,6 +258,7 @@ export default function EnrolmentRequestPage() {
         </Field>
         <Field id="enr-email" label="Email" error={fieldErrors.email}>
           <input type="email" {...inp('email')} autoComplete="email" maxLength={255} />
+          <p className={`${hintCls} mt-1`}>Use an email you can open now. You sign in to your class with this same email.</p>
         </Field>
         <Field id="enr-contactNumber" label="Contact Number" error={fieldErrors.contactNumber}>
           <input type="tel" {...inp('contactNumber')} placeholder="91234567" inputMode="tel" autoComplete="tel" maxLength={20} />
@@ -243,16 +292,19 @@ export default function EnrolmentRequestPage() {
             <Field id="enr-employerName" label="Company Name" error={fieldErrors.employerName}>
               <input {...inp('employerName')} autoComplete="organization" />
             </Field>
-            <Field id="enr-employerUen" label="Company UEN" error={fieldErrors.employerUen}>
+            <p className={hintCls}>
+              Only the company name is needed. Leave the UEN and contact details blank if you do not know them: our team will get them.
+            </p>
+            <Field id="enr-employerUen" label="Company UEN (optional)" error={fieldErrors.employerUen}>
               <input {...inp('employerUen')} placeholder="201200696W" maxLength={10} autoCapitalize="characters" />
             </Field>
-            <Field id="enr-employerContactName" label="Company Contact Person (e.g. HR)" error={fieldErrors.employerContactName}>
+            <Field id="enr-employerContactName" label="Company Contact Person, e.g. HR (optional)" error={fieldErrors.employerContactName}>
               <input {...inp('employerContactName')} />
             </Field>
-            <Field id="enr-employerContactEmail" label="Company Contact Email" error={fieldErrors.employerContactEmail}>
+            <Field id="enr-employerContactEmail" label="Company Contact Email (optional)" error={fieldErrors.employerContactEmail}>
               <input type="email" {...inp('employerContactEmail')} />
             </Field>
-            <Field id="enr-employerContactNumber" label="Company Contact Number" error={fieldErrors.employerContactNumber}>
+            <Field id="enr-employerContactNumber" label="Company Contact Number (optional)" error={fieldErrors.employerContactNumber}>
               <input {...inp('employerContactNumber')} inputMode="tel" />
             </Field>
           </div>
@@ -270,7 +322,7 @@ export default function EnrolmentRequestPage() {
         </button>
         <p className="text-xs text-gray-500">
           Enter your name and date of birth exactly as on your NRIC/FIN card. If you are already enrolled in this class, we tell you
-          and nothing is submitted. Otherwise you are registered for the class and can sign in with an email code.
+          and nothing more is submitted. Either way you are registered for the class and can sign in with an email code.
         </p>
       </form>
     );

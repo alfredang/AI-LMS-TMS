@@ -61,6 +61,9 @@ export const EnrolmentRequestsPanel: React.FC<{
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [refEditId, setRefEditId] = useState<string | null>(null);
   const [refInput, setRefInput] = useState('');
+  // Company details the learner left blank on the form (UEN, contact): staff fill them in here.
+  const [empEditId, setEmpEditId] = useState<string | null>(null);
+  const [empForm, setEmpForm] = useState({ employerName: '', employerUen: '', employerContactName: '', employerContactEmail: '', employerContactNumber: '' });
   const [rowMsg, setRowMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
   const [qrAvailable, setQrAvailable] = useState(false);
   const [qrZoomed, setQrZoomed] = useState(false);
@@ -91,6 +94,7 @@ export const EnrolmentRequestsPanel: React.FC<{
     setRowMsg({});
     setConfirmId(null);
     setRefEditId(null);
+    setEmpEditId(null);
     setQrAvailable(false);
     setQrZoomed(false);
     setConfirmAll(false);
@@ -101,10 +105,10 @@ export const EnrolmentRequestsPanel: React.FC<{
   useEffect(() => {
     if (!open || !qrAvailable) return;
     const t = setInterval(() => {
-      if (document.visibilityState === 'visible' && !busyId && !bulk && !refEditId && !confirmId) load(true);
+      if (document.visibilityState === 'visible' && !busyId && !bulk && !refEditId && !empEditId && !confirmId) load(true);
     }, 20000);
     return () => clearInterval(t);
-  }, [open, qrAvailable, busyId, bulk, refEditId, confirmId, load]);
+  }, [open, qrAvailable, busyId, bulk, refEditId, empEditId, confirmId, load]);
 
   useEffect(() => {
     if (!qrZoomed) return;
@@ -142,6 +146,34 @@ export const EnrolmentRequestsPanel: React.FC<{
     } finally {
       setBusyId(null);
       setConfirmId(null);
+    }
+  };
+
+  const editEmployer = (r: EnrolmentRequest) => {
+    setEmpEditId(r.id);
+    setEmpForm({
+      employerName: r.employerName || '', employerUen: r.employerUen || '', employerContactName: r.employerContactName || '',
+      employerContactEmail: r.employerContactEmail || '', employerContactNumber: r.employerContactNumber || '',
+    });
+  };
+
+  const saveEmployer = async (id: string) => {
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/enrolments/detail-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'set_employer', ...empForm }),
+      });
+      const json = await res.json();
+      const ok = res.ok && json.success;
+      if (json.request) setRequests(rs => rs.map(r => (r.id === id ? json.request : r)));
+      setRowMsg(m => ({ ...m, [id]: { ok, text: json.message || json.error || (ok ? 'Saved' : 'Failed') } }));
+      if (ok) setEmpEditId(null);
+    } catch {
+      setRowMsg(m => ({ ...m, [id]: { ok: false, text: 'Request failed. Please try again.' } }));
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -326,15 +358,46 @@ export const EnrolmentRequestsPanel: React.FC<{
                       <td className={td}>{r.nationality || '—'}</td>
                       <td className={td}>{r.sponsorshipType === 'Employer' ? 'Company Sponsored' : 'Self Sponsored'}</td>
                       <td className="px-3 py-3 text-on-surface-secondary min-w-[12rem]">
-                        {r.sponsorshipType === 'Employer' ? (
+                        {r.sponsorshipType !== 'Employer' ? '—' : empEditId === r.id ? (
+                          <div className="space-y-1.5 min-w-[14rem]">
+                            {([
+                              ['employerName', 'Company name'],
+                              ['employerUen', 'Company UEN'],
+                              ['employerContactName', 'Contact person'],
+                              ['employerContactEmail', 'Contact email'],
+                              ['employerContactNumber', 'Contact number'],
+                            ] as const).map(([k, label]) => (
+                              <input
+                                key={k}
+                                value={empForm[k]}
+                                onChange={e => setEmpForm(f => ({ ...f, [k]: k === 'employerUen' ? e.target.value.toUpperCase().trim() : e.target.value }))}
+                                placeholder={label}
+                                aria-label={label}
+                                className="w-full px-2 py-1 text-xs rounded border border-strong bg-surface text-on-surface"
+                              />
+                            ))}
+                            <div className="flex gap-1.5">
+                              <button disabled={busy} onClick={() => saveEmployer(r.id)} className={`${btn} bg-primary text-on-primary hover:bg-primary-hover`}>Save</button>
+                              <button disabled={busy} onClick={() => setEmpEditId(null)} className={`${btn} bg-surface-elevated border border-default text-on-surface-secondary`}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
                           <div className="text-xs space-y-0.5">
                             <div className="font-medium text-on-surface">{r.employerName}</div>
-                            <div>UEN {r.employerUen}</div>
-                            <div>{r.employerContactName}</div>
-                            <div>{r.employerContactEmail}</div>
-                            <div>{showContact ? r.employerContactNumber : mask(r.employerContactNumber || '')}</div>
+                            {r.employerUen ? <div>UEN {r.employerUen}</div> : <div className="text-warning">UEN not provided</div>}
+                            {r.employerContactName && <div>{r.employerContactName}</div>}
+                            {r.employerContactEmail && <div>{r.employerContactEmail}</div>}
+                            {r.employerContactNumber && <div>{showContact ? r.employerContactNumber : mask(r.employerContactNumber)}</div>}
+                            {!(r.employerContactName && r.employerContactEmail && r.employerContactNumber) && (
+                              <div className="text-warning">Contact details incomplete</div>
+                            )}
+                            {actionable && (
+                              <button disabled={busy} onClick={() => editEmployer(r)} className="text-primary hover:underline disabled:opacity-50">
+                                Edit company
+                              </button>
+                            )}
                           </div>
-                        ) : '—'}
+                        )}
                       </td>
                       <td className={`${td} text-xs`}>{fmtDateTime(r.updatedAt || r.submittedAt)}</td>
                       <td className="px-3 py-3">

@@ -5,6 +5,7 @@ import { requireCourseRunTrainer } from '../../../lib/auth/courseRunAccess';
 import { pushEnrolmentToSsgForLearner } from '../../../lib/ssg/pushEnrolmentToSsgForLearner';
 import {
   ensureEnrolmentDetailRequestTable, getEnrolmentRunContext, mapRequestRow, resolveLocalEnrolment, REQUEST_COLUMNS,
+  missingEmployerDetails, cleanEmployerDetails, employerDetailErrors,
 } from '../../../lib/learner/enrolmentDetailRequest';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,6 +19,10 @@ const REF_RE = /^[A-Z0-9][A-Z0-9-]{5,39}$/i;
  * GET  ?courseRunUuid=                         → { data: request[], qrAvailable }
  * POST { id, action: 'enrol' }                  → enrol the learner on TPGateway (REAL SSG) and store the ref
  * POST { id, action: 'set_ref', enrolmentRef }  → record a ref obtained elsewhere (e.g. the TPGateway portal)
+ * POST { id, action: 'set_employer', employerName, employerUen, employerContactName,
+ *        employerContactEmail, employerContactNumber }  → fill in / correct the company details of a
+ *                                                 company-sponsored request (the form leaves the UEN
+ *                                                 and contact optional; TPGateway needs them)
  * POST { id, action: 'dismiss' | 'reopen' }
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -93,6 +98,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         if (reqRow.status === 'enrolled') {
           return res.status(409).json({ success: false, error: `Already enrolled (${reqRow.enrolment_ref || 'ref on file'})` });
         }
+        // Company-sponsored: TPGateway needs the UEN and a contact, which the learner may have left blank.
+        const missing = missingEmployerDetails(reqRow);
+        if (missing.length) {
+          const message = `Add the ${missing.join(', ')} (Edit company) before enrolling on TPGateway, or enrol on the TPGateway portal and use Enter Ref.`;
+          const request = await finish('failed', null, message);
+          return res.status(200).json({ success: false, status: 'error', message, request });
+        }
         // The request came from the public QR form: find (or create) the learner's account and
         // local enrolment on the class first, so the TPGateway ref has a record to live on.
         const local = await resolveLocalEnrolment(reqRow, { create: true });
@@ -137,6 +149,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
         const request = await finish('enrolled', ref, null);
         return res.status(200).json({ success: true, message: `Enrolment ${ref} recorded`, request });
+      }
+
+      case 'set_employer': {
+        if (reqRow.status === 'enrolled') return res.status(409).json({ success: false, error: 'An enrolled request cannot be changed' });
+        if (reqRow.sponsorship_type !== 'Employer') return res.status(400).json({ success: false, error: 'This request is self sponsored' });
+        const e = cleanEmployerDetails(req.body);
+        const fieldErrors = employerDetailErrors(e, { requireAll: false });
+        if (Object.keys(fieldErrors).length) {
+          return res.status(400).json({ success: false, error: Object.values(fieldErrors)[0], fieldErrors });
+        }
+        const updated = (await pool.query(
+          `UPDATE enrolment_detail_request
+              SET employer_name = $2, employer_uen = NULLIF($3, ''), employer_contact_name = NULLIF($4, ''),
+                  employer_contact_email = NULLIF($5, ''), employer_contact_number = NULLIF($6, ''),
+                  status = CASE WHEN status = 'failed' THEN 'submitted' ELSE status END, last_error = NULL, updated_at = NOW()
+            WHERE id = $1
+          RETURNING ${REQUEST_COLUMNS}`,
+          [id, e.employerName, e.employerUen, e.employerContactName, e.employerContactEmail, e.employerContactNumber]
+        )).rows[0];
+        return res.status(200).json({ success: true, message: 'Company details saved', request: mapRequestRow(updated) });
       }
 
       case 'dismiss':

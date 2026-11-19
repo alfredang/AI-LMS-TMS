@@ -21,7 +21,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * POST { run, action: 'submit', ...details }     → store the learner's details for staff to enrol on
  *                                                   TPGateway, and register the learner on the class
  *                                                   (account + local enrolment) so they can sign in
- *                                                   with an email code
+ *                                                   with an email code. A learner already on SWDA is
+ *                                                   registered on the class too (nothing goes to staff).
+ *                                                   Submitting again with another email moves an unused
+ *                                                   registration to that email.
  *
  * Never returns anyone's stored personal details: a check answers only "enrolled" (with the ref
  * only for a matching NRIC) or "not yet". Nothing is sent to SSG — staff review the requests and
@@ -89,10 +92,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(429).json({ success: false, error: 'Too many attempts. Please ask your trainer.' });
     }
 
+    // Class registration (account + local enrolment) so the learner can sign in with an email code
+    // and see the class. `signIn` tells the page which email does that: the one just typed, or
+    // (masked) the email of the account that already holds this learner's place on the class.
+    const register = async (row: any, opts: { matchName?: boolean } = {}) => {
+      try {
+        const local = await resolveLocalEnrolment(row, { create: true, ...opts });
+        if (!local.ok) {
+          console.warn('[public enrolment-request] class registration skipped:', local.error);
+          // Only the generic reason reaches the page: the detailed one names another account.
+          return { registered: false, local: null, signIn: { registrationIssue: 'We could not set up your sign-in with this email. Your trainer will help you.' } };
+        }
+        const typed = local.signInEmail === d.email;
+        return { registered: true, local, signIn: { signInWithThisEmail: typed, email: typed ? d.email : maskEmail(local.signInEmail) } };
+      } catch (e: any) {
+        console.error('[public enrolment-request] class registration failed:', e?.message);
+        return { registered: false, local: null, signIn: {} };
+      }
+    };
+
+    // Already enrolled on SWDA: nothing goes to staff, but the learner is still registered on the
+    // class here, so the email they use opens it.
     const ref = await findEnrolmentRefByNric(run.id, d.nric);
-    if (ref) return res.status(200).json({ success: true, enrolled: true, enrolmentRef: ref });
-    if (await isEnrolledByName(run.id, d.traineeName)) {
-      return res.status(200).json({ success: true, enrolled: true, enrolmentRef: null });
+    const enrolledByName = !ref && (await isEnrolledByName(run.id, d.traineeName));
+    if (ref || enrolledByName) {
+      const r = await register(
+        { course_run_uuid: run.id, nric: d.nric, email: d.email, trainee_name: d.traineeName, contact_number: d.contactNumber, date_of_birth: d.dateOfBirth },
+        { matchName: true }
+      );
+      if (r.local && ref) {
+        // Keep the SWDA ref with the class registration (never replaces one already there).
+        await pool.query(
+          `UPDATE enrollment SET enrolment_id = $1, nric = COALESCE(NULLIF(nric, ''), $3), updated_at = NOW()
+            WHERE id = $2 AND NULLIF(TRIM(enrolment_id), '') IS NULL`,
+          [ref, r.local.enrollmentUuid, d.nric]
+        ).catch((e) => console.warn('[public enrolment-request] could not store the ref:', e?.message));
+      }
+      return res.status(200).json({ success: true, enrolled: true, enrolmentRef: ref || null, registered: r.registered, ...r.signIn });
     }
 
     const employer = d.sponsorshipType === 'Employer';
@@ -114,35 +150,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        RETURNING ${REQUEST_COLUMNS}`,
       [
         run.id, d.traineeName, d.nric, d.contactNumber, d.email, d.dateOfBirth, d.sponsorshipType,
-        employer ? d.employerName : null, employer ? d.employerUen : null, employer ? d.employerContactName : null,
-        employer ? d.employerContactEmail : null, employer ? d.employerContactNumber : null,
+        // Company UEN and contact details are optional on the form: blank is stored as NULL.
+        employer ? d.employerName : null, (employer && d.employerUen) || null, (employer && d.employerContactName) || null,
+        (employer && d.employerContactEmail) || null, (employer && d.employerContactNumber) || null,
         d.nationality,
       ]
     );
 
-    // Register the learner on this class (account + local enrolment) so they can sign in with an
-    // email code straight away. The SWDA enrolment itself is still done by staff on TPGateway.
-    let registered = false;
-    let registrationNote: string | null = null;
+    // Register the learner on this class straight away. The SWDA enrolment itself is still done
+    // by staff on TPGateway.
     const row = saved.rows[0];
-    if (row) {
-      try {
-        const local = await resolveLocalEnrolment(row, { create: true });
-        registered = local.ok;
-        if (!local.ok) {
-          registrationNote = local.error;
-          console.warn('[public enrolment-request] class registration skipped:', local.error);
-        }
-      } catch (e: any) {
-        console.error('[public enrolment-request] class registration failed:', e?.message);
-      }
-    }
-    return res.status(200).json({
-      success: true, enrolled: false, submitted: true, registered,
-      email: registered ? maskEmail(d.email) : null,
-      // Only the generic reason reaches the page: the detailed one names another account.
-      registrationIssue: registrationNote ? 'We could not set up your sign-in with this email. Your trainer will help you.' : null,
-    });
+    const r = row ? await register(row) : { registered: false, signIn: {} };
+    return res.status(200).json({ success: true, enrolled: false, submitted: true, registered: r.registered, ...r.signIn });
   } catch (err: any) {
     console.error('[public enrolment-request] failed:', err?.message);
     return res.status(500).json({ success: false, error: 'Something went wrong. Please try again.' });
