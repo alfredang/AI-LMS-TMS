@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { foldUidPlaceholders } from '../../../lib/attendance/foldPlaceholders';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const client = await pool.connect();
@@ -9,6 +10,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const { sessionId } = req.query;
       if (!sessionId) {
         return res.status(400).json({ success: false, error: 'sessionId is required' });
+      }
+
+      // One row per learner: fold `_uid_` placeholders into the learner's NRIC row first,
+      // so a learner who signed in on SSG is not also listed as an absent manual learner.
+      try {
+        await foldUidPlaceholders(client, String(sessionId));
+      } catch (e: any) {
+        console.warn('attendance-records: could not fold placeholder rows:', e?.message);
       }
 
       // Return attendance records — join app_user to get name/email for manually added learners
@@ -80,10 +89,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
       await client.query('COMMIT');
 
+      // SSG e-attendance saved on the NRIC row: drop the same learner's placeholder row.
+      let folded = 0;
+      try {
+        folded = await foldUidPlaceholders(client, sessionId);
+      } catch (e: any) {
+        console.warn('attendance-records: could not fold placeholder rows:', e?.message);
+      }
+
       const msg = skipped > 0
         ? `Attendance saved (${saved} saved, ${skipped} skipped — missing NRIC)`
         : `Attendance saved successfully (${saved} records).`;
-      return res.status(200).json({ success: true, message: msg });
+      return res.status(200).json({ success: true, message: msg, folded });
     }
 
     return res.status(405).json({ success: false, error: 'Method not allowed' });

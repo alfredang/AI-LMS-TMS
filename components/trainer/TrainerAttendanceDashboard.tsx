@@ -575,6 +575,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             for (const r of records) updated[r.nric] = { isPresent: true, reasonOfAbsence: '' };
             return updated;
           });
+          // A learner's placeholder row was merged into their SSG row: drop it from the list now
+          if (json.folded) refreshManualQuiet(selectedManualSession);
         }
       })
       .catch(() => {});

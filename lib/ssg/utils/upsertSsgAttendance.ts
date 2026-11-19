@@ -1,5 +1,6 @@
 import pool from '../../db';
 import { normalizeAttendanceRecord } from './attendance-decrypt';
+import { foldUidPlaceholders } from '../../attendance/foldPlaceholders';
 
 /**
  * Upsert one SSG attendance record into course_attendance for a local session.
@@ -71,5 +72,15 @@ export async function upsertSsgAttendanceRecord(
        updated_at = NOW()`,
     [sessionUuid, userId, nric, isPresent]
   );
+
+  // Learner found by NRIC (profile gained it after they self-enrolled): their
+  // `_uid_` placeholder for this session is the same person, not a second learner.
+  if (userId) {
+    try {
+      await foldUidPlaceholders(pool, sessionUuid, userId);
+    } catch (e: any) {
+      console.warn('[ssg-attendance] could not fold placeholder row:', e?.message);
+    }
+  }
   return true;
 }
