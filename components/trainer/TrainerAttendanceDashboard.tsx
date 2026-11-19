@@ -1456,7 +1456,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           course: { run: { id: selectedCourse?.courseRunCode || '', startDate: toYmd(selectedCourse?.startDate), endDate: toYmd(selectedCourse?.endDate) } },
           trainee: {
             id: r.nric, fullName: r.traineeName, email: { full: r.email }, contactNumber: r.contactNumber,
-            sponsorshipType: r.sponsorshipType, employer: r.employerName ? { name: r.employerName } : undefined,
+            dateOfBirth: r.dateOfBirth || '', nationality: r.nationality || '',
+            sponsorshipType: r.sponsorshipType,
+            employer: r.employerName ? {
+              name: r.employerName, uen: r.employerUen || '',
+              contact: { fullName: r.employerContactName || '', emailAddress: r.employerContactEmail || '', phone: r.employerContactNumber || '' },
+            } : undefined,
             enrolmentDate: toYmd(r.submittedAt),
           },
         },
@@ -1471,6 +1476,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     return acc;
   }, { confirmed: 0, pending: 0, cancelled: 0 });
 
+  /** A learner's date of birth as YYYY-MM-DD (the enrolment form's, or the one SSG returns). */
+  const enrolmentDob = (trainee: any): string => {
+    const v = String(trainee?.dateOfBirth || trainee?.dob || '').trim();
+    return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : v;
+  };
+
   /** Download the SWDA Enrolment table (SSG enrolments + pending form submissions) as Excel. */
   const downloadEnrolmentsExcel = async () => {
     const XLSX = await import('xlsx');
@@ -1481,6 +1492,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
       return {
         'No.': idx + 1,
+        'Course Title': selectedCourse?.title || '',
+        'Course Code': selectedCourse?.courseCode || '',
         'Course Run ID': run?.id || selectedCourse?.courseRunCode || '',
         'Start Date': run?.startDate || '',
         'End Date': run?.endDate || '',
@@ -1488,17 +1501,24 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         'Trainee Name': trainee?.fullName || trainee?.name || '',
         // Full NRIC for staff only, as on screen
         'NRIC': isAdminMode ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric),
+        // SWDA needs NRIC + date of birth to enrol, whatever the sponsorship
+        'Date of Birth': enrolmentDob(trainee),
+        'Nationality': trainee?.nationality || '',
         'Contact Number': extractContact(trainee).phone,
         'Email': trainee?.email?.full || (typeof trainee?.email === 'string' ? trainee.email : '') || '',
         'Sponsorship': trainee?.sponsorshipType || '',
         'Employer': trainee?.employer?.name || '',
+        'Employer UEN': trainee?.employer?.uen || '',
+        'Employer Contact': trainee?.employer?.contact?.fullName || '',
+        'Employer Contact Email': trainee?.employer?.contact?.emailAddress?.full || (typeof trainee?.employer?.contact?.emailAddress === 'string' ? trainee.employer.contact.emailAddress : '') || '',
+        'Employer Contact Number': trainee?.employer?.contact?.phone || trainee?.employer?.contact?.contactNumber?.phoneNumber || '',
         'Enrolment Status': enrol?.status || enrol?.enrolmentStatus || '',
         'Enrolment Date': trainee?.enrolmentDate || '',
         'Source': item?._request ? 'SWDA Enrolment form' : 'SSG',
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [5, 14, 12, 12, 20, 32, 12, 16, 32, 13, 28, 16, 14, 20].map(wch => ({ wch }));
+    ws['!cols'] = [5, 36, 16, 14, 12, 12, 20, 32, 12, 13, 18, 16, 32, 13, 28, 14, 24, 30, 18, 16, 14, 20].map(wch => ({ wch }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'SWDA Enrolment');
     const stamp = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
@@ -1904,6 +1924,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   </button>
                 </div>
               </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Date of Birth</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Sponsorship</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Employer</th>
@@ -1918,7 +1939,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             {isLoadingEnrolments ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 15 }).map((__, col) => (
+                  {Array.from({ length: 16 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
                     </td>
@@ -1956,6 +1977,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       }
                       return full;
                     })()}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{enrolmentDob(trainee) || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary">{trainee?.email?.full || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.sponsorshipType || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.employer?.name || '—'}</td>
