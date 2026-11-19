@@ -1842,7 +1842,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         else if (label === 'Certificate') targetId = 'certificate';
         else if (label === 'Announcements') targetId = 'announcements';
         else if (label === 'Assessment Summary Record') targetId = toId(label);
-        else if (label === 'Grading') targetId = 'assessment-grading';
+        else if (label === 'Course Feedback') targetId = toId('TRAQOM Survey'); // shared "Course Feedback & TRAQOM Survey" card
 
             const element = document.getElementById(targetId);
             if (element) {
@@ -1868,46 +1868,26 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Certificate", icon: IconName.FileText },
     ];
 
-    let trainerNavItems: NavItem[] = [
-        { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
+    // Trainer/staff menu: one entry per section, in the same order the sections appear in the
+    // main column. The individual courseware documents all live under "Courseware Link".
+    const isTrainerView = userRole === UserRole.Trainer;
+    const isCourseSessionsRole = userRole === UserRole.Developer || userRole === UserRole.Admin;
+    const trainerNavItems: NavItem[] = [
+        // E-Attendance, Course Feedback and Briefing on Assessment sections render for trainers only.
+        ...(isTrainerView ? [{ type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck } as NavItem] : []),
         { type: 'link', label: "SWDA Enrolment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
+        { type: 'link', label: "Lesson", icon: IconName.BookOpen },
+        ...(isTrainerView && trainingProviderProfile?.showCertificateDelivery
+            ? [{ type: 'link', label: "Course Feedback", icon: IconName.Edit } as NavItem] : []),
+        ...(isTrainerView ? [{ type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck } as NavItem] : []),
+        { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
         { type: 'link', label: "Assessment Summary Record", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Post Course Feedback Summary", icon: IconName.Edit },
-        { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
-        { type: 'link', label: "Learner Guide", icon: IconName.FileText },
-        { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
-        { type: 'link', label: "Learner Slides", icon: IconName.FileText },
-        { type: 'link', label: "Trainer Slides", icon: IconName.FileText },
-        { type: 'link', label: "Assessment Plan", icon: IconName.ClipboardCheck },
-        { type: 'separator' },
-        { type: 'link', label: "Lesson", icon: IconName.BookOpen },
-        { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
-        { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
-        { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
-        { type: 'link', label: "Grading", icon: IconName.Edit },
+        ...(isCourseSessionsRole ? [{ type: 'link', label: "Course Sessions", icon: IconName.ClipboardCheck } as NavItem] : []),
     ];
-
-    if (userRole === UserRole.Developer || userRole === UserRole.Admin) {
-        trainerNavItems = [
-            ...trainerNavItems,
-            { type: 'link', label: "Course Sessions", icon: IconName.ClipboardCheck },
-        ];
-    }
-
-    if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
-        trainerNavItems = trainerNavItems.filter(item =>
-            item.type === 'separator' ||
-            (item.label !== "TRAQOM Survey" && item.label !== "Grading" && item.label !== "Briefing on Assessment")
-        );
-    } else if (userRole === UserRole.Trainer) {
-        trainerNavItems = trainerNavItems.filter(item =>
-            item.type === 'separator' ||
-            (item.label !== "TRAQOM Survey" && item.label !== "Learner Slides")
-        );
-    }
 
     const navItems = userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin ? trainerNavItems : learnerNavItems;
 
@@ -1922,11 +1902,11 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         },
         {
             text: <>Go to the <span className="font-bold">Assessment Grading</span> section to mark each learner <span className="font-bold">Competent</span> after they submit all the assessments.</>,
-            target: 'Grading',
+            target: 'Assessment Grading',
         },
         {
             text: <><span className="font-bold">Digitally sign</span> the assessment for each learner in the <span className="font-bold">Assessment Grading</span> section.</>,
-            target: 'Grading',
+            target: 'Assessment Grading',
         },
         {
             text: <><span className="font-bold">Trainer payment will not be made</span> for learners who provide an overall course review rating of <span className="font-bold">2 out of 5 or below</span>.</>,

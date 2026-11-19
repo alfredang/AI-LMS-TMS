@@ -172,10 +172,10 @@ const SessionKpis: React.FC<{ kpis: SessionKpiData }> = ({ kpis }) => {
             <div
               key={t.label}
               title={t.hint}
-              className={`rounded-lg border px-4 py-3 bg-surface-elevated ${off ? 'border-amber-500/60' : allMatch ? 'border-green-500/60' : 'border-default'}`}
+              className={`rounded-lg border px-4 py-3 bg-surface-elevated ${off ? 'border-warning/60' : allMatch ? 'border-success/60' : 'border-default'}`}
             >
               <div className="text-xs font-medium text-on-surface-secondary">{t.label}</div>
-              <div className={`text-2xl font-bold mt-0.5 ${off ? 'text-amber-400' : 'text-on-surface'}`}>
+              <div className={`text-2xl font-bold mt-0.5 ${off ? 'text-warning' : 'text-on-surface'}`}>
                 {loading ? <span className="inline-block h-6 w-8 rounded bg-surface animate-pulse align-middle" /> : t.value}
               </div>
             </div>
@@ -184,14 +184,14 @@ const SessionKpis: React.FC<{ kpis: SessionKpiData }> = ({ kpis }) => {
       </div>
       {!loading && enrolments > 0 && (
         allMatch ? (
-          <p className="text-sm text-green-500 flex items-center gap-1.5">
+          <p className="text-sm text-success flex items-center gap-1.5">
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             All three numbers match.
           </p>
         ) : (
-          <div className="text-sm text-amber-400 space-y-1">
+          <div className="text-sm text-warning space-y-1">
             {missingEAttendance.length > 0 && (
               <p><span className="font-semibold">No e-attendance yet ({missingEAttendance.length}):</span> {missingEAttendance.join(', ')}</p>
             )}
