@@ -1649,6 +1649,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   </select>
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
                 </div>
+                {!selectedCourseRunId && (
+                  <p className="text-xs text-muted italic mt-1.5">Select a class to load its enrolments, sessions and attendance.</p>
+                )}
                 <input
                   type="text"
                   value={adminInput}
@@ -1733,6 +1736,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
             </div>
           )}
+          {/* The one "select a class" reminder on the page: the sections below stay quiet until a class is open */}
+          <p className="text-xs text-muted italic mt-1.5">Select a class to load its enrolments, sessions and attendance.</p>
         </div>
       )}
 
@@ -1740,24 +1745,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       {selectedCourse && (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-5 space-y-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0 space-y-3">
+            <div className="flex-1 min-w-0">
               <div>
                 <p className="text-xs font-semibold text-on-surface-secondary">Class</p>
                 <h2 className="text-lg font-semibold text-on-surface mt-0.5">{selectedCourse.title}</h2>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ['Course Run ID', selectedCourse.courseRunCode],
-                  ['Code', selectedCourse.courseCode],
-                  ['Start', fmtDay(selectedCourse.startDate)],
-                  ['End', fmtDay(selectedCourse.endDate)],
-                  ['Trainer', selectedCourse.assignedTrainerName],
-                ] as Array<[string, string | null | undefined]>).filter(([, v]) => !!v).map(([k, v]) => (
-                  <span key={k} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-default bg-surface-elevated text-sm">
-                    <span className="text-on-surface-secondary">{k}</span>
-                    <span className="font-semibold text-on-surface">{v}</span>
-                  </span>
-                ))}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 flex-shrink-0">
@@ -1795,6 +1786,22 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Full card width, so Trainer sits on the same row as the dates */}
+          <div className="flex flex-wrap gap-2">
+            {([
+              ['Course Run ID', selectedCourse.courseRunCode],
+              ['Code', selectedCourse.courseCode],
+              ['Start', fmtDay(selectedCourse.startDate)],
+              ['End', fmtDay(selectedCourse.endDate)],
+              ['Trainer', selectedCourse.assignedTrainerName],
+            ] as Array<[string, string | null | undefined]>).filter(([, v]) => !!v).map(([k, v]) => (
+              <span key={k} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-default bg-surface-elevated text-sm">
+                <span className="text-on-surface-secondary">{k}</span>
+                <span className="font-semibold text-on-surface">{v}</span>
+              </span>
+            ))}
           </div>
 
           {/* SSG attendance links — per class (digital attendance ID), not per session */}
@@ -1893,7 +1900,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       )}
 
       {/* ── SWDA Enrolment: SSG enrolments + enrolment-form submissions (Pending), per class — collapsible ── */}
-      <div id="swda-enrolment" className="bg-surface rounded-lg border border-default shadow-sm scroll-mt-24">
+      <div id="swda-enrolment" className={`bg-surface rounded-lg border border-default shadow-sm scroll-mt-24 ${selectedCourseRunId ? '' : '[&>div:first-child]:border-b-0'}`}>
         <SectionHeader
           title="SWDA Enrolment"
           count={enrolmentTableRows.length > 0 ? enrolmentTableRows.length : undefined}
@@ -1942,11 +1949,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   Refetch Enrolments
                 </button>
               )}
-              <CollapseToggle open={enrolmentsOpen} onToggle={() => setEnrolmentsOpen(v => !v)} />
+              {selectedCourseRunId && <CollapseToggle open={enrolmentsOpen} onToggle={() => setEnrolmentsOpen(v => !v)} />}
             </>
           }
         />
-        {enrolmentsOpen && (<>
+        {/* No class selected: the prompt sits beside the title and the empty table is not drawn */}
+        {enrolmentsOpen && selectedCourseRunId && (<>
         {uploadTemplateNote && (
           <p className="px-4 py-2 text-xs text-on-surface-secondary border-b border-default">{uploadTemplateNote}</p>
         )}
@@ -2096,8 +2104,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               })
             ) : (
               <tr>
-                <td colSpan={15} className="px-3 py-10 text-center text-sm text-muted italic">
-                  {selectedCourseRunId ? 'No enrolment records found.' : 'Select a class to load enrolments.'}
+                <td colSpan={16} className="px-3 py-10 text-center text-sm text-muted italic">
+                  No enrolment records found.
                 </td>
               </tr>
             )}
@@ -2230,13 +2238,11 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   )}
                 </button>
               );
-            }) : (
+            }) : selectedCourse ? (
               <p className="text-sm text-muted italic py-2">
-                {!selectedCourse
-                  ? 'Select a class to see its sessions.'
-                  : isFetchingSessions || loadingManualSessions ? 'Loading sessions…' : 'No sessions found for this class.'}
+                {isFetchingSessions || loadingManualSessions ? 'Loading sessions…' : 'No sessions found for this class.'}
               </p>
-            )}
+            ) : null}
           </div>
           <button
             type="button"
@@ -2464,9 +2470,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             </tr>
           </thead>
           <tbody>
-            {!selectedCourseRunId ? (
-              <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">Select a class to take attendance.</td></tr>
-            ) : !selectedManualSession ? (
+            {!selectedCourseRunId ? null : !selectedManualSession ? (
               <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">{manualSessions.length === 0 ? 'No sessions found for this class.' : 'Select a session above.'}</td></tr>
             ) : loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance ? (
               Array.from({ length: 4 }).map((_, idx) => (
@@ -2759,13 +2763,13 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   No attendance records found for this session.
                 </td>
               </tr>
-            ) : (
+            ) : selectedCourseRunId ? (
               <tr>
                 <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
-                  Select a class and session to load attendance.
+                  Select a session to load attendance.
                 </td>
               </tr>
-            )}
+            ) : null}
           </tbody>
         </table>
         </div>
