@@ -138,6 +138,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                     -- past records (and merged duplicate rows) do not lose them.
                     OR e.certificate IS NOT NULL
                     OR e.assessment_status IN ('Competent', 'Passed')
+                    -- A cancelled TPGateway enrolment does not mean the learner left: staff
+                    -- cancel and re-create enrolments (wrong sponsorship / employer) while the
+                    -- class is running. A learner marked present in this run stays gradable.
+                    OR (e.enrolment_status = 'Cancelled' AND EXISTS (
+                          SELECT 1
+                          FROM course_attendance a
+                          JOIN course_session s ON s.id = a.session_id
+                          WHERE s.course_run_id = e.course_run_id
+                            AND a.is_present
+                            AND (a.user_id = e.user_id
+                                 OR (e.nric IS NOT NULL AND upper(a.nric) = upper(e.nric)))
+                    ))
               )
         `;
         const [resData, subsData, methodsData] = await Promise.all([
