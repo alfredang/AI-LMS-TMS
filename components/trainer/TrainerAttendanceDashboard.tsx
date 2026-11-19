@@ -1805,7 +1805,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
 
           {/* SSG attendance links — per class (digital attendance ID), not per session */}
-          <div className="border-t border-default pt-4">
+          <div>
             {isFetchingDigitalId ? (
               <div className="flex items-center gap-2 text-sm text-muted py-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
