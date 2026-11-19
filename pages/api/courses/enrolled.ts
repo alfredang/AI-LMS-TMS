@@ -1,6 +1,8 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { classMemberSql } from '../../../lib/enrolment/classMembership';
+import { ensureClassMembershipTables } from '../../../lib/enrolment/classMembershipTables';
 import { getLocalYMD } from '../../../lib/dateHelpers';
 
 interface CourseRow {
@@ -57,6 +59,7 @@ async function handler(
       return res.status(400).json({ message: 'User ID is required' });
     }
 
+    await ensureClassMembershipTables();
     // SQL query to get enrolled courses for a learner
     const enrolledCoursesQuery = `
       SELECT 
@@ -102,22 +105,9 @@ async function handler(
         GROUP BY course_id
       ) assessment_count ON c.id = assessment_count.course_id
       WHERE u.id = $1
-        AND (
-              LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
-              -- A cancelled TPGateway enrolment does not mean the learner left: staff cancel
-              -- and re-create enrolments (wrong sponsorship / employer) while the class is
-              -- running. A learner marked present in the run keeps the class, and with it
-              -- their assessments and submissions (same rule as trainer/class-students.ts).
-              OR (LOWER(e.enrolment_status) = 'cancelled' AND EXISTS (
-                    SELECT 1
-                    FROM course_attendance a
-                    JOIN course_session s ON s.id = a.session_id
-                    WHERE s.course_run_id = e.course_run_id
-                      AND a.is_present
-                      AND (a.user_id = e.user_id
-                           OR (e.nric IS NOT NULL AND upper(a.nric) = upper(e.nric)))
-              ))
-        )
+        -- Class membership rule (self-registration, digital attendance, SWDA enrolment):
+        -- lib/enrolment/classMembership.
+        AND ${classMemberSql('e')}
       ORDER BY cr.start_date DESC
     `;
 

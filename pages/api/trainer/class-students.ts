@@ -1,6 +1,8 @@
 import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
 import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import { resolveSubmissionFolders, driveFolderUrl } from '@lib/google-drive/submissionFolder';
+import { classMemberSql } from '@lib/enrolment/classMembership';
+import { ensureClassMembershipTables } from '@lib/enrolment/classMembershipTables';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 
@@ -115,9 +117,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, courseRunId))) return;
 
     try {
-        // Fetch the run's active enrolments from the unified `enrollment` table.
-        // Learners removed from the class (no-shows, withdrawals, cancellations)
-        // are left off the roster so they are not graded or sent a certificate.
+        // Fetch the run's class members from the unified `enrollment` table: everyone who
+        // self-registered, took digital attendance or holds an SWDA enrolment. Only learners
+        // taken off the class (Admin Removed / Withdrawn, or cancelled and never came) are
+        // left off, so they are not graded or sent a certificate. Rule: lib/enrolment/classMembership.
+        await ensureClassMembershipTables();
         const query = `
             SELECT
                 e.id as enrolment_id,
@@ -133,23 +137,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             LEFT JOIN app_user u ON e.user_id = u.id
             WHERE e.course_run_id = $1
               AND (
-                    COALESCE(e.enrolment_status, '') NOT IN ('Admin Removed', 'Cancelled', 'Withdrawn')
+                    ${classMemberSql('e')}
                     -- Keep a removed row that already holds a grade or certificate, so
                     -- past records (and merged duplicate rows) do not lose them.
                     OR e.certificate IS NOT NULL
                     OR e.assessment_status IN ('Competent', 'Passed')
-                    -- A cancelled TPGateway enrolment does not mean the learner left: staff
-                    -- cancel and re-create enrolments (wrong sponsorship / employer) while the
-                    -- class is running. A learner marked present in this run stays gradable.
-                    OR (e.enrolment_status = 'Cancelled' AND EXISTS (
-                          SELECT 1
-                          FROM course_attendance a
-                          JOIN course_session s ON s.id = a.session_id
-                          WHERE s.course_run_id = e.course_run_id
-                            AND a.is_present
-                            AND (a.user_id = e.user_id
-                                 OR (e.nric IS NOT NULL AND upper(a.nric) = upper(e.nric)))
-                    ))
               )
         `;
         const [resData, subsData, methodsData] = await Promise.all([
