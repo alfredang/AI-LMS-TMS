@@ -152,6 +152,42 @@ export async function sendCompanyApplicationInvoiceEmails(
   summary.totalGroups = groups.size;
 
   for (const g of groups.values()) {
+    // One invoice covers every learner from this employer on this run, not just
+    // the rows that were selected. Judge — and stamp — the invoice as a whole:
+    // otherwise sending for half the class left the other half unstamped, and
+    // selecting them later emailed the SAME invoice to the employer again; and
+    // an unverified classmate on the invoice slipped past the verification rule.
+    try {
+      const siblings = await pool.query(
+        `SELECT id::text AS id,
+                invoice_sent_at,
+                LOWER(TRIM(COALESCE(supporting_doc_verification_status, ''))) AS verification
+           FROM public.company_application
+          WHERE invoice_id = $1
+            AND ca_cancelled_at IS NULL`,
+        [g.invoiceId]
+      );
+      if (siblings.rows.some((r: any) => r.invoice_sent_at)) g.anyAlreadySent = true;
+      const unverified = siblings.rows.filter((r: any) => r.verification !== 'verified');
+      if (!g.anyAlreadySent && unverified.length > 0) {
+        summary.skippedNotVerified++;
+        for (const r of unverified) {
+          summary.skippedNotVerifiedRows.push({ id: String(r.id), employer: g.employerName });
+        }
+        continue;
+      }
+      g.rowIds = Array.from(new Set([...g.rowIds, ...siblings.rows.map((r: any) => String(r.id))]));
+    } catch (siblingErr) {
+      // Can't see the whole invoice — don't risk a duplicate or unverified send.
+      summary.failed++;
+      summary.failures.push({
+        invoiceDocNumber: g.invoiceDocNumber || g.invoiceId,
+        employer: g.employerName,
+        error: `Could not check the other learners on this invoice: ${siblingErr instanceof Error ? siblingErr.message : String(siblingErr)}`,
+      });
+      continue;
+    }
+
     if (g.anyAlreadySent) {
       summary.skippedAlreadySent++;
       continue;

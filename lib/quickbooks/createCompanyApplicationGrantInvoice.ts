@@ -214,10 +214,12 @@ export async function createCompanyApplicationGrantInvoice(
       });
     }
 
-    const txnDate = new Date().toISOString().slice(0, 10);
+    // Singapore calendar date (server runs in UTC — see the tax invoice).
+    const sgtToday = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const txnDate = sgtToday.toISOString().slice(0, 10);
     const dueDate = (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + CA_GRANT_DUE_DAYS);
+      const d = new Date(sgtToday.getTime());
+      d.setUTCDate(d.getUTCDate() + CA_GRANT_DUE_DAYS);
       return d.toISOString().slice(0, 10);
     })();
 

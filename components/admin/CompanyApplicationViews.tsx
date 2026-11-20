@@ -404,9 +404,17 @@ const columnMatchers: Array<[string, (header: string) => boolean]> = [
 const getCellText = (value: unknown): string => {
   if (value == null) return '';
   if (value instanceof Date) {
-    const day = String(value.getDate()).padStart(2, '0');
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const year = value.getFullYear();
+    // SheetJS builds date cells from a local-time 1899 epoch, and Singapore's
+    // 1899 offset (+6:55:25) differs from today's, so a cell holding 18 Nov
+    // arrives as 17 Nov 23:59:35 — a whole day early (and 00:29:35 for dates
+    // under the old +7:30 zone). Reading the calendar day straight off it
+    // shifted DOBs (SSG then rejects "verify particulars", TGS-403) and start
+    // dates (wrong or no course run). Snap to the nearest midnight first: a
+    // correct midnight value is unchanged, a shifted one is put right.
+    const snapped = new Date(value.getTime() + 12 * 60 * 60 * 1000);
+    const day = String(snapped.getDate()).padStart(2, '0');
+    const month = String(snapped.getMonth() + 1).padStart(2, '0');
+    const year = snapped.getFullYear();
     return `${day}-${month}-${year}`;
   }
   return String(value).trim();
@@ -458,6 +466,8 @@ export interface RowValidationError {
     courseTitle: string;
     courseStartDate: string;
     candidates: CourseRunCandidate[];
+    /** 'none' = no run matched; 'many' = several runs of the course start that day. */
+    reason?: 'none' | 'many';
   };
 }
 
@@ -489,17 +499,49 @@ export class UploadValidationError extends Error {
   }
 }
 
+/** A company that already holds an invoice for the class some uploaded learners join. */
+export interface UploadBillingGroup {
+  key: string;
+  employerOrgName: string;
+  employerUen: string;
+  courseRunId: string;
+  invoices: Array<{ invoiceId: string; docNumber: string; learnerCount: number }>;
+  canReplace: boolean;
+  blockedReason: 'sent' | 'paid' | 'qbo-unreachable' | null;
+  newLearners: string[];
+}
+
+export type UploadBillingChoice = { mode: 'auto' | 'enrol-only' | 'replace'; invoiceRef?: string };
+
+// Thrown when the server stops the upload to ask how late joiners should be
+// billed — the Excel twin of the Enrol Learners existing-invoice popup.
+export class UploadBillingChoiceNeeded extends Error {
+  groups: UploadBillingGroup[];
+  constructor(message: string, groups: UploadBillingGroup[]) {
+    super(message);
+    this.name = 'UploadBillingChoiceNeeded';
+    this.groups = groups;
+  }
+}
+
 const uploadRows = async (
   rows: CompanyApplicationRow[],
   courseRunOverrides: CourseRunOverride[] = [],
+  billingByGroup?: Record<string, UploadBillingChoice>,
 ): Promise<CompanyUploadResult> => {
   const response = await fetch('/api/admin/upload-company-applications', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows, courseRunOverrides }),
+    body: JSON.stringify({ rows, courseRunOverrides, ...(billingByGroup ? { billingByGroup } : {}) }),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
+    if (response.status === 409 && err?.needsBillingChoice && Array.isArray(err.groups)) {
+      throw new UploadBillingChoiceNeeded(
+        err?.message || 'Some companies already have an invoice for this class.',
+        err.groups as UploadBillingGroup[],
+      );
+    }
     if (Array.isArray(err?.validationErrors) && err.validationErrors.length > 0) {
       throw new UploadValidationError(
         err?.message || 'Excel file has validation issues.',
@@ -566,12 +608,24 @@ const parseCompanyApplicationRows = async (file: File, password?: string): Promi
   const workbook = await readCompanyApplicationWorkbook(file, password);
   if (!workbook.SheetNames.length) throw new Error('Excel file has no sheets.');
 
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
-  const headerRowIndex = rawRows.findIndex(row => {
+  const isHeaderRow = (row: unknown[]) => {
     const text = row.map(normalize).join(' ');
     return text.includes('course title') && text.includes('employer') && (text.includes('trainee') || text.includes('nric'));
-  });
+  };
+  // The learner table is usually the first sheet, but employers sometimes add
+  // an instructions or cover sheet in front of it — use the first sheet that
+  // actually has the header row instead of failing on sheet one.
+  let rawRows: unknown[][] = [];
+  let headerRowIndex = -1;
+  for (const sheetName of workbook.SheetNames) {
+    const candidateRows: unknown[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: true });
+    const idx = candidateRows.findIndex(isHeaderRow);
+    if (idx >= 0) {
+      rawRows = candidateRows;
+      headerRowIndex = idx;
+      break;
+    }
+  }
 
   if (headerRowIndex < 0) {
     throw new Error('Could not find the company application table headers in this workbook.');
@@ -637,6 +691,18 @@ const parseCompanyApplicationRows = async (file: File, password?: string): Promi
     const courseTitleIdx = EXCEL_APPLICATION_COLUMNS.indexOf('Course Title*');
     const courseTitle = courseTitleIdx >= 0 ? values[courseTitleIdx] : '';
     if (isInstructionText(courseTitle)) continue;
+
+    // A row is a learner only if it names a course, a trainee or an ID number.
+    // Stray dropdown picks (e.g. "NRIC" left in Trainee Identity Type on the blank
+    // row under the instructions) otherwise become a phantom "(no course title)"
+    // learner that blocks the import with "information not filled".
+    const identifyingColumns = EXCEL_APPLICATION_COLUMNS
+      .map((column, idx) => ({ column: String(column).toLowerCase(), idx }))
+      .filter(({ column }) =>
+        column.startsWith('course title') ||
+        column.startsWith('trainee full name') ||
+        column.includes('nric/fin number'));
+    if (identifyingColumns.length && identifyingColumns.every(({ idx }) => !values[idx]?.trim())) continue;
 
     const instructionHits = values.filter(v => isInstructionText(v)).length;
     if (instructionHits >= 2) continue;
@@ -872,6 +938,12 @@ export const UploadCompanyApplicationView: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<RowValidationError[]>([]);
+  // Late joiners in this upload whose company already has an invoice for the
+  // class — the admin picks Replace / Separate / Enrol only per company.
+  const [billingChoice, setBillingChoice] = useState<{
+    groups: UploadBillingGroup[];
+    overrides: CourseRunOverride[];
+  } | null>(null);
   const [uploadResult, setUploadResult] = useState<CompanyUploadResult | null>(null);
   const [backendStatus, setBackendStatus] = useState<'idle' | 'processing' | 'complete' | 'stalled'>('idle');
   const [backendDoneCount, setBackendDoneCount] = useState(0);
@@ -1178,8 +1250,12 @@ export const UploadCompanyApplicationView: React.FC = () => {
   // `courseRunOverrides` also carries answers from the validation modal's picker
   // when a row still fails afterwards. Re-parses the same file rather than
   // caching the parsed rows — the file is still in state and parsing is cheap.
-  const handleUpload = async (courseRunOverrides: CourseRunOverride[] = []) => {
+  const handleUpload = async (
+    courseRunOverrides: CourseRunOverride[] = [],
+    billingByGroup?: Record<string, UploadBillingChoice>,
+  ) => {
     if (!file) return;
+    setBillingChoice(null);
     setIsUploading(true);
     setError(null);
     setValidationErrors([]);
@@ -1206,14 +1282,18 @@ export const UploadCompanyApplicationView: React.FC = () => {
           courseTitle,
         };
       });
-      if (!(await confirmCourseFees(feeItems))) return;
-      const result = await uploadRows(rows, courseRunOverrides);
+      // Already confirmed on the first attempt — the billing-choice retry
+      // re-sends the same file, so don't make the admin confirm fees twice.
+      if (!billingByGroup && !(await confirmCourseFees(feeItems))) return;
+      const result = await uploadRows(rows, courseRunOverrides, billingByGroup);
       setUploadResult(result);
       pollBackendProcessing(result.insertedIds);
     } catch (err) {
       if (err instanceof UploadValidationError) {
         setError(err.message);
         setValidationErrors(err.validationErrors);
+      } else if (err instanceof UploadBillingChoiceNeeded) {
+        setBillingChoice({ groups: err.groups, overrides: courseRunOverrides });
       } else if (isPasswordProtectedWorkbookError(err) && !workbookPassword) {
         setPendingPasswordAction('upload');
         setPasswordError(null);
@@ -1560,6 +1640,129 @@ export const UploadCompanyApplicationView: React.FC = () => {
           }}
         />
       )}
+
+      {billingChoice && (
+        <UploadBillingChoiceModal
+          groups={billingChoice.groups}
+          isUploading={isUploading}
+          onClose={() => setBillingChoice(null)}
+          onSubmit={(choices) => void handleUpload(billingChoice.overrides, choices)}
+        />
+      )}
+    </div>
+  );
+};
+
+const describeUploadReplaceBlock = (reason: UploadBillingGroup['blockedReason']): string => {
+  if (reason === 'sent') return 'The company has already been sent this invoice, so it cannot be replaced.';
+  if (reason === 'paid') return 'A payment is already applied to this invoice, so it cannot be replaced.';
+  if (reason === 'qbo-unreachable') return 'QuickBooks could not be checked, so replacing it is not safe right now.';
+  return 'This invoice cannot be replaced.';
+};
+
+/**
+ * "This company already has an invoice for this class" — one card per company,
+ * the same three choices Enrol Learners offers. Nothing is imported until every
+ * company has an answer.
+ */
+const UploadBillingChoiceModal: React.FC<{
+  groups: UploadBillingGroup[];
+  isUploading: boolean;
+  onClose: () => void;
+  onSubmit: (choices: Record<string, UploadBillingChoice>) => void;
+}> = ({ groups, isUploading, onClose, onSubmit }) => {
+  const [choices, setChoices] = useState<Record<string, UploadBillingChoice>>({});
+  const allChosen = groups.every(g => {
+    const c = choices[g.key];
+    return !!c && (c.mode !== 'enrol-only' || !!c.invoiceRef);
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="p-6 border-b border-default">
+          <h2 className="text-lg font-bold text-on-surface">
+            {groups.length === 1 ? 'This company already has' : `${groups.length} companies already have`} an invoice for this class
+          </h2>
+          <p className="text-sm text-muted mt-0.5">
+            Choose how to bill the new learners. Nothing has been imported yet.
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {groups.map(g => {
+            const choice = choices[g.key];
+            const setChoice = (c: UploadBillingChoice) => setChoices(prev => ({ ...prev, [g.key]: c }));
+            const invoiceLabel = g.invoices.map(i => `${i.docNumber || i.invoiceId} (${i.learnerCount} learner${i.learnerCount === 1 ? '' : 's'})`).join(', ');
+            const option = (mode: UploadBillingChoice['mode'], label: string, hint: string, disabled = false) => (
+              <label
+                className={`flex items-start gap-2.5 rounded-lg border p-2.5 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-surface-hover'} ${choice?.mode === mode ? 'border-primary bg-surface-elevated' : 'border-default'}`}
+              >
+                <input
+                  type="radio"
+                  name={`billing-${g.key}`}
+                  className="mt-0.5"
+                  disabled={disabled || isUploading}
+                  checked={choice?.mode === mode}
+                  onChange={() => setChoice({
+                    mode,
+                    invoiceRef: mode === 'enrol-only' ? (g.invoices[0]?.docNumber || g.invoices[0]?.invoiceId) : undefined,
+                  })}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-on-surface">{label}</span>
+                  <span className="block text-xs text-muted">{hint}</span>
+                </span>
+              </label>
+            );
+            return (
+              <div key={g.key} className="rounded-xl border border-default p-4 space-y-2">
+                <p className="text-sm font-semibold text-on-surface">
+                  {g.employerOrgName || g.employerUen}
+                  <span className="font-normal text-muted"> · Run {g.courseRunId}</span>
+                </p>
+                <p className="text-xs text-muted">
+                  Existing invoice: <span className="font-mono">{invoiceLabel}</span>
+                  <br />
+                  New in this upload: {g.newLearners.join(', ')}
+                </p>
+                {option(
+                  'replace',
+                  'Replace with one invoice covering everyone',
+                  g.canReplace
+                    ? 'The current invoice is deleted and a single new one is raised once SSG grants the new learners. Until then the current invoice stays as it is.'
+                    : describeUploadReplaceBlock(g.blockedReason),
+                  !g.canReplace,
+                )}
+                {option('auto', 'Create a separate invoice', 'The new learners are billed on a second invoice for this class.')}
+                {option('enrol-only', 'Enrol only — add them in QuickBooks myself', 'No LMS invoice for them; they are marked Billed by hand.')}
+                {choice?.mode === 'enrol-only' && g.invoices.length > 1 && (
+                  <select
+                    className="input text-sm"
+                    value={choice.invoiceRef || ''}
+                    onChange={e => setChoice({ mode: 'enrol-only', invoiceRef: e.target.value })}
+                  >
+                    {g.invoices.map(i => {
+                      const ref = i.docNumber || i.invoiceId;
+                      return <option key={ref} value={ref}>Add to {ref}</option>;
+                    })}
+                  </select>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-4 border-t border-default flex justify-end gap-2">
+          <button type="button" className="btn btn-outline" onClick={onClose} disabled={isUploading}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!allChosen || isUploading}
+            onClick={() => onSubmit(choices)}
+          >
+            {isUploading ? 'Uploading…' : 'Continue upload'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1878,14 +2081,14 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
   // Ten learners on the same course share one unresolved (title, date) — ask
   // once, not ten times.
   const runGroups = useMemo(() => {
-    const map = new Map<string, { courseTitle: string; courseStartDate: string; candidates: CourseRunCandidate[]; rowCount: number }>();
+    const map = new Map<string, { courseTitle: string; courseStartDate: string; candidates: CourseRunCandidate[]; rowCount: number; reason: 'none' | 'many' }>();
     for (const err of errors) {
       const u = err.courseRunUnresolved;
       if (!u) continue;
       const key = runGroupKey(u.courseTitle, u.courseStartDate);
       const existing = map.get(key);
       if (existing) existing.rowCount++;
-      else map.set(key, { courseTitle: u.courseTitle, courseStartDate: u.courseStartDate, candidates: u.candidates || [], rowCount: 1 });
+      else map.set(key, { courseTitle: u.courseTitle, courseStartDate: u.courseStartDate, candidates: u.candidates || [], rowCount: 1, reason: u.reason === 'many' ? 'many' : 'none' });
     }
     return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
   }, [errors]);
@@ -1944,10 +2147,15 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
               className="border border-blue-300 dark:border-blue-500/40 rounded-xl p-4 bg-blue-50/60 dark:bg-blue-900/15"
             >
               <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                No run matched &ldquo;{group.courseTitle}&rdquo; on {group.courseStartDate}
+                {group.reason === 'many'
+                  ? <>More than one run of &ldquo;{group.courseTitle}&rdquo; starts on {group.courseStartDate}</>
+                  : <>No run matched &ldquo;{group.courseTitle}&rdquo; on {group.courseStartDate}</>}
               </p>
               <p className="text-xs text-info mt-0.5">
-                Affects {group.rowCount} row{group.rowCount === 1 ? '' : 's'}. Did you mean one of these? Runs within 30 days, closest title first.
+                Affects {group.rowCount} row{group.rowCount === 1 ? '' : 's'}.{' '}
+                {group.reason === 'many'
+                  ? 'Pick the run these learners are on — the LMS will not guess between them.'
+                  : 'Did you mean one of these? Runs within 45 days, closest title first.'}
               </p>
 
               {group.candidates.length === 0 ? (
@@ -2128,6 +2336,19 @@ interface InvoiceError {
   courseRunId: string;
   error: string;
   isCustomerNotFound: boolean;
+  isNotEnrolled?: boolean;
+}
+
+/**
+ * A group Generate Invoice held back because some learners are not yet
+ * SSG-enrolled, but which still has enrolled learners that could be billed now.
+ */
+interface SkipNotEnrolledGroup {
+  employerOrgName: string;
+  employerUen: string;
+  courseRunId: string;
+  enrolledCount: number;
+  skipped: Array<{ name: string; reason: string }>;
 }
 
 interface QboSearchResult {
@@ -2575,6 +2796,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // the default (one invoice per employer x course-run); per-learner exists
   // because admin sometimes has to bill a single person on their own.
   const [invoiceMode, setInvoiceMode] = useState<'consolidated' | 'per-learner'>('consolidated');
+  // Shown after Generate Invoice when a group was held back only because some
+  // learners are not yet SSG-enrolled — offers to bill the enrolled ones now.
+  const [skipNotEnrolledPrompt, setSkipNotEnrolledPrompt] = useState<{
+    applicationIds: string[];
+    groups: SkipNotEnrolledGroup[];
+  } | null>(null);
   // List of pre-check problems blocking a Send Invoice Email attempt. Surfaced
   // as a popup instead of a cramped inline message so admins can read each
   // reason on its own line.
@@ -2896,16 +3123,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
     setConfirmGenerateInvoiceOpen(true);
   };
 
-  const executeGenerateInvoice = async () => {
+  /**
+   * With `retry`, re-runs only the groups held back for un-enrolled learners
+   * (the ids the skip popup collected) with skipNotEnrolled, billing their
+   * enrolled classmates and leaving the rest off. The earlier run's message
+   * and its errors for other groups are kept so nothing from it disappears.
+   */
+  const executeGenerateInvoice = async (
+    retry?: { applicationIds: string[]; groups: SkipNotEnrolledGroup[] },
+  ) => {
+    const skipNotEnrolled = !!retry;
+    const applicationIds = retry ? retry.applicationIds : Array.from(selectedIds);
+    const previousMessage = retry ? invoiceMessage : null;
     setConfirmGenerateInvoiceOpen(false);
+    setSkipNotEnrolledPrompt(null);
     setIsGeneratingInvoice(true);
     setInvoiceMessage(null);
-    setInvoiceErrors([]);
+    if (!retry) setInvoiceErrors([]);
     try {
       const res = await fetch('/api/admin/ca-generate-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationIds: Array.from(selectedIds), mode: invoiceMode }),
+        body: JSON.stringify({ applicationIds, mode: invoiceMode, skipNotEnrolled }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -2918,6 +3157,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const failed = Number(data.failed) || 0;
       const replaced = Number(data.replacedGroups) || 0;
       const billedByHand = Number(data.skippedBilledManually) || 0;
+      const leftOff: Array<{ name: string }> = Array.isArray(data.skippedNotEnrolledLearners)
+        ? data.skippedNotEnrolledLearners
+        : [];
       // The backend counts per group, and in per-learner mode a group IS one
       // learner — so name the unit after the mode the user actually picked.
       const unit = invoiceMode === 'per-learner' ? 'learner' : 'group';
@@ -2925,6 +3167,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (generated) parts.push(`${generated} invoice${generated === 1 ? '' : 's'} generated`);
       if (replaced) parts.push(`${replaced} existing invoice${replaced === 1 ? '' : 's'} replaced to cover a late joiner`);
       if (billedByHand) parts.push(`${billedByHand} learner${billedByHand === 1 ? '' : 's'} billed by hand — left for QuickBooks`);
+      if (leftOff.length) parts.push(`${leftOff.length} learner${leftOff.length === 1 ? '' : 's'} left off the invoice (not yet SSG-enrolled): ${leftOff.map(l => l.name).join(', ')}`);
       if (alreadyInvoiced) parts.push(`${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — left alone`);
       if (notEnrolled) parts.push(`${notEnrolled} ${unit}${notEnrolled === 1 ? '' : 's'} skipped (not yet enrolled with SSG)`);
       if (awaitingGrants) parts.push(`${awaitingGrants} ${unit}${awaitingGrants === 1 ? '' : 's'} awaiting grants — click "Sync Grants" after stakeholders apply in the SSG portal`);
@@ -2937,13 +3180,55 @@ export const ViewCompanyApplicationView: React.FC = () => {
           `⚠ ${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — cannot regenerate. Open the existing invoice via the Tax Invoice column, or delete it in QBO first if you need to regenerate.`
         );
       } else {
-        setInvoiceMessage(
-          parts.length === 0
-            ? 'Nothing to do — selected rows are not yet enrolled.'
-            : parts.join(' · ')
-        );
+        const message = parts.length === 0
+          ? 'Nothing to do — selected rows are not yet enrolled.'
+          : parts.join(' · ');
+        setInvoiceMessage(previousMessage ? `${previousMessage} · Then: ${message}` : message);
       }
-      setInvoiceErrors(Array.isArray(data.errors) ? data.errors : []);
+      const newErrors: InvoiceError[] = Array.isArray(data.errors) ? data.errors : [];
+      const groupKeyOfError = (e: InvoiceError) =>
+        `${String(e.employerUen || '').trim().toLowerCase()}::${String(e.courseRunId || '').trim()}`;
+      if (retry) {
+        // Drop the earlier "not yet SSG-enrolled" banners for the groups just
+        // retried; keep every other error from the first run.
+        const retriedKeys = new Set(retry.groups.map(g => `${g.employerUen.toLowerCase()}::${g.courseRunId}`));
+        setInvoiceErrors(prev => [
+          ...prev.filter(e => !(e.isNotEnrolled && retriedKeys.has(groupKeyOfError(e)))),
+          ...newErrors,
+        ]);
+      } else {
+        setInvoiceErrors(newErrors);
+        // Groups held back only for un-enrolled learners that still have
+        // enrolled ones — offer to bill those now and leave the rest off.
+        const sentIds = new Set(applicationIds);
+        const groups: SkipNotEnrolledGroup[] = [];
+        const retryIds: string[] = [];
+        for (const e of newErrors.filter(err => err.isNotEnrolled)) {
+          const key = groupKeyOfError(e);
+          const groupRows = rows.filter(r =>
+            sentIds.has(String(r.id || '')) &&
+            `${String(r['Employer UEN*'] || '').trim().toLowerCase()}::${String(r['Course Run ID'] || '').trim()}` === key &&
+            !hasValue(r['Invoice ID']) &&
+            !isCheckedValue(r['Billed Manually'])
+          );
+          const isEnrolled = (r: CompanyApplicationRow) => /^ENR-/i.test(String(r['Enrolment ID'] || '').trim());
+          const enrolled = groupRows.filter(isEnrolled);
+          const notEnrolled = groupRows.filter(r => !isEnrolled(r));
+          if (enrolled.length === 0 || notEnrolled.length === 0) continue;
+          groups.push({
+            employerOrgName: String(e.employerOrgName || '').trim() || String(e.employerUen || ''),
+            employerUen: String(e.employerUen || '').trim(),
+            courseRunId: String(e.courseRunId || '').trim(),
+            enrolledCount: enrolled.length,
+            skipped: notEnrolled.map(r => ({
+              name: String(r['Trainee FULL Name as on government ID*'] || '').trim() || '(unnamed)',
+              reason: String(r['Auto-Enrol Error'] || '').replace(/^enrol(?:l)?ment:\s*/i, '').trim(),
+            })),
+          });
+          retryIds.push(...groupRows.map(r => String(r.id)));
+        }
+        if (groups.length > 0) setSkipNotEnrolledPrompt({ applicationIds: retryIds, groups });
+      }
       void reloadRows();
       window.setTimeout(() => void reloadRows(), 3000);
     } catch (err) {
@@ -3524,12 +3809,32 @@ export const ViewCompanyApplicationView: React.FC = () => {
     const matched = showStuckOnly
       ? queryMatched.filter(row => row._stuck === '1')
       : queryMatched;
-    // Sort so rows sharing the same Invoice ID are adjacent — keeps the
-    // (employer, course-run) groups together so the Invoice # / Tax Invoice
-    // cell-merging below picks them up. Within a group, trainee name is the
-    // tiebreaker. Rows without an invoice yet sort first (newest uploads
-    // first via created_at fallback through the original DB ORDER BY).
-    return [...matched].sort((a, b) => {
+    // Sort so every application for one course run is adjacent (so a class
+    // is never split across pages — see pageBoundaries), and within a run,
+    // rows sharing the same Invoice ID are adjacent so the Invoice # / Tax
+    // Invoice cell-merging below picks them up (an invoice is per employer +
+    // course run, so it never spans runs). Runs with un-invoiced rows come
+    // first, then runs in the original DB order (newest uploads first).
+    // Within a run: un-invoiced rows first, then by invoice, then trainee name.
+    const runKey = (row: Record<string, string>, idx: number) =>
+      String(row['Course Run ID'] || '').trim() || `__no_run_${idx}`;
+    const runFirstIdx = new Map<string, number>();
+    const runHasUninvoiced = new Set<string>();
+    matched.forEach((row, idx) => {
+      const key = runKey(row, idx);
+      if (!runFirstIdx.has(key)) runFirstIdx.set(key, idx);
+      if (!(row['Invoice ID'] || '').trim()) runHasUninvoiced.add(key);
+    });
+    const indexed = matched.map((row, idx) => ({ row, key: runKey(row, idx) }));
+    indexed.sort((x, y) => {
+      if (x.key !== y.key) {
+        const ux = runHasUninvoiced.has(x.key) ? 0 : 1;
+        const uy = runHasUninvoiced.has(y.key) ? 0 : 1;
+        if (ux !== uy) return ux - uy;
+        return (runFirstIdx.get(x.key) ?? 0) - (runFirstIdx.get(y.key) ?? 0);
+      }
+      const a = x.row;
+      const b = y.row;
       const ia = (a['Invoice ID'] || '').trim();
       const ib = (b['Invoice ID'] || '').trim();
       if (ia !== ib) {
@@ -3541,25 +3846,26 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const nb = (b['Trainee FULL Name as on government ID*'] || '').trim();
       return na.localeCompare(nb);
     });
+    return indexed.map(x => x.row);
   }, [rows, searchQuery, showStuckOnly]);
 
   React.useEffect(() => { setCurrentPage(1); }, [searchQuery, showStuckOnly]);
 
   // Group-aware page boundaries: target ~itemsPerPage rows per page, but
-  // never split an invoice group (rows sharing an Invoice ID) across pages,
-  // because the Invoice # / Tax Invoice cells use rowSpan and would render
-  // incorrectly if the group were broken. A single group larger than the
-  // target gets its own page.
+  // never split a course run across pages — admins work a class at a time,
+  // so a 32-learner run shows on one page. This also keeps every invoice
+  // group whole (an invoice never spans runs), which the rowSpan'd Invoice # /
+  // Tax Invoice cells need. A single run larger than the target gets its own page.
   const pageBoundaries = useMemo(() => {
     const pages: Array<{ start: number; end: number }> = [];
     if (filteredRows.length === 0) return pages;
     let pageStart = 0;
     let i = 0;
     while (i < filteredRows.length) {
-      const inv = (filteredRows[i]['Invoice ID'] || '').trim();
+      const run = (filteredRows[i]['Course Run ID'] || '').trim();
       let groupEnd = i + 1;
-      if (inv) {
-        while (groupEnd < filteredRows.length && (filteredRows[groupEnd]['Invoice ID'] || '').trim() === inv) {
+      if (run) {
+        while (groupEnd < filteredRows.length && (filteredRows[groupEnd]['Course Run ID'] || '').trim() === run) {
           groupEnd++;
         }
       }
@@ -4257,6 +4563,45 @@ export const ViewCompanyApplicationView: React.FC = () => {
               )}
               <p className="text-xs text-muted">
                 Tip: {perLearner ? 'learners' : 'groups'} whose grants are still awaiting application get flagged and skipped — sync grants first if so.
+              </p>
+            </ConfirmPopup>
+          );
+        })()}
+        {skipNotEnrolledPrompt && (() => {
+          const { groups } = skipNotEnrolledPrompt;
+          const skippedTotal = groups.reduce((n, g) => n + g.skipped.length, 0);
+          const billTotal = groups.reduce((n, g) => n + g.enrolledCount, 0);
+          return (
+            <ConfirmPopup
+              tone="warning"
+              icon={IconName.FileText}
+              title="Generate invoice without these learners?"
+              subtitle={`${skippedTotal} learner${skippedTotal === 1 ? ' is' : 's are'} not yet enrolled with SSG · ${billTotal} enrolled learner${billTotal === 1 ? '' : 's'} can be invoiced now`}
+              confirmLabel={`Skip ${skippedTotal === 1 ? 'learner' : 'learners'} & generate invoice`}
+              busyLabel="Generating…"
+              busy={isGeneratingInvoice}
+              onConfirm={() => void executeGenerateInvoice(skipNotEnrolledPrompt)}
+              onCancel={() => setSkipNotEnrolledPrompt(null)}
+            >
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {groups.map(g => (
+                  <div key={`${g.employerUen}::${g.courseRunId}`} className="rounded-lg border border-default bg-surface-elevated p-2.5 space-y-1.5">
+                    <p className="text-xs font-semibold text-on-surface">
+                      {g.employerOrgName}
+                      <span className="font-normal text-muted"> · Run {g.courseRunId} · {g.enrolledCount} to invoice</span>
+                    </p>
+                    {g.skipped.map((l, i) => (
+                      <div key={i} className="text-xs">
+                        <span className="font-semibold text-danger">Skip: {l.name}</span>
+                        {l.reason && <span className="block text-muted mt-0.5">{l.reason}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted">
+                The skipped learner{skippedTotal === 1 ? ' stays' : 's stay'} on the list without an invoice. Once SSG accepts the
+                enrolment, select them and click Generate Invoice again — they are billed as a late joiner.
               </p>
             </ConfirmPopup>
           );
@@ -5044,6 +5389,22 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             </td>
                           );
                         }
+                        if (row._invoice_removed === '1') {
+                          // Remove Invoice was used and nothing has replaced it.
+                          // Never re-created automatically (the admin may be
+                          // waiting to add a late joiner) — so say so loudly.
+                          return (
+                            <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap align-middle">
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-danger-bg text-danger"
+                                title="The tax invoice was removed and has not been re-raised. The company is not billed for this learner. Select the learners and click Generate Invoice when ready (or mark Billed by hand)."
+                              >
+                                <Icon name={IconName.Warning} className="w-3 h-3" />
+                                Invoice removed — re-raise
+                              </span>
+                            </td>
+                          );
+                        }
                         return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-muted align-middle">-</td>;
                       }
                       return (
@@ -5154,7 +5515,12 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
   // recovered and went on to invoice still announced a failure. Say that only
   // when the pipeline actually gave up.
   const hasFailed = row._failed === '1';
-  const title = hasFailed ? 'Auto-enrol failed' : 'Warnings from earlier attempts';
+  const invoiceRemoved = row._invoice_removed === '1';
+  const title = hasFailed
+    ? 'Auto-enrol failed'
+    : invoiceRemoved
+      ? 'Invoice removed — not re-raised'
+      : 'Warnings from earlier attempts';
   const traineeName = String(row['Trainee FULL Name as on government ID*'] || '').trim() || '(no name)';
   const courseTitle = String(row['Course Title*'] || '').trim() || '(no course title)';
   const employerOrg = String(row['Employer Organization Name*'] || '').trim();
@@ -5188,6 +5554,18 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {invoiceRemoved && (
+            <div className="rounded-xl p-4 bg-danger-bg">
+              <h3 className="text-sm font-semibold text-danger mb-2">The company is not being billed for this learner</h3>
+              <p className="text-sm text-danger">
+                The tax invoice was removed and nothing has replaced it. The LMS will not create a new one on
+                its own, in case you are waiting to add a late joiner. When ready, select everyone for this
+                company and course run and click <span className="font-semibold">Generate Invoice</span> — or
+                mark the learner <span className="font-semibold">Billed by hand</span> if Finance is handling it
+                in QuickBooks.
+              </p>
+            </div>
+          )}
           {autoEnrolError && (
             <div className="border border-red-200 dark:border-red-900/40 rounded-xl p-4 bg-red-50/50 dark:bg-red-900/10">
               <h3 className="text-sm font-semibold text-danger mb-2">Enrolment error</h3>

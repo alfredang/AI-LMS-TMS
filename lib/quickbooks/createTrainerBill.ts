@@ -16,6 +16,7 @@
  */
 
 import { callQbProxy } from './qbProxyClient';
+import { escapeQboQueryLiteral } from './qboQueryLiteral';
 import { qboQuery, qboResolveOosTaxCodeRef } from '../services/qboInvoiceService';
 
 /** Expense account shown in the bill's "Category" column. */
@@ -30,7 +31,7 @@ const VENDOR_PREFIX =
   process.env.QBO_TRAINER_VENDOR_PREFIX === undefined ? 'Trainer ' : process.env.QBO_TRAINER_VENDOR_PREFIX;
 
 function esc(value: string): string {
-  return String(value || '').replace(/'/g, "''");
+  return escapeQboQueryLiteral(value || '');
 }
 
 /** QBO "Object Not Found" (error 610) — the object is already gone. */

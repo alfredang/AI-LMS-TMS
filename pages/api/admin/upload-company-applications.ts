@@ -2,7 +2,8 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
-import { validateCompanyApplicationRows, type CourseRunOverride } from '../../../lib/companyApplicationValidator';
+import { validateAndResolveCompanyApplicationRows, type CourseRunOverride } from '../../../lib/companyApplicationValidator';
+import { lookupExistingGroupInvoices } from '../../../lib/services/caExistingInvoice';
 import { normalizeTraineeIdentityFields } from '../../../lib/traineeIdentity';
 
 export const config = {
@@ -50,6 +51,32 @@ interface DedupKey {
   startDate: string;
 }
 
+/**
+ * "8/11/2026", "08-11-2026" and "08/11/2026" are the same class. Store and
+ * compare one spelling (DD-MM-YYYY, zero-padded) so re-uploading a learner with
+ * the date typed differently updates their row instead of creating a second
+ * one — which the pipeline would then try to enrol again (SSG: duplicate).
+ * Anything not in a day-month-year shape is left exactly as typed.
+ */
+function canonicalStartDate(raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  const m = value.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (!m) return value;
+  return `${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}-${m[3]}`;
+}
+
+/** Every spelling an existing row may hold for the same DD-MM-YYYY date. */
+function startDateSpellings(canonical: string): string[] {
+  const m = canonical.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!m) return [canonical.toLowerCase()];
+  const [, dd, mm, yyyy] = m;
+  const days = Array.from(new Set([dd, String(Number(dd))]));
+  const months = Array.from(new Set([mm, String(Number(mm))]));
+  const out: string[] = [];
+  for (const d of days) for (const mo of months) for (const sep of ['-', '/']) out.push(`${d}${sep}${mo}${sep}${yyyy}`);
+  return out;
+}
+
 function makeDedupKey(row: Record<string, string>): DedupKey | null {
   const traineeNric = String(row['Trainee NRIC/FIN Number*'] || '').trim().toLowerCase();
   const employerUen = String(row['Employer UEN*'] || '').trim().toLowerCase();
@@ -80,6 +107,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ message: "billing.mode must be 'auto', 'enrol-only' or 'replace'" });
   }
   const billingInvoiceRef = String(req.body?.billing?.invoiceRef || '').trim();
+
+  // Per-(employer, course run) answers to "this company already has an invoice
+  // for this class — replace it, bill separately, or enrol only?", sent back by
+  // the Excel upload popup after this route asked (409 needsBillingChoice).
+  // Keyed `${uen lowercased}|${courseRunId}`.
+  type GroupBilling = { mode: 'auto' | 'enrol-only' | 'replace'; invoiceRef: string };
+  const rawByGroup = req.body?.billingByGroup;
+  const billingByGroup: Record<string, GroupBilling> | null =
+    rawByGroup && typeof rawByGroup === 'object' && !Array.isArray(rawByGroup) ? {} : null;
+  if (billingByGroup) {
+    for (const [key, value] of Object.entries(rawByGroup as Record<string, any>)) {
+      const mode = String(value?.mode || '').trim();
+      if (!['auto', 'enrol-only', 'replace'].includes(mode)) {
+        return res.status(400).json({ message: `billingByGroup["${key}"].mode must be 'auto', 'enrol-only' or 'replace'` });
+      }
+      billingByGroup[key] = { mode: mode as GroupBilling['mode'], invoiceRef: String(value?.invoiceRef || '').trim() };
+    }
+  }
 
   try {
     await ensureCompanyApplicationsTable();
@@ -118,7 +163,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // fix it and re-upload cleanly. Catches things that previously only surfaced
     // after auto-enrol hit SSG (e.g. a DOB entered as MM-DD-YYYY becoming
     // "Invalid Date" in the payload, or a course run that doesn't exist).
-    const validationErrors = await validateCompanyApplicationRows(rows, overrides);
+    const { errors: validationErrors, runIdByRow } = await validateAndResolveCompanyApplicationRows(rows, overrides);
     if (validationErrors.length > 0) {
       const resolvable = validationErrors.filter(e => e.courseRunUnresolved).length;
       return res.status(400).json({
@@ -129,11 +174,92 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
+    // Late joiners. An Excel upload used to go straight to the normal pipeline,
+    // which cuts a SECOND invoice for a company that already has one for this
+    // class. Enrol Learners asks first (Replace / Separate / Enrol only); ask
+    // here too, before anything is written. Only when the request came with no
+    // billing answer at all — the Enrol Learners path sends `billing`, and the
+    // upload popup's retry sends `billingByGroup`.
+    const groupKeyByRow: Array<string | null> = rows.map((row, i) => {
+      const uen = String(row['Employer UEN*'] || '').trim().toLowerCase();
+      const runId = runIdByRow[i];
+      return uen && runId ? `${uen}|${runId}` : null;
+    });
+
+    if (billingMode === 'auto' && !billingByGroup) {
+      const byGroup = new Map<string, { uen: string; runId: string; orgName: string; learners: Array<{ name: string; nric: string }> }>();
+      rows.forEach((row, i) => {
+        const key = groupKeyByRow[i];
+        if (!key) return;
+        const g = byGroup.get(key) ?? {
+          uen: String(row['Employer UEN*'] || '').trim(),
+          runId: String(runIdByRow[i]),
+          orgName: String(row['Employer Organization Name*'] || '').trim(),
+          learners: [],
+        };
+        g.learners.push({
+          name: String(row['Trainee FULL Name as on government ID*'] || '').trim(),
+          nric: String(row['Trainee NRIC/FIN Number*'] || '').trim().toLowerCase(),
+        });
+        byGroup.set(key, g);
+      });
+
+      const needsChoice: any[] = [];
+      for (const [key, g] of byGroup) {
+        // Learners already on an invoice for this class are a re-upload, not
+        // a late joiner — they never trigger the question.
+        const onInvoice = await pool.query(
+          `SELECT LOWER(TRIM(trainee_nric)) AS nric
+             FROM public.company_application
+            WHERE LOWER(TRIM(employer_uen)) = LOWER($1)
+              AND TRIM(course_run_id)       = $2
+              AND ca_cancelled_at IS NULL
+              AND COALESCE(invoice_id, '') <> ''`,
+          [g.uen, g.runId]
+        );
+        const invoicedNrics = new Set(onInvoice.rows.map((r: any) => String(r.nric || '')));
+        const newLearners = g.learners.filter(l => !invoicedNrics.has(l.nric));
+        if (newLearners.length === 0) continue;
+
+        const lookup = await lookupExistingGroupInvoices(g.uen, g.runId);
+        if (lookup.invoices.length === 0) continue;
+        needsChoice.push({
+          key,
+          employerOrgName: lookup.employerOrgName || g.orgName,
+          employerUen: g.uen,
+          courseRunId: g.runId,
+          invoices: lookup.invoices,
+          canReplace: lookup.canReplace,
+          blockedReason: lookup.blockedReason,
+          newLearners: newLearners.map(l => l.name || '(unnamed)'),
+        });
+      }
+
+      if (needsChoice.length > 0) {
+        return res.status(409).json({
+          needsBillingChoice: true,
+          message: `${needsChoice.length} compan${needsChoice.length === 1 ? 'y already has' : 'ies already have'} an invoice for this class — choose how to bill the new learners.`,
+          groups: needsChoice,
+        });
+      }
+    }
+
     const queuedIds: string[] = [];
+    const queuedIdsByGroup = new Map<string, string[]>();
     let inserted = 0;
     let updated = 0;
 
-    for (const row of rows) {
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const row = rows[rowIndex];
+      const rowGroupKey = groupKeyByRow[rowIndex];
+      const queueId = (id: string) => {
+        queuedIds.push(id);
+        if (rowGroupKey) {
+          const list = queuedIdsByGroup.get(rowGroupKey) ?? [];
+          list.push(id);
+          queuedIdsByGroup.set(rowGroupKey, list);
+        }
+      };
       const normalizedIdentity = normalizeTraineeIdentityFields({
         nric: row['Trainee NRIC/FIN Number*'],
         idType: row['Trainee ID Type*'],
@@ -141,6 +267,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
       const normalizedRow: Record<string, string> = {
         ...row,
+        'Course Start Date (DD-MM-YYYY)*': canonicalStartDate(row['Course Start Date (DD-MM-YYYY)*']),
         'Trainee ID Type*': normalizedIdentity.idType,
         'Trainee Identity Type*': normalizedIdentity.identityType,
       };
@@ -159,18 +286,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // title/date that failed to match in the first place. The employer's
       // original wording is preserved in course_title — we add the answer, we
       // don't rewrite the question.
+      // Keyed by the date AS TYPED (not canonicalStartDate) — the picker sends
+      // back the raw Excel value it was shown.
       const chosenRun = resolvedRunByKey.get(
-        `${String(normalizedRow['Course Title*'] || '').trim().toLowerCase()}|${String(normalizedRow['Course Start Date (DD-MM-YYYY)*'] || '').trim()}`
+        `${String(row['Course Title*'] || '').trim().toLowerCase()}|${String(row['Course Start Date (DD-MM-YYYY)*'] || '').trim()}`
       );
       const COLUMNS = chosenRun ? [...DB_COLUMNS, 'course_run_id', 'course_reference_number'] : DB_COLUMNS;
       const values = chosenRun
         ? [...baseValues, chosenRun.courseRunId, chosenRun.courseCode || null]
         : baseValues;
-      console.log('[upload-company-applications] parsed row →', JSON.stringify({
-        dedupKey,
-        rowKeys: Object.keys(row),
-        valuesByColumn: debugMap,
-      }, null, 2));
+      // Column names only — the values are NRIC, date of birth and phone
+      // numbers, which must not land in the server log.
+      console.log('[upload-company-applications] parsed row columns →', Object.keys(row).length,
+        'filled:', Object.keys(debugMap).filter(k => debugMap[k] != null).length);
 
       const existing = dedupKey
         ? await pool.query(
@@ -178,11 +306,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               WHERE LOWER(TRIM(COALESCE(trainee_nric, ''))) = $1
                 AND LOWER(TRIM(COALESCE(employer_uen, ''))) = $2
                 AND LOWER(TRIM(COALESCE(course_title, ''))) = $3
-                AND LOWER(TRIM(COALESCE(course_start_date, ''))) = $4
+                AND LOWER(TRIM(COALESCE(course_start_date, ''))) = ANY($4::text[])
                 AND ca_cancelled_at IS NULL
               ORDER BY created_at ASC
               LIMIT 1`,
-            [dedupKey.traineeNric, dedupKey.employerUen, dedupKey.courseTitle, dedupKey.startDate]
+            [dedupKey.traineeNric, dedupKey.employerUen, dedupKey.courseTitle, startDateSpellings(dedupKey.startDate)]
           )
         : { rows: [] };
 
@@ -200,7 +328,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         );
         if (result.rows[0]?.id) {
           updated++;
-          queuedIds.push(result.rows[0].id);
+          queueId(result.rows[0].id);
         }
       } else {
         const insertColumns = [...COLUMNS, ...AUTOMATION_COLUMNS];
@@ -215,7 +343,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           );
           if (result.rows[0]?.id) {
             inserted++;
-            queuedIds.push(result.rows[0].id);
+            queueId(result.rows[0].id);
           }
         } catch (insertErr: any) {
           // 23505 = unique_violation. Race: another concurrent upload inserted
@@ -228,11 +356,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 WHERE LOWER(TRIM(COALESCE(trainee_nric, ''))) = $1
                   AND LOWER(TRIM(COALESCE(employer_uen, ''))) = $2
                   AND LOWER(TRIM(COALESCE(course_title, ''))) = $3
-                  AND LOWER(TRIM(COALESCE(course_start_date, ''))) = $4
+                  AND LOWER(TRIM(COALESCE(course_start_date, ''))) = ANY($4::text[])
                   AND ca_cancelled_at IS NULL
                 ORDER BY created_at ASC
                 LIMIT 1`,
-              [dedupKey.traineeNric, dedupKey.employerUen, dedupKey.courseTitle, dedupKey.startDate]
+              [dedupKey.traineeNric, dedupKey.employerUen, dedupKey.courseTitle, startDateSpellings(dedupKey.startDate)]
             );
             const recoveredId = recovered.rows[0]?.id;
             if (recoveredId) {
@@ -249,7 +377,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               );
               if (updRes.rows[0]?.id) {
                 updated++;
-                queuedIds.push(updRes.rows[0].id);
+                queueId(updRes.rows[0].id);
               }
             } else {
               throw insertErr;
@@ -278,6 +406,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       console.log(
         `[upload-company-applications] billing mode '${billingMode}' applied to ${queuedIds.length} row(s)`
       );
+    }
+
+    // Per-company answers from the upload popup — same columns as above.
+    if (billingByGroup) {
+      for (const [key, choice] of Object.entries(billingByGroup)) {
+        const ids = queuedIdsByGroup.get(key) || [];
+        if (ids.length === 0 || choice.mode === 'auto') continue;
+        await pool.query(
+          `UPDATE public.company_application
+              SET billed_manually             = $2,
+                  billed_manually_invoice_ref = CASE WHEN $2 THEN NULLIF($4, '') ELSE NULL END,
+                  replace_group_invoice       = $3,
+                  updated_at                  = now()
+            WHERE id = ANY($1::uuid[])`,
+          [ids, choice.mode === 'enrol-only', choice.mode === 'replace', choice.invoiceRef]
+        );
+        console.log(`[upload-company-applications] billing mode '${choice.mode}' applied to ${ids.length} row(s) in group ${key}`);
+      }
     }
 
     if (queuedIds.length > 0) {

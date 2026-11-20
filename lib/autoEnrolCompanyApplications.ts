@@ -443,6 +443,9 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
          FROM public.course_run cr
          JOIN public.course c ON c.id = cr.course_id
         WHERE cr.start_date::date = $1::date
+          -- Same as the exact path: never match (or count as a rival) a run
+          -- that has been deleted.
+          AND COALESCE(cr.is_deleted, false) = false
         -- Stable tie-break, as above.
         ORDER BY cr.start_date ASC NULLS LAST, cr.course_run_id ASC
         LIMIT 100`,
@@ -811,6 +814,8 @@ export async function processCompanyApplication(
     try {
       const ctx = sharedCtx || (await loadSsgContext());
 
+      // Course/fee fields only. NRIC, date of birth, phone and email were logged
+      // here on every enrolment — personal data that must not sit in server logs.
       console.log('🏢 Company auto-enrol data check:', {
         course_title: caRecord.course_title,
         course_run_id: caRecord.course_run_id,
@@ -818,15 +823,8 @@ export async function processCompanyApplication(
         course_fee: caRecord.course_fee,
         net_fee: caRecord.net_fee,
         run_course_fee: run.courseFee,
-        trainee_id: caRecord.trainee_id,
         trainee_id_type: caRecord.trainee_id_type,
-        trainee_name: caRecord.trainee_name,
-        trainee_email: caRecord.trainee_email,
-        trainee_phone: caRecord.trainee_phone,
-        date_of_birth: caRecord.date_of_birth,
         employer_uen: caRecord.employer_uen,
-        uen: ctx.uen,
-        tpCode: ctx.tpCode,
       });
 
       const payload = buildEnrolmentPayload(caRecord, ctx.uen, ctx.tpCode) as any;
@@ -863,7 +861,10 @@ export async function processCompanyApplication(
         };
       }
 
-      console.log('📦 Company SSG payload check:', JSON.stringify(payload, null, 2));
+      // The full payload carries the trainee's NRIC, DOB and contact details —
+      // log only its shape.
+      console.log('📦 Company SSG payload check: course', payload?.enrolment?.course?.referenceNumber,
+        'run', payload?.enrolment?.course?.run?.id, 'sponsorship', payload?.enrolment?.trainee?.sponsorshipType);
 
       // SSG create-enrolment routinely exceeds the default 30s and aborts even
       // though SSG created the record — give it 60s (mirrors /api/enrolment/create).
@@ -884,9 +885,17 @@ export async function processCompanyApplication(
           };
 
           const searchResult = await searchEnrolment(searchPayload as any);
+          const deadStatuses = ['cancelled', 'withdrawn', 'rejected'];
+          const isDead = deadStatuses.includes(String(searchResult.enrolmentStatus || '').toLowerCase());
 
-          if (searchResult.success && searchResult.referenceNumber) {
+          if (searchResult.success && searchResult.referenceNumber && !isDead) {
             enrolmentReference = searchResult.referenceNumber;
+          } else if (isDead) {
+            // Same rule as the timeout recovery below: never adopt a dead
+            // enrolment, or the employer is invoiced for a cancelled learner.
+            throw new Error(
+              `SSG reports a duplicate, but the only enrolment found (${searchResult.referenceNumber}) is ${searchResult.enrolmentStatus}. Check the learner in TPGateway before retrying.`
+            );
           } else {
             throw new Error('Duplicate record found, but search failed to recover reference');
           }
@@ -1226,7 +1235,13 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
   await pool.query(
     `UPDATE public.company_application ca
         SET course_run_id = COALESCE(NULLIF(TRIM(ca.course_run_id), ''), cr.course_run_id::text),
-            course_start_date = COALESCE(ca.course_start_date, cr.start_date::date),
+            -- course_start_date is TEXT (DD-MM-YYYY, as uploaded). Mixing it
+            -- with a date made Postgres reject this whole statement at plan
+            -- time ("COALESCE types text and date cannot be matched"), so the
+            -- run-wide grant sweep failed on EVERY call from 15 Sep 2026 —
+            -- Sync Grants, Auto-Process, the upload grant poll and the resume
+            -- job all silently skipped it.
+            course_start_date = COALESCE(NULLIF(TRIM(ca.course_start_date), ''), to_char(cr.start_date, 'DD-MM-YYYY')),
             updated_at = now()
        FROM public.enrollment e
        JOIN public.course_run cr ON cr.id = e.course_run_id
@@ -1262,26 +1277,34 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
   let totalUpserted = 0;
   for (const courseRunId of courseRunIds) {
     try {
-      const parsed = await ssgEncryptedPost(ctx, '/tpg/grants/search', {
-        grants: {
-          course: { run: { id: courseRunId } },
-          trainingPartner: { uen: ctx.uen, code: ctx.tpCode },
-        },
-        parameters: { page: 0, pageSize: 100 },
-      });
-      const errMsg = hasSsgError(parsed);
-      if (errMsg) {
-        console.warn(`[sweepGrantsByCourseRun] Run ${courseRunId} returned error:`, errMsg);
-        continue;
-      }
-      const grants: Record<string, unknown>[] = Array.isArray(parsed?.data) ? parsed.data : [];
-      for (const grant of grants) {
-        try {
-          await upsertSsgGrant(grant);
-          totalUpserted++;
-        } catch (err) {
-          console.warn(`[sweepGrantsByCourseRun] Upsert failed for run ${courseRunId}:`, err instanceof Error ? err.message : err);
+      // Page through: a learner usually has two grants (baseline + enhanced),
+      // so one page of 100 stopped at ~50 learners and the rest of a big class
+      // sat at "awaiting grant" forever, holding back their employer's invoice.
+      // Capped at 10 pages (1,000 grants) so a misbehaving API can't loop.
+      const PAGE_SIZE = 100;
+      for (let page = 0; page < 10; page++) {
+        const parsed = await ssgEncryptedPost(ctx, '/tpg/grants/search', {
+          grants: {
+            course: { run: { id: courseRunId } },
+            trainingPartner: { uen: ctx.uen, code: ctx.tpCode },
+          },
+          parameters: { page, pageSize: PAGE_SIZE },
+        });
+        const errMsg = hasSsgError(parsed);
+        if (errMsg) {
+          console.warn(`[sweepGrantsByCourseRun] Run ${courseRunId} page ${page} returned error:`, errMsg);
+          break;
         }
+        const grants: Record<string, unknown>[] = Array.isArray(parsed?.data) ? parsed.data : [];
+        for (const grant of grants) {
+          try {
+            await upsertSsgGrant(grant);
+            totalUpserted++;
+          } catch (err) {
+            console.warn(`[sweepGrantsByCourseRun] Upsert failed for run ${courseRunId}:`, err instanceof Error ? err.message : err);
+          }
+        }
+        if (grants.length < PAGE_SIZE) break;
       }
     } catch (err) {
       console.warn(`[sweepGrantsByCourseRun] Search failed for run ${courseRunId}:`, err instanceof Error ? err.message : err);

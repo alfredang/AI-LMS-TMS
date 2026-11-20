@@ -1,4 +1,5 @@
 import pool from '../db';
+import { escapeQboQueryLiteral } from '../quickbooks/qboQueryLiteral';
 
 const QBO_BASE_URL = process.env.QBO_BASE_URL || 'https://quickbooks.api.intuit.com';
 const QBO_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
@@ -395,7 +396,7 @@ export async function qboFindInvoiceByDocNumber(
   docNumber: string,
   opts?: { ignoreVoided?: boolean }
 ): Promise<{ id: string; customerRef?: string; syncToken?: string; raw: any } | null> {
-  const safe = String(docNumber || '').replace(/'/g, "''").trim();
+  const safe = escapeQboQueryLiteral(String(docNumber || '').trim());
   if (!safe) return null;
   const data = await qboQuery(appOverride, `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`);
   const inv = data?.QueryResponse?.Invoice;
@@ -471,7 +472,7 @@ export async function qboFindInvoiceByDocNumberLike(
   pattern: string,
   opts?: { ignoreVoided?: boolean }
 ): Promise<{ id: string; docNumber?: string; customerRef?: string; syncToken?: string; raw: any } | null> {
-  const safe = String(pattern || '').replace(/'/g, "''").trim();
+  const safe = escapeQboQueryLiteral(String(pattern || '').trim());
   if (!safe) return null;
   // MAXRESULTS 5, not 1: the newest match may be a void, and the point of this
   // search is to find a REUSABLE invoice. Taking only the newest would hand back
@@ -759,7 +760,7 @@ export async function qboResolveOosTaxCodeRef(appOverride: string | undefined): 
 }
 
 function escapeQboStringLiteral(value: string): string {
-  return String(value || '').replace(/'/g, "''");
+  return escapeQboQueryLiteral(value || '');
 }
 
 /**
@@ -811,7 +812,7 @@ export async function qboUpdateItemUnitPrice(
   itemId: string,
   unitPrice: number
 ): Promise<void> {
-  const safe = String(itemId || '').replace(/'/g, "''").trim();
+  const safe = escapeQboQueryLiteral(String(itemId || '').trim());
   if (!safe) throw new Error('QuickBooks item id is required');
   const data = await qboQuery(appOverride, `SELECT * FROM Item WHERE Id = '${safe}' MAXRESULTS 1`);
   const raw = data?.QueryResponse?.Item;
@@ -890,7 +891,7 @@ export async function qboFindCustomerByName(
  * Use this for fixed customers (e.g. "WSQ Individual (Not for Company)") that must be pre-created in QB.
  */
 export async function qboFindCustomerByDisplayName(appOverride: string | undefined, displayName: string): Promise<string> {
-  const safe = displayName.replace(/'/g, "''");
+  const safe = escapeQboQueryLiteral(displayName);
   const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`);
   const c = data?.QueryResponse?.Customer?.[0];
   if (c?.Id) return String(c.Id);
@@ -904,7 +905,7 @@ export async function qboFindCustomerByDisplayName(appOverride: string | undefin
  * Use this for system customers (e.g. "WSG") that should exist but may need auto-creation.
  */
 export async function qboFindOrCreateCustomerByDisplayName(appOverride: string | undefined, displayName: string): Promise<string> {
-  const safe = displayName.replace(/'/g, "''");
+  const safe = escapeQboQueryLiteral(displayName);
   const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`);
   const c = data?.QueryResponse?.Customer?.[0];
   if (c?.Id) return String(c.Id);
@@ -947,7 +948,7 @@ export async function qboFindOrCreateCompanyCustomer(
   const displayName = (opts.displayName || '').trim();
   if (!displayName) throw new Error('qboFindOrCreateCompanyCustomer: displayName is required');
 
-  const safe = displayName.replace(/'/g, "''");
+  const safe = escapeQboQueryLiteral(displayName);
   const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`);
   const existing = data?.QueryResponse?.Customer?.[0];
   if (existing?.Id) return String(existing.Id);
@@ -1021,7 +1022,7 @@ export async function qboReadCustomer(
   appOverride: string | undefined,
   customerId: string
 ): Promise<{ id: string; syncToken?: string; raw: any } | null> {
-  const safe = String(customerId || '').replace(/'/g, "''").trim();
+  const safe = escapeQboQueryLiteral(String(customerId || '').trim());
   if (!safe) return null;
   const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE Id = '${safe}' MAXRESULTS 1`);
   const raw = data?.QueryResponse?.Customer;
@@ -1031,7 +1032,7 @@ export async function qboReadCustomer(
 }
 
 export async function qboFindOrCreateCustomerByEmail(appOverride: string | undefined, email: string, displayName: string): Promise<string> {
-  const safeEmail = email.replace(/'/g, "''");
+  const safeEmail = escapeQboQueryLiteral(email);
   const q = `SELECT * FROM Customer WHERE PrimaryEmailAddr = '${safeEmail}'`;
   const data = await qboQuery(appOverride, q);
   const c = data?.QueryResponse?.Customer?.[0];

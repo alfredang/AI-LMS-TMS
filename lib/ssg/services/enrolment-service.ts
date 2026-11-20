@@ -205,7 +205,17 @@ export async function searchEnrolment(payload: EnrolmentSearchPayload): Promise<
     };
   }
 
-  const enrolmentData = parsed?.data?.enrolment ?? parsed?.data?.[0]?.enrolment;
+  // A learner re-enrolled after a cancellation has BOTH records on the run, and
+  // SSG does not promise to list the live one first. Prefer a record that is not
+  // cancelled/withdrawn/rejected, so a caller recovering from "duplicate" never
+  // adopts the dead reference (and invoices against it). Falls back to the first
+  // record when every one is dead — callers check enrolmentStatus themselves.
+  const DEAD_STATUSES = ['cancelled', 'withdrawn', 'rejected'];
+  const listed: any[] = Array.isArray(parsed?.data) ? parsed.data : [];
+  const liveListed = listed.find(
+    (d: any) => !DEAD_STATUSES.includes(String(d?.enrolment?.status || '').toLowerCase())
+  );
+  const enrolmentData = parsed?.data?.enrolment ?? (liveListed ?? listed[0])?.enrolment;
   return {
     success: true,
     status: 'found',

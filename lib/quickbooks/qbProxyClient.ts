@@ -29,7 +29,10 @@ function proxyBaseUrl(): string {
     process.env.QBO_PROXY_BASE_URL ||
     process.env.NEXT_PUBLIC_BASE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-    'http://localhost:3000'
+    // Loopback to this same server. Next sets PORT to the port it is actually
+    // listening on, so a dev server on 3003 calls 3003 — a hard-coded 3000
+    // made every QuickBooks write fail locally with "fetch failed".
+    `http://localhost:${process.env.PORT || 3000}`
   );
 }
 

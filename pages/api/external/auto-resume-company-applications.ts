@@ -59,6 +59,28 @@ async function findStaleCompanyApplicationIds(limit: number): Promise<string[]> 
         AND (
              LOWER(COALESCE(auto_enrol_status, '')) IN ('pending', 'enroled', 'grant_found')
           OR (LOWER(COALESCE(auto_enrol_status, '')) = 'failed' AND COALESCE(enrolment_id, '') <> '')
+          -- "TGS-407 Course run not found" for a run that is brand new: SSG
+          -- had not finished registering it (seen 17 Nov 2026 — run 1488902
+          -- created 09:39, enrolment rejected 09:45, run fine in SSG later), or
+          -- the learners were uploaded before the run existed at all. Keep
+          -- retrying while the rejection is within 2 hours of the run's
+          -- creation in the LMS. Rows are only picked once idle for
+          -- STALE_AFTER_MINUTES, so that is at most ~4 attempts, after which
+          -- the window closes by itself and the row waits for a human.
+          OR (
+               LOWER(COALESCE(auto_enrol_status, '')) = 'failed'
+           AND COALESCE(enrolment_id, '') = ''
+           AND auto_enrol_error ILIKE '%TGS-407%'
+           -- Only fresh failures: old ones (often for classes already over)
+           -- are left for an admin to retry deliberately.
+           AND updated_at > now() - interval '1 day'
+           AND EXISTS (
+                 SELECT 1 FROM public.course_run cr
+                  WHERE cr.course_run_id::text = TRIM(company_application.course_run_id)
+                    AND COALESCE(cr.is_deleted, false) = false
+                    AND company_application.updated_at < cr.created_at + interval '2 hours'
+               )
+          )
         )
         AND (
              COALESCE(enrolment_id, '') = ''
@@ -161,7 +183,29 @@ export async function runAutomation(limit = DEFAULT_LIMIT): Promise<ResumeResult
 
       let invoice: ResumeResult['invoice'] = null;
       try {
-        const summary = await generateInvoicesForApplications(ids);
+        // Invoice whole classes, not just the rows this batch happened to pick.
+        // The batch is capped (LIMIT), so one classmate can be picked while
+        // another is not — and the invoice was cut for half the company, leaving
+        // the other learner to get a SECOND invoice on a later pass (Paula's
+        // Choice, run 1425027, 20 Nov 2026). Pull in every active, unbilled
+        // classmate of the same employer + run; the invoice step still holds
+        // the whole group if any of them is not ready.
+        const classmates = await pool.query(
+          `SELECT o.id::text AS id
+             FROM public.company_application o
+             JOIN public.company_application s
+               ON LOWER(TRIM(o.employer_uen)) = LOWER(TRIM(s.employer_uen))
+              AND TRIM(o.course_run_id)       = TRIM(s.course_run_id)
+            WHERE s.id = ANY($1::uuid[])
+              AND COALESCE(TRIM(s.employer_uen), '') <> ''
+              AND COALESCE(TRIM(s.course_run_id), '') <> ''
+              AND o.ca_cancelled_at IS NULL
+              AND COALESCE(o.invoice_id, '') = ''
+              AND COALESCE(o.billed_manually, false) = false`,
+          [ids]
+        );
+        const invoiceIds = Array.from(new Set([...ids, ...classmates.rows.map((r: any) => String(r.id))]));
+        const summary = await generateInvoicesForApplications(invoiceIds);
         invoice = {
           generated: summary.generated,
           skippedAlreadyInvoiced: summary.skippedAlreadyInvoiced,

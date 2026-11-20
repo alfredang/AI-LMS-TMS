@@ -235,7 +235,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         Date.now() - updatedAt > 30 * 60 * 1000 &&
         !isDismissed;
 
-      const isStuck = isFailed || isStranded || (warnings.length > 0 && !isInvoiced && !isDismissed);
+      // Invoice removed and never re-raised: enrolled, still marked 'invoiced'
+      // (Remove Invoice keeps the status so the background job won't re-create
+      // it on its own — the admin may be waiting to add a late joiner), but no
+      // invoice and not billed by hand. The employer is not being billed, so it
+      // needs attention — and it cannot be dismissed, or it goes silent again.
+      const isInvoiceRemoved =
+        String(r.enrolment_id || '').trim().length > 0 &&
+        !isInvoiced &&
+        status === 'invoiced' &&
+        r.billed_manually !== true;
+
+      const isStuck =
+        isFailed ||
+        isStranded ||
+        isInvoiceRemoved ||
+        (warnings.length > 0 && !isInvoiced && !isDismissed);
 
       // Read by the Type and Renewal columns.
       out._course_type = String(r.course_type || '');
@@ -246,12 +261,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
       out._pipeline_warnings = JSON.stringify(warnings);
       out._stuck = isStuck ? '1' : '';
+      out._invoice_removed = isInvoiceRemoved ? '1' : '';
       // Lets the UI title the dialog honestly: a hard failure reads differently
       // from warnings left over from an attempt that eventually worked.
       out._failed = isFailed ? '1' : '';
       return out;
     });
     const stuckCount = rows.filter((r) => r._stuck === '1').length;
+    // The dev script sets ENABLE_APP_SCHEDULER=false to mean "no background
+    // automation here". Localhost talks to the LIVE database, and this resume
+    // job enrols with SSG and raises QuickBooks invoices — merely opening the
+    // page on a laptop created real invoices (20 Nov 2026). Respect the flag.
+    // Same rule instrumentation.ts uses to start the scheduler, so this page
+    // runs background automation exactly where the scheduler does.
+    const automationEnabled = process.env.ENABLE_APP_SCHEDULER === 'true'
+      || (process.env.NODE_ENV === 'production' && process.env.ENABLE_APP_SCHEDULER !== 'false');
+    if (!automationEnabled) {
+      return res.status(200).json({ rows, stuckCount });
+    }
     setImmediate(async () => {
       try {
         const { runAutomation } = await import('../external/auto-resume-company-applications');
