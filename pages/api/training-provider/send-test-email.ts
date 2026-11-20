@@ -6,6 +6,7 @@ import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
 import { renderInvitationHtmlEmail, renderInvitationTemplate, parseCcList } from '@lib/trainerInvitations';
 import { passwordSectionHtml } from '@lib/learner/welcomeSigninEmailTemplate';
 import { loginUrlFrom } from '@lib/learner/selfEnrolment';
+import { COURSEWARE_SCENARIOS, CoursewareTemplateError, coursewareSample, renderCoursewareEmail, type CoursewareScenario } from '@lib/learner/coursewareEmailTemplate';
 import {
   DEFAULT_MMS_ACCESS_EMAIL_BODY,
   DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
@@ -133,10 +134,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { testEmail, subject, body: emailBody, templateType = 'certificate', cc, attachmentUrl } = req.body;
+  const { testEmail, subject, body: emailBody, templateType = 'certificate', cc, attachmentUrl, coursewareScenario = 'funded' } = req.body;
 
   if (!testEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
     return res.status(400).json({ success: false, error: 'Valid test email address is required.' });
+  }
+  if (templateType === 'courseware-attendance' && (!COURSEWARE_SCENARIOS.includes(coursewareScenario)
+      || typeof subject !== 'string' || typeof emailBody !== 'string')) {
+    return res.status(400).json({ success: false, error: 'Select a valid courseware scenario and provide a subject and body.' });
   }
 
   try {
@@ -186,7 +191,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // **bold** lines, tight line spacing, and side-by-side Accept/Decline
     // buttons render correctly.
     let htmlBody: string;
-    if (templateType === 'trainer-invitation') {
+    if (templateType === 'courseware-attendance') {
+      const rendered = renderCoursewareEmail(subject, emailBody, coursewareSample(coursewareScenario as CoursewareScenario, {
+        companyName, companyShortName, companyWebsite, companyEmail: tp.supportEmail || tp.companyEmail,
+        companyPhone: tp.contactTel, siteUrl: tp.siteUrl,
+      }));
+      sampleSubject = `[TEST: ${rendered.scenario}] ${rendered.subject}`;
+      htmlBody = `${rendered.html}<p style="font:12px Arial;color:#666;">Mock email only. Course details are sample data. Do not submit attendance or assessment from this preview.</p>`;
+    } else if (templateType === 'trainer-invitation') {
       const invitationReplacements: Record<string, string> = {};
       for (const [k, v] of Object.entries(replacements)) {
         invitationReplacements[k.replace(/[{}]/g, '')] = v;
@@ -274,6 +286,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     return res.status(200).json({ success: true, message: `Test email sent to ${testEmail}` });
   } catch (error) {
+    if (error instanceof CoursewareTemplateError) return res.status(400).json({ success: false, error: error.message });
     console.error('Error sending test email:', error);
     return res.status(500).json({
       success: false,

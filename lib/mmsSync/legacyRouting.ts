@@ -2,13 +2,23 @@ import { prepareClassAccess, type ClassIdentity } from './accessContext';
 import { accessInstruction, accessMessage, recipients } from './accessPolicy';
 import { MmsSyncError } from './contract';
 import { getMmsRuntimeConfig } from './runtimeConfig';
+import { isConditionalCoursewareTemplate, renderCoursewareEmail, type CoursewareValues } from '../learner/coursewareEmailTemplate';
 /** Scoped templates: never rewrite a stored/global funded-course template. */
-export async function learnerMail(identity: ClassIdentity, opts: { name: string; email: string; support: string; title: string; dates: string; venue: string; confirmation?: boolean }) {
+export async function learnerMail(identity: ClassIdentity, opts: { name: string; email: string; support: string; title: string; dates: string; venue: string; confirmation?: boolean;
+    courseware?: { subject: string; body: string; values: CoursewareValues } }) {
     const context = await prepareClassAccess(identity);
     if (context.platform === 'tms') return null;
     if (context.platform === 'review') throw new MmsSyncError(context.reason || 'Class access needs review.');
     if (context.state === 'ready' && getMmsRuntimeConfig().notificationsEnabled) {
         if (!recipients(context.snapshot!).some(p => p.role === 'learner' && p.email === opts.email.toLowerCase())) throw new MmsSyncError('This learner is awaiting MMS enrolment reconciliation.');
+        // Opt in only for this course-day caller and a saved conditional master.
+        // Ordinary templates, confirmations and standalone MMS notices retain their current behaviour.
+        if (!opts.confirmation && opts.courseware && isConditionalCoursewareTemplate(opts.courseware.body)) {
+            return renderCoursewareEmail(opts.courseware.subject, opts.courseware.body, {
+                ...opts.courseware.values, courseRunCode: context.class_id,
+                attendanceId: undefined, attendanceVerified: false,
+            });
+        }
         return accessMessage(context, { name: opts.name, role: 'learner' }, opts.support, opts.confirmation ? 'Course confirmation' : 'Course-day reminder');
     }
     if (!opts.confirmation) throw new MmsSyncError(context.reason || 'Hold course-day mail until MMS access is ready.');
