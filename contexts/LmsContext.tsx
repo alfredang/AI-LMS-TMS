@@ -1056,6 +1056,12 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Reset view to dashboard when switching roles
     setCurrentView(View.Dashboard);
     setSelectedCourse(null);
+    // An open course editor belongs to the role that opened it. Every layout
+    // renders <CourseEditor /> while editingCourse is set, so leaving it here
+    // showed the Developer's editor inside the next role instead of its dashboard.
+    setEditingCourse(null);
+    setCourseEditMode(null);
+    setEditingCourseRun(null);
 
     // Trigger profile refresh after role change
     try {
