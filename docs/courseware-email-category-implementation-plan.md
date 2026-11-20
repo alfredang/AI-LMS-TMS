@@ -48,7 +48,7 @@ Use one stored subject pattern, `{EMAIL_PURPOSE} - {COURSE_NAME}`, and one store
 | Check-course-code introduction and unsure/trainer/support guidance | One conditional block | Combined scenario only |
 | Class Attendance | One conditional block | Non-funded and combined scenarios; labelled non-funded only |
 | E-Attendance | One conditional block | Funded and combined scenarios; labelled SWDA-funded only |
-| WSQ Assessment Submission | One conditional block | Funded and combined scenarios; explicitly conditional in combined output |
+| WSQ Assessment Information | One conditional block | Funded and combined scenarios; explicitly conditional in combined output |
 
 Use a small, documented set of allowlisted conditional markers and variables. Do not evaluate arbitrary JavaScript or template expressions. Validate balanced blocks and known names when saving. Resolve block visibility before substituting escaped course values, so inserted course data cannot be interpreted as template syntax. No conditional markers may remain in a sent email.
 
@@ -107,15 +107,17 @@ The non-funded output contains no SWDA e-attendance instructions. The funded out
 
 ### WSQ assessment wording
 
+Both applicable scenarios use the heading **Assessment Information - WSQ Courses Only** and the portal name **Course Material Portal**.
+
 Funded scenario:
 
-> Open your class in the portal above and complete and submit your assessment according to your trainer's instructions and assessment schedule.
+> Assessment documents and submission are available in the **Course Material Portal**. Your trainer will explain the steps and guide you through the process during the assessment session.
 
-Combined scenario, under **Assessment Submission - WSQ Courses Only**:
+Combined scenario:
 
-> If you are attending a WSQ course, open your class in the WSQ portal above and complete and submit your assessment according to your trainer's instructions and assessment schedule.
+> If you are attending a WSQ course, assessment documents and submission are available in the **Course Material Portal**. Your trainer will explain the steps and guide you through the process during the assessment session.
 
-Do not render a WSQ assessment section in the non-funded scenario. Use the trainer's assessment schedule instead of the former fixed wording "this afternoon", which may be incorrect for multi-day classes.
+Do not render a WSQ assessment section in the non-funded scenario. Present this as information about available documents and trainer guidance; do not introduce exam/pass requirements or fixed submission times.
 
 ### Support and sign-off
 
@@ -219,6 +221,14 @@ The initial three mock messages were sent on 20 November 2026 at 14:05:05, 14:05
 Both send histories are retained: `scratch/courseware-email-20261120/implementation/mock-send-receipts.json` records the initial set; `mock-send-receipts-corrected.json` in the same directory records the corrected final set. The private daily log also records the address correction and message IDs.
 
 The feature is published on `codex/courseware-scenarios` in PR #159. Automatic approval review rejected a direct push to `main` because it could trigger production deployment and requires explicit approval for that action. The review branch was published instead; neither `main` nor the live database template was changed. The remaining release steps are to approve production deployment, verify renderer availability, then save and read back the staged master template while preserving CC and schedules.
+
+### Assessment wording revision and refreshed samples
+
+The assessment section now reads **Assessment Information - WSQ Courses Only**, calls the portal **Course Material Portal**, and explains document availability and trainer guidance during the assessment session. The combined scenario retains its WSQ-only qualification; the non-funded scenario still omits assessment information.
+
+Nine focused tests and six desktop/mobile renders passed for this revision. One updated mock per scenario was sent to the clarified review address on 20 November 2026 at 15:31:20, 15:31:25 and 15:31:31 Singapore time (funded, non-funded and unrecognised respectively). Gmail Sent headers and exact rendered bodies were verified; no CC/BCC was used.
+
+The latest review master, rendered bodies, screenshots and send receipts are under `scratch/courseware-email-20261120/implementation/assessment-information-review/`. These samples supersede the earlier review sets. The staged activation master has also been refreshed, with the previous wording preserved in `master-before-assessment-wording.json`. Live deployment and template activation remain pending approval.
 
 ### Conditional markers
 

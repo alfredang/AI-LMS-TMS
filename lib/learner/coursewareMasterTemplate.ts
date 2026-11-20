@@ -41,8 +41,8 @@ export function buildCoursewareMasterTemplate(branding: CoursewareBranding) {
 <p style="${p}">If you are attending a SWDA-funded course, please complete your digital e-attendance for each session
 <!-- cw:if HAS_ATTENDANCE_LINK -->using the link below and follow your trainer&rsquo;s instructions.<br><br><a href="{E_ATTENDANCE_URL}">Take e-attendance</a><!-- cw:end -->
 <!-- cw:if NO_ATTENDANCE_LINK -->using the attendance link provided by your trainer.<!-- cw:end --></p>
-<h1 style="font-size:16px;">Assessment Submission &mdash; WSQ Courses Only</h1>
-<p style="${p}"><!-- cw:if FUNDED -->Open<!-- cw:end --><!-- cw:if UNRECOGNISED -->If you are attending a WSQ course, open<!-- cw:end --> your class in the WSQ portal above and complete and submit your assessment according to your trainer&rsquo;s instructions and assessment schedule.</p><!-- cw:end -->
+<h1 style="font-size:16px;">Assessment Information &mdash; WSQ Courses Only</h1>
+<p style="${p}"><!-- cw:if FUNDED -->Assessment<!-- cw:end --><!-- cw:if UNRECOGNISED -->If you are attending a WSQ course, assessment<!-- cw:end --> documents and submission are available in the <strong>Course Material Portal</strong>. Your trainer will explain the steps and guide you through the process during the assessment session.</p><!-- cw:end -->
 <h1 style="font-size:16px;">${supportName}</h1>
 <p style="${p}">If you need assistance, please contact us:<br><br>Tel: ${b.supportPhone}<br>Email: <a href="mailto:${b.supportEmail}">${b.supportEmail}</a><br><br>Best regards,<br>${b.teamName}</p>
 </td></tr></table></td></tr></table></div>`,

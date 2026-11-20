@@ -20,7 +20,7 @@ test('classifies registered codes, including whitespace and existing C-number co
 });
 test('one master renders exactly the relevant funded, non-funded and fallback sections', () => {
   const funded = render('TGS-2023036153').html;
-  assert.match(funded, /funded\.example\.test/); assert.match(funded, /E-Attendance/); assert.match(funded, /Assessment Submission/);
+  assert.match(funded, /funded\.example\.test/); assert.match(funded, /E-Attendance/); assert.match(funded, /Assessment Information/);
   assert.doesNotMatch(funded, /nonfunded\.example\.test|Class Attendance|If you are unsure/);
   assert.match(funded, /take-attendance\/1467809/);
   const nonFunded = render('C251').html;
@@ -57,7 +57,7 @@ test('escapes course values and never reinterprets their markers or replacement 
 });
 test('ordinary HTML remains supported and date ranges collapse when dates match', () => {
   const legacy = renderer.renderCoursewareEmail('For {COURSE_NAME}', '<p>Hello {STUDENT_NAME}</p>', { ...sample('C1'), studentName: 'Alex' });
-  assert.match(legacy.html, /<p>Hello Alex<\/p>/); assert.doesNotMatch(legacy.html, /Assessment Submission/);
+  assert.match(legacy.html, /<p>Hello Alex<\/p>/); assert.doesNotMatch(legacy.html, /Assessment Information/);
   assert.equal(renderer.coursewareDates('20 Nov', '20 Nov'), '20 Nov');
   assert.equal(renderer.coursewareDates('20 Nov', '21 Nov'), '20 Nov - 21 Nov');
   const edited = { ...master, body: master.body.replace('Dear Learners,', 'Shared greeting edited once') };
