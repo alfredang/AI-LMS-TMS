@@ -1678,7 +1678,7 @@ const UploadBillingChoiceModal: React.FC<{
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">{/* design-tokens-allow: modal backdrop is dark in both themes, same as every other popup */}
       <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
         <div className="p-6 border-b border-default">
           <h2 className="text-lg font-bold text-on-surface">
