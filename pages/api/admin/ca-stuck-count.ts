@@ -50,6 +50,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             AND updated_at < now() - interval '30 minutes'
             AND attention_ignored_at IS NULL
               )
+           -- Invoice removed and never re-raised (see isInvoiceRemoved). Not
+           -- dismissable: the employer is unbilled until someone acts.
+           OR (
+                COALESCE(enrolment_id, '') <> ''
+            AND COALESCE(invoice_id, '') = ''
+            AND LOWER(COALESCE(auto_enrol_status, '')) = 'invoiced'
+            AND COALESCE(billed_manually, false) = false
+              )
          )
     `);
     return res.status(200).json({ count: result.rows[0]?.count ?? 0 });

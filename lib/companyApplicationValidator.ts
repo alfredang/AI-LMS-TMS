@@ -28,6 +28,8 @@ export interface RowValidationError {
     courseTitle: string;
     courseStartDate: string;
     candidates: CourseRunCandidate[];
+    /** 'none' = no run matched; 'many' = several runs of the course start that day. */
+    reason?: 'none' | 'many';
   };
 }
 
@@ -102,12 +104,27 @@ function parseDdMmYyyy(raw: string): ParsedDate | null {
   return { iso, year, month, day };
 }
 
+/**
+ * How a row's (title, start date) resolves against the LMS's course runs:
+ * no run, exactly one, or several (duplicate sittings of the same course on
+ * the same day — SSG holds hundreds of these). `runIds` lists the matches.
+ */
+type RunResolution = { kind: 'none' } | { kind: 'one'; runId: string } | { kind: 'many'; runIds: string[] };
+type CourseRunResolver = (title: string, isoStartDate: string) => RunResolution;
+
 // Pre-fetches all course_runs that could match anything in this upload, so we
 // do one query for N rows instead of N queries. Returns a lookup function the
 // per-row validator calls.
+//
+// Mirrors resolveCourseRun in autoEnrolCompanyApplications (exact title first,
+// then a pasted TGS code, then fuzzy title) so that a row which passes here is
+// one the pipeline can place. Before, this only asked "is there ANY match?",
+// so a course with two runs on the same date sailed through the upload and then
+// failed in the pipeline with "Ambiguous course run" — after the admin had
+// left, with no picker to answer it.
 async function buildCourseRunResolver(
   rows: Array<Record<string, string>>,
-): Promise<(title: string, isoStartDate: string) => boolean> {
+): Promise<CourseRunResolver> {
   const startDates = new Set<string>();
   for (const row of rows) {
     const raw = String(row['Course Start Date (DD-MM-YYYY)*'] || '').trim();
@@ -115,36 +132,49 @@ async function buildCourseRunResolver(
     if (parsed) startDates.add(parsed.iso);
   }
   if (startDates.size === 0) {
-    return () => false;
+    return () => ({ kind: 'none' });
   }
 
+  // Deleted runs are excluded: the pipeline never enrols onto one, so letting
+  // one satisfy validation just moves the failure to after the upload.
   const result = await pool.query(
-    `SELECT c.title::text AS title, c.course_code::text AS course_code, cr.start_date::text AS start_date
+    `SELECT c.title::text AS title, c.course_code::text AS course_code,
+            cr.start_date::text AS start_date, cr.course_run_id::text AS course_run_id
        FROM public.course_run cr
        JOIN public.course c ON c.id = cr.course_id
-      WHERE cr.start_date::date = ANY($1::date[])`,
+      WHERE cr.start_date::date = ANY($1::date[])
+        AND COALESCE(cr.is_deleted, false) = false`,
     [Array.from(startDates)],
   );
 
-  const byDate = new Map<string, Array<{ title: string; courseCode: string }>>();
+  const byDate = new Map<string, Array<{ title: string; courseCode: string; runId: string }>>();
   for (const r of result.rows) {
     const iso = String(r.start_date).slice(0, 10);
     const arr = byDate.get(iso) || [];
-    arr.push({ title: String(r.title || ''), courseCode: String(r.course_code || '') });
+    arr.push({ title: String(r.title || ''), courseCode: String(r.course_code || ''), runId: String(r.course_run_id || '') });
     byDate.set(iso, arr);
   }
 
   return (title, isoStartDate) => {
     const candidates = byDate.get(isoStartDate);
-    if (!candidates || candidates.length === 0) return false;
+    if (!candidates || candidates.length === 0) return { kind: 'none' };
 
+    const exactTitle = title.trim().toLowerCase();
+    const exact = candidates.filter(c => c.title.trim().toLowerCase() === exactTitle);
     // A TGS code pasted into the title (e.g. "WSQ - Process and Design FMEA
     // (TGS-2023037830)") is exact and survives renames — prefer it over any
     // amount of title comparison.
     const code = extractCourseReferenceNumber(title);
-    if (code && candidates.some(c => c.courseCode.trim().toUpperCase() === code)) return true;
+    const byCode = code ? candidates.filter(c => c.courseCode.trim().toUpperCase() === code) : [];
+    const matches = exact.length > 0
+      ? exact
+      : byCode.length > 0
+        ? byCode
+        : candidates.filter(c => courseTitlesMatch(c.title, title));
 
-    return candidates.some(c => courseTitlesMatch(c.title, title));
+    if (matches.length === 0) return { kind: 'none' };
+    if (matches.length === 1) return { kind: 'one', runId: matches[0].runId };
+    return { kind: 'many', runIds: matches.map(m => m.runId) };
   };
 }
 
@@ -233,7 +263,7 @@ export async function findCourseRunCandidates(
 function validateRow(
   row: Record<string, string>,
   rowNumber: number,
-  resolveCourseRun: (title: string, isoStartDate: string) => boolean,
+  resolveCourseRun: CourseRunResolver,
 ): RowValidationError | null {
   const issues: string[] = [];
   const get = (col: string) => String(row[col] ?? '').trim();
@@ -286,11 +316,15 @@ function validateRow(
   }
 
   const title = get('Course Title*');
-  let courseRunUnresolved = false;
+  let courseRunUnresolved: 'none' | 'many' | null = null;
   if (title && startParsed) {
-    if (!resolveCourseRun(title, startParsed.iso)) {
-      courseRunUnresolved = true;
+    const resolution = resolveCourseRun(title, startParsed.iso);
+    if (resolution.kind === 'none') {
+      courseRunUnresolved = 'none';
       issues.push(`No course run found in the LMS for "${title}" on ${startParsed.iso} — pick the correct run below, or fix the title/date in the Excel`);
+    } else if (resolution.kind === 'many') {
+      courseRunUnresolved = 'many';
+      issues.push(`${resolution.runIds.length} course runs of "${title}" start on ${startParsed.iso} (${resolution.runIds.join(', ')}) — pick which one this learner is on below`);
     }
   }
 
@@ -305,7 +339,7 @@ function validateRow(
     // Only offer the picker when the run is the ONLY thing wrong — resolving it
     // on a row that also has, say, a bad NRIC would still fail on re-submit.
     ...(courseRunUnresolved && issues.length === 1
-      ? { courseRunUnresolved: { courseTitle: title, courseStartDate: startRaw, candidates: [] } }
+      ? { courseRunUnresolved: { courseTitle: title, courseStartDate: startRaw, candidates: [], reason: courseRunUnresolved } }
       : {}),
   };
 }
@@ -314,19 +348,41 @@ export async function validateCompanyApplicationRows(
   rows: Array<Record<string, string>>,
   overrides: CourseRunOverride[] = [],
 ): Promise<RowValidationError[]> {
-  if (rows.length === 0) return [];
+  return (await validateAndResolveCompanyApplicationRows(rows, overrides)).errors;
+}
+
+/**
+ * Validation plus, for every row that passed, the course run it resolves to
+ * (null where it did not). The upload route needs the run up front to ask
+ * whether the employer already holds an invoice for it.
+ */
+export async function validateAndResolveCompanyApplicationRows(
+  rows: Array<Record<string, string>>,
+  overrides: CourseRunOverride[] = [],
+): Promise<{ errors: RowValidationError[]; runIdByRow: Array<string | null> }> {
+  if (rows.length === 0) return { errors: [], runIdByRow: [] };
 
   // Rows the admin has already answered "did you mean this run?" for.
-  const overridden = new Set(overrides.map(o => overrideKey(o.courseTitle, o.courseStartDate)));
+  const overrideRun = new Map(overrides.map(o => [overrideKey(o.courseTitle, o.courseStartDate), o.courseRunId]));
 
   const baseResolve = await buildCourseRunResolver(rows);
   const errors: RowValidationError[] = [];
+  const runIdByRow: Array<string | null> = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowKey = overrideKey(row['Course Title*'], row['Course Start Date (DD-MM-YYYY)*']);
-    const resolve = overridden.has(rowKey) ? () => true : baseResolve;
+    const pinned = overrideRun.get(rowKey);
+    let resolvedRunId: string | null = pinned || null;
+    const resolve: CourseRunResolver = pinned
+      ? () => ({ kind: 'one', runId: pinned })
+      : (title, iso) => {
+          const r = baseResolve(title, iso);
+          if (r.kind === 'one') resolvedRunId = r.runId;
+          return r;
+        };
     const err = validateRow(row, i + 1, resolve); // 1-based data-row index (header row not counted)
     if (err) errors.push(err);
+    runIdByRow.push(err ? null : resolvedRunId);
   }
 
   // Attach "did you mean" candidates. Done here, after validation, so the
@@ -346,5 +402,5 @@ export async function validateCompanyApplicationRows(
     }
   }
 
-  return errors;
+  return { errors, runIdByRow };
 }
