@@ -214,7 +214,9 @@ The HTML drafts use illustrative course data/placeholders for review. Implementa
 - [x] Send exactly one clearly labelled mock email for each scenario to the review address explicitly specified in the latest request, without CC/BCC. All use sample class data and no actionable SWDA attendance link.
 - [x] Verify all three messages in Gmail Sent, including recipient, subject and rendered body. Record their scenario, timestamp and message ID in the private daily log and local audit record. This verifies sending, not recipient delivery.
 
-The three mock messages were sent on 20 November 2026 at 14:05:05, 14:05:25 and 14:06:11 Singapore time for funded, non-funded and unrecognised scenarios respectively. Private receipt details are in `scratch/courseware-email-20261120/implementation/mock-send-receipts.json` and `.claude/daily-logs/2026-11-20.md`.
+The initial three mock messages were sent on 20 November 2026 at 14:05:05, 14:05:25 and 14:06:11 Singapore time for funded, non-funded and unrecognised scenarios respectively. The recipient clarification arrived afterward. One mock per scenario was then sent to the clarified review address at 15:05:32, 15:05:47 and 15:06:09 Singapore time, and all three were verified in Gmail Sent with the expected headers and rendered bodies. No CC/BCC was used.
+
+Both send histories are retained: `scratch/courseware-email-20261120/implementation/mock-send-receipts.json` records the initial set; `mock-send-receipts-corrected.json` in the same directory records the corrected final set. The private daily log also records the address correction and message IDs.
 
 The feature is published on `codex/courseware-scenarios` in PR #159. Automatic approval review rejected a direct push to `main` because it could trigger production deployment and requires explicit approval for that action. The review branch was published instead; neither `main` nor the live database template was changed. The remaining release steps are to approve production deployment, verify renderer availability, then save and read back the staged master template while preserving CC and schedules.
 
