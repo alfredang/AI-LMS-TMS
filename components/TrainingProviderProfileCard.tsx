@@ -315,7 +315,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
-    const [isGamificationOpen, setIsGamificationOpen] = useState(false);
     const [isSsgFundingOpen, setIsSsgFundingOpen] = useState(false);
     const [isGstOpen, setIsGstOpen] = useState(false);
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
@@ -604,7 +603,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         feedbackFormEnabled: 'feedback_form_enabled',
     };
 
-    const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
+    const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'fundingSettings', key: string) => {
         setFormData(prev => {
             const currentSection = prev[section];
             const newValue = !(currentSection as any)[key];
@@ -4034,23 +4033,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
                 </div>
                 </>}
-
-                <div className="border-t my-6"></div>
-                {renderSectionHeader('Gamification Setting', isGamificationOpen, () => setIsGamificationOpen(prev => !prev), 'text-xl font-bold')}
-                {isGamificationOpen && <div className="space-y-4 font-semibold mt-4">
-                    <ToggleSwitch
-                        checked={formData.gamingSettings.enableLeaderboard}
-                        onChange={(checked) => handleToggleChange('gamingSettings', 'enableLeaderboard')}
-                        label="Enable Leaderboard"
-                        isEditing={isEditing}
-                    />
-                    <ToggleSwitch
-                        checked={formData.gamingSettings.enablePoints}
-                        onChange={(checked) => handleToggleChange('gamingSettings', 'enablePoints')}
-                        label="Enable Points System"
-                        isEditing={isEditing}
-                    />
-                </div>}
 
                 <div className="border-t my-6"></div>
                 {renderSectionHeader('Appearance', isAppearanceOpen, () => setIsAppearanceOpen(prev => !prev), 'text-xl font-bold')}

@@ -544,15 +544,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             enable_otp_login = $26,
             enable_default_otp = $27,
             default_otp = $28,
-            enable_leaderboard = $29,
-            enable_point_sys = $30,
-            normal_fund_rate = $31,
-            enhanced_fund_rate = $32,
-            gst_rate = $33,
-            gst_register = $34,
-            color_scheme = $35,
-            company_logo_url = COALESCE($37, company_logo_url)
-        WHERE id = $36
+            normal_fund_rate = $29,
+            enhanced_fund_rate = $30,
+            gst_rate = $31,
+            gst_register = $32,
+            color_scheme = $33,
+            company_logo_url = COALESCE($35, company_logo_url)
+        WHERE id = $34
         RETURNING *
       `;
 
@@ -585,8 +583,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         profileData.securitySettings?.enableOtpLogin || false,
         profileData.securitySettings?.enableDefaultOtp || false,
         profileData.securitySettings?.defaultOtpValue || '',
-        profileData.gamingSettings?.enableLeaderboard || false,
-        profileData.gamingSettings?.enablePoints || false,
         profileData.fundingSettings?.normalFunding || 70,
         profileData.fundingSettings?.enhancedFunding || 90,
         profileData.fundingSettings?.gstRate || 8.0,

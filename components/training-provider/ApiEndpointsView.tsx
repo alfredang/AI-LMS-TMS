@@ -1465,7 +1465,7 @@ const sections: EndpointSection[] = [
           { name: 'Content-Type', value: 'multipart/form-data', description: 'Supports file uploads' },
         ],
         bodyFields: [
-          { name: 'courseData', type: 'string', required: true, description: 'JSON-stringified payload: { title, courseCode, tscTitle?, tscCode?, trainingHours?, assessmentHours?, modeOfLearning?, courseType?, learningOutcomes?, isGamified?, learningUnits?, assessments?, resourceLinks?, ... }. title and courseCode are required.' },
+          { name: 'courseData', type: 'string', required: true, description: 'JSON-stringified payload: { title, courseCode, tscTitle?, tscCode?, trainingHours?, assessmentHours?, modeOfLearning?, courseType?, learningOutcomes?, learningUnits?, assessments?, resourceLinks?, ... }. title and courseCode are required.' },
           { name: 'courseImage', type: 'file', required: false, description: 'Course image (uploaded to /uploads/images)' },
           { name: 'lessonPlan', type: 'file', required: false, description: 'Lesson plan document (uploaded to /uploads/plans)' },
           { name: 'assessmentPlan', type: 'file', required: false, description: 'Assessment plan document (uploaded to /uploads/plans)' },
@@ -2278,7 +2278,7 @@ const sections: EndpointSection[] = [
         ],
         bodyFields: [
           { name: 'userId', type: 'string', required: true, description: 'User UUID (used to resolve the caller\'s training provider organization)' },
-          { name: 'profileData', type: 'string (JSON)', required: true, description: 'JSON-encoded settings object: companyName, companyShortname, uen, companyAddress, companyEmail, companyTel, companyWebsite, contactPerson, integrations, adminSettings, securitySettings, gamingSettings, fundingSettings, colorScheme, apiKeys, apiKeyModels, etc.' },
+          { name: 'profileData', type: 'string (JSON)', required: true, description: 'JSON-encoded settings object: companyName, companyShortname, uen, companyAddress, companyEmail, companyTel, companyWebsite, contactPerson, integrations, adminSettings, securitySettings, fundingSettings, colorScheme, apiKeys, apiKeyModels, etc.' },
           { name: 'companyLogo, invoiceTemplate, receiptTemplate, certificateTemplate, proFormaInvoiceTemplate, ssgCertFile, ssgPrivateKeyFile, ssgApp1CertFile, ssgApp1PrivateKeyFile, ssgApp3CertFile, ssgApp3PrivateKeyFile, serviceAccountKeyFile', type: 'file', required: false, description: 'Optional file uploads, keyed by field name' },
         ],
       },

@@ -109,7 +109,6 @@ async function handler(
         c.github_url,
         c.assessment_record_link,
         c.assessment_summary_record_url,
-        c.is_gamified          AS is_leaderboard_enabled,
         c.image_url,
         c.funding_validity,
           (SELECT h.valid_from::text FROM course_code_history h
@@ -252,7 +251,6 @@ async function handler(
       ...(canSeeGithubLink((req as any).authUser) ? { githubUrl: courseData.github_url || '' } : {}),
       assessmentRecordLink: courseData.assessment_record_link,
       assessmentSummaryRecordUrl: courseData.assessment_summary_record_url,
-      isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       fundingValidity: courseData.funding_validity || null,
       fundingValidityStart: courseData.funding_validity_start || null,

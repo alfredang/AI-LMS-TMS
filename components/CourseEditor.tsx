@@ -167,7 +167,7 @@ const EditableTopicAccordion: React.FC<{
     onSubtopicDragLeave: (e: React.DragEvent) => void;
     onSubtopicDragEnd: (e: React.DragEvent) => void;
     // Whether any subtopic drag is currently in progress — used to light up
-    // the Add Topic row as a drop target in other topics.
+    // the Add Sub Topic row as a drop target in other topics.
     isSubtopicDragging: boolean;
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
@@ -504,7 +504,7 @@ const EditableTopicAccordion: React.FC<{
                             >
                                 <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-on-surface-secondary hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
-                                    {isSubtopicDragging ? 'Drop here to move topic' : 'Add Topic'}
+                                    {isSubtopicDragging ? 'Drop here to move sub topic' : 'Add Sub Topic'}
                                 </Button>
                             </li>
                         </ul>
@@ -653,13 +653,13 @@ const CourseEditor: React.FC = () => {
     // Side-nav entries, matching exactly which sections this role renders.
     const navSections = [
         { id: 'course-details', label: 'Course Details', show: true },
-        { id: 'learning-outcomes', label: 'Learning Outcomes', show: role !== UserRole.Admin },
+        { id: 'learning-outcomes', label: 'Learning Outcomes', show: role !== UserRole.Admin && !isDeveloperView },
         { id: 'courseware', label: 'Courseware', show: true },
         { id: 'lesson', label: 'Lesson', show: role === UserRole.Developer },
         { id: 'assessment-methods', label: 'Assessment', show: role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer },
         { id: 'approved-trainers', label: 'Approved Trainers', show: role === UserRole.Admin || role === UserRole.Developer },
         { id: 'pricing', label: 'Pricing & Funding', show: role === UserRole.Admin },
-        { id: 'course-settings', label: 'Course Settings', show: true },
+        { id: 'course-settings', label: 'Course Settings', show: !!course.id && !course.id.startsWith('course_') },
     ].filter(s => s.show);
 
     // Use courseEditMode to determine if this is a new course, with fallback to ID check
@@ -1112,7 +1112,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     // Drop the dragged subtopic at the END of a target topic's subtopics list.
-    // Used by the "Add Topic" row which acts as a fallback drop target for
+    // Used by the "Add Sub Topic" row which acts as a fallback drop target for
     // learning units that have no subtopics (or when the user just wants to
     // append rather than insert at a specific position).
     const handleSubtopicDropAtEnd = (e: React.DragEvent, targetTopicId: string) => {
@@ -1388,7 +1388,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 modeOfLearning: selectedMode, // Use the validated mode
                 courseType: course.courseType,
                 learningOutcomes: course.learningOutcomes,
-                isGamified: course.isLeaderboardEnabled || false, // Use isLeaderboardEnabled as gamification
                 courseFee: baseCourseFee,
                 taxPercent: companyGstRate / 100,
                 scheduleId: course.scheduleId,
@@ -1981,7 +1980,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <span className="block text-sm font-bold text-on-surface-secondary mb-1">On This Page</span>
                                     <nav className="rounded-md border border-strong divide-y divide-default">
                                         {([
-                                            ['view-learning-outcomes', 'Learning Outcomes'],
+                                            ...(isDeveloperView ? [] : [['view-learning-outcomes', 'Learning Outcomes']]),
                                             ['view-courseware', 'Courseware'],
                                             ['section-lesson', 'Lesson'],
                                             ['view-assessment-links', 'Assessment Links'],
@@ -2020,12 +2019,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 </div>
 
                     <div className="md:col-span-1 xl:col-span-2 space-y-6">
-                        <Card id="view-learning-outcomes" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
-                            <div className="whitespace-pre-wrap rounded-md border border-strong bg-surface px-3 py-2 text-on-surface">
-                                {course.learningOutcomes || '—'}
-                            </div>
-                        </Card>
+                        {!isDeveloperView && (
+                            <Card id="view-learning-outcomes" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
+                                <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
+                                <div className="whitespace-pre-wrap rounded-md border border-strong bg-surface px-3 py-2 text-on-surface">
+                                    {course.learningOutcomes || '—'}
+                                </div>
+                            </Card>
+                        )}
 
                         <Card id="view-courseware" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Courseware</h3>
@@ -2426,7 +2427,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                 {/* Right Column: Content Sections */}
                 <div className="md:col-span-1 xl:col-span-2 space-y-6">
-                    {role !== UserRole.Admin && (
+                    {role !== UserRole.Admin && !isDeveloperView && (
                         <CollapsibleSection
                             id="learning-outcomes"
                             title="Learning Outcomes"
@@ -2713,7 +2714,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </div>
                             ))}
                             <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
-                                + Add Learning Unit
+                                + Add Topic
                             </Button>
                             </div>
                             )}
@@ -2990,34 +2991,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         </CollapsibleSection>
                     )}
 
-                    <CollapsibleSection
-                        id="course-settings"
-                        title="Course Settings"
-                        collapsible={isDeveloperView}
-                        collapsed={collapsedSections.has('course-settings')}
-                        onToggle={toggleSection}
-                    >
-                        <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
-                            <div>
-                                <p className="font-semibold text-sm">Enable Gaming Leaderboard</p>
-                                <p className="text-xs text-subtle">Allow learners to see a competitive leaderboard for this course.</p>
-                            </div>
-                            <button
-                                onClick={() => setCourse(prev => ({ ...prev, isLeaderboardEnabled: !(prev.isLeaderboardEnabled ?? false) }))}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(course.isLeaderboardEnabled ?? false) ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-600'}`}
-                                aria-pressed={course.isLeaderboardEnabled ?? false}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(course.isLeaderboardEnabled ?? false) ? 'translate-x-6' : 'translate-x-1'}`}
-                                />
-                            </button>
-                        </div>
-                        {!isNewCourse && course.id && (
-                            <div className="mt-3">
-                                <CoursePracticeExamSetting courseId={course.id} />
-                            </div>
-                        )}
-                    </CollapsibleSection>
+                    {!isNewCourse && course.id && (
+                        <CollapsibleSection
+                            id="course-settings"
+                            title="Course Settings"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('course-settings')}
+                            onToggle={toggleSection}
+                        >
+                            <CoursePracticeExamSetting courseId={course.id} />
+                        </CollapsibleSection>
+                    )}
                 </div>
             </div>
             )}

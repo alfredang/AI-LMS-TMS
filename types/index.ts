@@ -359,7 +359,6 @@ export interface Course {
   traqomQualityRating?: number | null;
   casScore?: number | null;
   esScore?: number | null;
-  isLeaderboardEnabled?: boolean;
   courseLink?: string;
   brochureLink?: string;
   skillsfutureLink?: string;

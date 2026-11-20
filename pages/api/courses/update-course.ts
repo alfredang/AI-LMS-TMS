@@ -53,7 +53,6 @@ interface CourseData {
   modeOfLearning: string | string[]; // Accept both formats
   courseType: string;
   learningOutcomes: string;
-  isGamified: boolean;
   courseFee?: number;
   taxPercent?: number;
   scheduleId?: string;
@@ -541,38 +540,37 @@ async function handler(
           assessment_plan_url = COALESCE($14, assessment_plan_url),
           slides_url = COALESCE($15, slides_url),
           trainer_slides_url = COALESCE($16, trainer_slides_url),
-          is_gamified = $17,
-          course_fee = $18,
-          tax_percent = $19,
-          schedule_id = $20,
-          course_fees_exclude_gst = $21,
-          course_fees_include_gst = $22,
-          after_normal_funding = $23,
-          after_mces_funding = $24,
-          is_utap_eligible = $25,
-          renewed_status = $26,
-          written_assessment_link = $27,
-          practical_performance_assessment_link = $28,
-          courseware_link = $29,
-          brochure_link = $30,
-          skillsfuture_link = $31,
-          assessment_record_link = $32,
-          assessment_summary_record_url = $33,
-          funding_validity = $34,
-          num_of_trainers = $35,
-          trainers_list = $36,
-          trainers_email_list = $37,
-          activities_url = COALESCE($38, activities_url),
+          course_fee = $17,
+          tax_percent = $18,
+          schedule_id = $19,
+          course_fees_exclude_gst = $20,
+          course_fees_include_gst = $21,
+          after_normal_funding = $22,
+          after_mces_funding = $23,
+          is_utap_eligible = $24,
+          renewed_status = $25,
+          written_assessment_link = $26,
+          practical_performance_assessment_link = $27,
+          courseware_link = $28,
+          brochure_link = $29,
+          skillsfuture_link = $30,
+          assessment_record_link = $31,
+          assessment_summary_record_url = $32,
+          funding_validity = $33,
+          num_of_trainers = $34,
+          trainers_list = $35,
+          trainers_email_list = $36,
+          activities_url = COALESCE($37, activities_url),
           -- Lab Simulator / Practice Exam: absent/null keeps the stored link
           -- (older clients do not send it); an explicit blank clears it.
-          lab_simulator_url = CASE WHEN $41::text IS NULL THEN lab_simulator_url
+          lab_simulator_url = CASE WHEN $40::text IS NULL THEN lab_simulator_url
+                                   ELSE NULLIF(btrim($40::text), '') END,
+          practice_exam_url = CASE WHEN $41::text IS NULL THEN practice_exam_url
                                    ELSE NULLIF(btrim($41::text), '') END,
-          practice_exam_url = CASE WHEN $42::text IS NULL THEN practice_exam_url
-                                   ELSE NULLIF(btrim($42::text), '') END,
           -- GitHub Link is Developer-only: other roles always send NULL here,
           -- which keeps the stored link.
-          github_url = CASE WHEN $43::text IS NULL THEN github_url
-                            ELSE NULLIF(btrim($43::text), '') END,
+          github_url = CASE WHEN $42::text IS NULL THEN github_url
+                            ELSE NULLIF(btrim($42::text), '') END,
           -- The code issued at funding renewal. course_code above keeps the
           -- ORIGINAL code so history stays traceable.
           --
@@ -581,11 +579,11 @@ async function handler(
           -- load the field sent '', which NULLIF turned into NULL and silently
           -- wiped a renewal on save. Clearing a renewed code is not something the
           -- course editor ever needs to do, so blank means "not supplied".
-          new_course_code = CASE WHEN NULLIF(btrim(COALESCE($40::text, '')), '') IS NULL
+          new_course_code = CASE WHEN NULLIF(btrim(COALESCE($39::text, '')), '') IS NULL
                                  THEN new_course_code
-                                 ELSE btrim($40::text) END,
+                                 ELSE btrim($39::text) END,
           updated_at = now()
-        WHERE id = $39
+        WHERE id = $38
         RETURNING id
       `;
 
@@ -606,7 +604,6 @@ async function handler(
         fileUrls.assessmentPlanUrl || courseData.assessmentPlanUrl || null,
         fileUrls.slidesUrl || courseData.slidesUrl || null,
         fileUrls.trainerSlidesUrl || courseData.trainerSlidesUrl || null, // Use uploaded file or URL
-        courseData.isGamified,
         courseData.courseFee || null,
         courseData.taxPercent || null,
         courseData.scheduleId || null,

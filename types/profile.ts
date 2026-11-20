@@ -340,10 +340,6 @@ export interface TrainingProviderProfile extends BaseProfile {
     forceFirstPasswordChange: boolean;
     defaultPassword?: string;
   };
-  gamingSettings: {
-    enableLeaderboard: boolean;
-    enablePoints: boolean;
-  };
   fundingSettings: {
     normalFunding: 50 | 70;
     enhancedFunding: number;

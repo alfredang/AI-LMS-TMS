@@ -105,7 +105,6 @@ interface CourseData {
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
-  isGamified: boolean;
   learningUnits: Array<{
     title: string;
     position: number;
@@ -212,7 +211,7 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           INSERT INTO course (
             title, image_url, course_code, tsc_title, tsc_code,
             training_hours, assessment_hours, mode_of_learning, course_type,
-            learning_outcomes, is_gamified, learner_guide_url, slides_url,
+            learning_outcomes, learner_guide_url, slides_url,
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
             written_assessment_link, practical_performance_assessment_link,
             courseware_link, assessment_record_link, assessment_summary_record_url, resource_links,
@@ -223,7 +222,7 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
             -- renewal overwrites it later. Kept populated so "current code" is
             -- never empty anywhere it is displayed.
             new_course_code
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $3)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $3)
           RETURNING id
         `;
 
@@ -238,7 +237,6 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           courseData.modeOfLearning || 'Physical',
           courseData.courseType || 'Non-WSQ',
           courseData.learningOutcomes || null,
-          courseData.isGamified || false,
           filesByFieldname?.learnerGuide ? `/uploads/guides/${filesByFieldname.learnerGuide[0].filename}` : null,
           filesByFieldname?.learnerSlides ? `/uploads/slides/${filesByFieldname.learnerSlides[0].filename}` : null,
           filesByFieldname?.lessonPlan ? `/uploads/plans/${filesByFieldname.lessonPlan[0].filename}` : null,

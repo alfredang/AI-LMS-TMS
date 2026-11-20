@@ -405,8 +405,6 @@ async function getTrainingProviderProfile(userId: string) {
         tp.enable_otp_login,
         tp.enable_default_otp,
         tp.default_otp,
-        tp.enable_leaderboard,
-        tp.enable_point_sys,
         tp.normal_fund_rate,
         tp.enhanced_fund_rate,
         tp.gst_rate,
@@ -482,8 +480,6 @@ async function getTrainingProviderProfile(userId: string) {
           tp.enable_otp_login,
           tp.enable_default_otp,
           tp.default_otp,
-          tp.enable_leaderboard,
-          tp.enable_point_sys,
           tp.normal_fund_rate,
           tp.enhanced_fund_rate,
           tp.gst_rate,
@@ -559,8 +555,6 @@ async function getTrainingProviderProfile(userId: string) {
           tp.enable_otp_login,
           tp.enable_default_otp,
           tp.default_otp,
-          tp.enable_leaderboard,
-          tp.enable_point_sys,
           tp.normal_fund_rate,
           tp.enhanced_fund_rate,
           tp.gst_rate,
@@ -889,10 +883,6 @@ async function getTrainingProviderProfile(userId: string) {
       defaultOtpValue: profileData.default_otp || '',
       forceFirstPasswordChange: profileData.force_first_password_change || false,
       defaultPassword: profileData.default_password || ''
-    },
-    gamingSettings: {
-      enableLeaderboard: profileData.enable_leaderboard || false,
-      enablePoints: profileData.enable_point_sys || false
     },
     fundingSettings: {
       normalFunding: (profileData.normal_fund_rate as 50 | 70) || 70,

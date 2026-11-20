@@ -159,67 +159,6 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
     );
 };
 
-// --- Leaderboard Component ---
-// const Leaderboard: React.FC<{ course: Course }> = ({ course }) => {
-//     const { currentUser } = useLms();
-//     const currentUserEmail = currentUser?.email || ""; 
-
-//     if (!course.learners || course.learners.length === 0) {
-//         return (
-//             <ContentSection title="Game Leaderboard">
-//                 <p className="text-muted text-center py-4">
-//                     No learners enrolled yet. Be the first!
-//                 </p>
-//             </ContentSection>
-//         );
-//     }
-
-//     const totalTasks = course.topics.reduce((sum, topic) => sum + topic.subtopics.length, 0);
-
-//     const leaderboardData = course.learners
-//         .map(learner => {
-//             const completedTasks = Math.floor((learner.progressPercent / 100) * totalTasks);
-//             const score = completedTasks * 10;
-//             return {
-//                 name: learner.name,
-//                 email: learner.email,
-//                 score,
-//             };
-//         })
-//         .sort((a, b) => b.score - a.score);
-
-//     const currentUserData = leaderboardData.find(l => l.email === currentUserEmail);
-//     const currentUserRank = leaderboardData.findIndex(l => l.email === currentUserEmail) + 1;
-
-//     return (
-//         <ContentSection title="Game Leaderboard">
-//             {currentUserData && (
-//                 <div className="p-4 bg-blue-50 rounded-lg mb-4 flex justify-between items-center">
-//                     <div>
-//                         <p className="text-sm font-semibold text-primary">Your Score</p>
-//                         <p className="text-3xl font-bold text-primary">{currentUserData.score} Points</p>
-//                     </div>
-//                     <div className="text-right">
-//                          <p className="text-sm font-semibold text-primary">Your Rank</p>
-//                         <p className="text-3xl font-bold text-primary">#{currentUserRank}</p>
-//                     </div>
-//                 </div>
-//             )}
-//             <ol className="space-y-2">
-//                 {leaderboardData.map((learner, index) => (
-//                     <li key={learner.email} className={`flex items-center p-3 rounded-md transition-colors ${learner.email === currentUserEmail ? 'bg-indigo-100 border border-blue-500' : 'bg-gray-50'}`}>
-//                         <span className="font-bold text-lg w-8">{index + 1}</span>
-//                         <div className="flex-grow">
-//                             <p className="font-semibold">{learner.name}</p>
-//                         </div>
-//                         <span className="font-bold text-primary">{learner.score} pts</span>
-//                     </li>
-//                 ))}
-//             </ol>
-//         </ContentSection>
-//     );
-// };
-
 // --- Assessment Section Component ---
 const AssessmentsSection: React.FC<{
     course: Course;
@@ -3719,11 +3658,6 @@ export const CourseDetail: React.FC = () => {
                             <div id={toId("Certificate")}>
                                 <CertificateSection userRole={userRole} />
                             </div>
-
-                            {/* Leaderboard */}
-                            {/* {userRole === UserRole.Learner && (
-                        <Leaderboard course={convertedCourse} />
-                    )} */}
                             </>
                             )}
                         </main>

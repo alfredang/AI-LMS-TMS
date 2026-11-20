@@ -206,11 +206,11 @@ One shared style set serves every role (Admin, Training Provider, Finance, Payro
 - **Course Funding Validity** — WSQ/CASL/IBF course validity dates with funding-type totals (WSQ, CASL and IBF each tiled separately), cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin). Per course the list shows the Earliest Renewal Date (computed: 3 months before the validity end date, red once reachable) plus stored Actual Renew Date and Renewal Application No, editable inline via the row's Edit button. Excel round-trip: full-list export, a pre-filled upload template, and bulk update by uploading the edited file (matched by course ref code; blank cells leave values unchanged) — the renewal date and application number round-trip too. Two pending-renewal watchlists: Expiring Within 1 Month (the set the daily reminder email sends) and Expiring Within 3 Months (every course already inside its renewal window)
 - **Expired Course List** — courses whose funding validity end date has already passed (any course type, including those re-typed to Non-WSQ when funding lapsed), oldest first, with course code, expiry date (and days ago) and renew status; searchable and filterable by renew status, with renewed/not-renewed totals tiled
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
-- Learning unit and subtopic management
+- Topic and sub topic management (**Add Topic** / **Add Sub Topic**); the Learning Outcomes section is not shown in the Developer course page
 - Course material uploads (lesson plans, slides, guides)
 - **Courseware link cards** — in course view mode, courseware documents (lesson plan, guides, slides, brochure, SkillsFuture link, etc.) render as click-to-open cards; empty links are hidden
 - **Lab Simulator & Practice Exam links** — two optional course links in the course editor, right after **Activities/Lab URL**: **Lab Simulator URL** (an interactive browser lab, e.g. a GitHub Pages simulator) and **Practice Exam URL**. When set, each appears as a click-to-open card in the Courseware section of the Learner and Trainer class pages, after Activities/Lab; clearing the field and saving removes the card. Columns `course.lab_simulator_url` / `course.practice_exam_url` (`database/migrations/add_course_lab_simulator_and_practice_exam_url.sql`, also added at app start by `lib/db.ts`). The Practice Exam URL is a plain link, separate from the Tertiary Exams registration (`course.practice_exam_code`)
-- **"On This Page" section menu** — course view mode shows a jump menu (Learning Outcomes, Courseware, Lesson, Assessment Links, Approved Trainers) that smooth-scrolls to the matching card; topics mount collapsed for a compact overview
+- **"On This Page" section menu** — course view mode shows a jump menu (Learning Outcomes — hidden for Developers —, Courseware, Lesson, Assessment Links, Approved Trainers) that smooth-scrolls to the matching card; topics mount collapsed for a compact overview
 - **SEO Metadata Generator** — AI-powered SEO metadata generation for WSQ and non-WSQ courses using Claude Agent SDK
   - WSQ: Meta title (with WSQ prefix), keywords, description with 70% funding subsidy, course description, and 20 job roles
   - Non-WSQ: Region-specific meta titles (Singapore, Malaysia with HRD Corp, International), keywords, description, course description, and 20 job roles
@@ -230,7 +230,6 @@ One shared style set serves every role (Admin, Training Provider, Finance, Payro
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking
   - **Admin Settings** — Auto-send pro-forma invoices, confirmation emails, invoices on grant success, receipts, certificates, thank-you emails
-  - **Gaming Settings** — Leaderboard and points system toggles
   - **Funding Settings** — Normal/enhanced funding rates, GST configuration
   - **Document Templates** — Proforma invoice, invoice, receipt, and certificate templates (text IDs or file uploads)
 - **SSG API Summary** — Full summary of SSG API endpoints and their status
