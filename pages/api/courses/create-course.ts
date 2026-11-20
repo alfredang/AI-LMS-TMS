@@ -1,4 +1,5 @@
 import { withAuth } from '@lib/auth/withAuth';
+import { canSeeGithubLink } from '@lib/auth/githubLinkAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import multer, { StorageEngine } from 'multer';
 import path from 'path';
@@ -97,6 +98,7 @@ interface CourseData {
   activitiesUrl?: string;
   labSimulatorUrl?: string;
   practiceExamUrl?: string;
+  githubUrl?: string | null; // GitHub repository (Developer-only)
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   courseLink?: string;
@@ -260,6 +262,12 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
         const courseResult = await client.query(courseInsertQuery, courseValues);
         const courseId = courseResult.rows[0].id;
         console.log('✅ Course created with ID:', courseId);
+
+        // GitHub Link is Developer-only; anyone else's value is ignored.
+        const githubUrl = courseData.githubUrl?.trim();
+        if (githubUrl && canSeeGithubLink((req as any).authUser)) {
+          await client.query(`UPDATE course SET github_url = $2 WHERE id = $1`, [courseId, githubUrl]);
+        }
 
         if (tsc.caslSkills) {
           await client.query(`UPDATE course SET casl_skills = $2 WHERE id = $1`, [courseId, tsc.caslSkills]);

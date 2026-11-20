@@ -363,6 +363,8 @@ export interface Course {
   courseLink?: string;
   brochureLink?: string;
   skillsfutureLink?: string;
+  /** GitHub repository of the course. Developer-only: only the course editor APIs return it, and only to a Developer. */
+  githubUrl?: string | null;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   topics: Topic[];
@@ -402,6 +404,8 @@ export interface CourseDetail {
   courseLink?: string;
   brochureLink?: string;
   skillsfutureLink?: string;
+  /** GitHub repository of the course. Developer-only: only the course editor APIs return it, and only to a Developer. */
+  githubUrl?: string | null;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   writtenAssessmentLink?: string;

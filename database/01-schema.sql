@@ -1340,6 +1340,7 @@ CREATE TABLE public.course (
     activities_url text,
     lab_simulator_url text,
     practice_exam_url text,
+    github_url text,
     is_gamified boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,

@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCaslSkillsColumn } from '@lib/course-casl-skills-ensure-column';
 import { splitTrainerList } from '@/lib/trainerInvitations';
+import { canSeeGithubLink } from '@lib/auth/githubLinkAccess';
 
 interface LearningUnitRow {
   learning_unit_id: string;
@@ -105,6 +106,7 @@ async function handler(
         c.courseware_link,
         c.brochure_link,
         c.skillsfuture_link,
+        c.github_url,
         c.assessment_record_link,
         c.assessment_summary_record_url,
         c.is_gamified          AS is_leaderboard_enabled,
@@ -246,6 +248,8 @@ async function handler(
       courseLink: courseData.courseware_link,
       brochureLink: courseData.brochure_link,
       skillsfutureLink: courseData.skillsfuture_link,
+      // Developer-only link: left out of the response for every other role.
+      ...(canSeeGithubLink((req as any).authUser) ? { githubUrl: courseData.github_url || '' } : {}),
       assessmentRecordLink: courseData.assessment_record_link,
       assessmentSummaryRecordUrl: courseData.assessment_summary_record_url,
       isLeaderboardEnabled: courseData.is_leaderboard_enabled,

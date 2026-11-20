@@ -154,6 +154,8 @@ pool
   .query(`
     ALTER TABLE course ADD COLUMN IF NOT EXISTS lab_simulator_url text;
     ALTER TABLE course ADD COLUMN IF NOT EXISTS practice_exam_url text;
+    -- Developer-only GitHub repository link (add_course_github_url.sql).
+    ALTER TABLE course ADD COLUMN IF NOT EXISTS github_url text;
   `)
   .catch((err) => {
     console.warn('Auto-migration warning:', err.message);

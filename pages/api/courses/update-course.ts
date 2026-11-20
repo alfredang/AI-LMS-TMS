@@ -1,4 +1,5 @@
 import { withAuth } from '@lib/auth/withAuth';
+import { canSeeGithubLink } from '@lib/auth/githubLinkAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
@@ -66,6 +67,7 @@ interface CourseData {
   activitiesUrl?: string; // Link to hands-on lab worksheets / activities folder
   labSimulatorUrl?: string | null; // Interactive lab simulator; '' clears, null/absent keeps
   practiceExamUrl?: string | null; // Practice exam link; '' clears, null/absent keeps
+  githubUrl?: string | null; // GitHub repository (Developer-only); '' clears, null/absent keeps
   lessonPlanUrl?: string;
   learnerGuideUrl?: string;
   facilitatorGuideUrl?: string;
@@ -567,6 +569,10 @@ async function handler(
                                    ELSE NULLIF(btrim($41::text), '') END,
           practice_exam_url = CASE WHEN $42::text IS NULL THEN practice_exam_url
                                    ELSE NULLIF(btrim($42::text), '') END,
+          -- GitHub Link is Developer-only: other roles always send NULL here,
+          -- which keeps the stored link.
+          github_url = CASE WHEN $43::text IS NULL THEN github_url
+                            ELSE NULLIF(btrim($43::text), '') END,
           -- The code issued at funding renewal. course_code above keeps the
           -- ORIGINAL code so history stays traceable.
           --
@@ -625,7 +631,8 @@ async function handler(
         courseId,
         courseData.newCourseCode === undefined ? null : courseData.newCourseCode,
         courseData.labSimulatorUrl ?? null,
-        courseData.practiceExamUrl ?? null
+        courseData.practiceExamUrl ?? null,
+        canSeeGithubLink((req as any).authUser) ? (courseData.githubUrl ?? null) : null
       ]);
 
       // Keep the canonical title history in lockstep with course.title. Some

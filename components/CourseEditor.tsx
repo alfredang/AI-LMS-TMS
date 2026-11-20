@@ -1412,6 +1412,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 courseLink: course.courseLink || null,
                 brochureLink: course.brochureLink || null,
                 skillsfutureLink: course.skillsfutureLink || null,
+                // Developer-only. '' clears a removed link; null (never loaded) keeps it.
+                githubUrl: role === UserRole.Developer ? (course.githubUrl ?? null) : null,
                 fundingValidity: fundingValidityEndIso || null,
                 fundingValidityStart: fundingValidityStartIso || null,
                 assessmentRecordLink: course.assessmentRecordLink || null,
@@ -2040,9 +2042,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <LinkCard label="Courseware Link" value={course.courseLink} />
                                 <LinkCard label="Brochure Link" value={course.brochureLink} />
                                 <LinkCard label="SkillsFuture Link" value={course.skillsfutureLink} />
+                                {role === UserRole.Developer && <LinkCard label="GitHub Link" value={course.githubUrl || undefined} />}
                                 <LinkCard label="Assessment Record Link" value={course.assessmentRecordLink} />
                                 <LinkCard label="Assessment Summary Record" value={course.assessmentSummaryRecordUrl} />
-                                {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.labSimulatorUrl, course.practiceExamUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
+                                {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.labSimulatorUrl, course.practiceExamUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, role === UserRole.Developer && course.githubUrl, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
                                     <div className="text-muted">No courseware links available.</div>
                                 )}
                             </div>
@@ -2580,6 +2583,21 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     placeholder="https://www.myskillsfuture.gov.sg/..."
                                 />
                             </div>
+                            {role === UserRole.Developer && (
+                                <div>
+                                    <label htmlFor="githubUrl" className="block text-sm font-bold text-on-surface-secondary mb-1">GitHub Link</label>
+                                    <input
+                                        type="url"
+                                        id="githubUrl"
+                                        name="githubUrl"
+                                        value={course.githubUrl || ''}
+                                        onChange={(e) => setCourse(prev => ({ ...prev, githubUrl: e.target.value }))}
+                                        className={inputClasses}
+                                        placeholder="https://github.com/..."
+                                    />
+                                    <p className="mt-1 text-xs text-muted">Optional. The course's GitHub repository. Only Developers see this link; learners and trainers do not.</p>
+                                </div>
+                            )}
                             <div>
                                 <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-on-surface-secondary mb-1">Assessment Record Link</label>
                                 <input
