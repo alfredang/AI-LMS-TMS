@@ -7,7 +7,10 @@ import type { InvoiceGenerationMode } from '../../../lib/quickbooks/createCompan
 /**
  * POST /api/admin/ca-generate-invoice
  *
- * Body: { applicationIds: string[], mode?: 'consolidated' | 'per-learner' }
+ * Body: { applicationIds: string[], mode?: 'consolidated' | 'per-learner', skipNotEnrolled?: boolean }
+ *
+ * skipNotEnrolled: bill the SSG-enrolled learners of each group and leave out
+ * the ones SSG has not enrolled yet (admin confirms this in a popup).
  *
  * Groups the given Company Application rows and creates one QuickBooks invoice
  * per group — by (employer_uen, course_run_id) in the default `consolidated`
@@ -24,7 +27,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { applicationIds, mode } = req.body || {};
+  const { applicationIds, mode, skipNotEnrolled } = req.body || {};
   if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
     return res.status(400).json({ success: false, error: 'applicationIds array is required' });
   }
@@ -41,7 +44,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     await ensureCompanyApplicationsTable();
-    const result = await generateInvoicesForApplications(applicationIds, requestedMode);
+    const result = await generateInvoicesForApplications(applicationIds, requestedMode, {
+      skipNotEnrolled: skipNotEnrolled === true,
+    });
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     console.error('[ca-generate-invoice] error:', err);

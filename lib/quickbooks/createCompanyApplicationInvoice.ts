@@ -24,6 +24,7 @@
  */
 
 import pool from '../db';
+import { escapeQboQueryLiteral } from './qboQueryLiteral';
 import { callQbProxy } from './qbProxyClient';
 import { appendPipelineWarning } from '../companyApplicationsTable';
 import { findEmployerQboDisplayNameByUen, upsertEmployerQboAlias } from '../employerQboAliasTable';
@@ -84,7 +85,7 @@ function buildCaInvoicePdfFileName(docNumber: string | null | undefined, invoice
  * doesn't hand a returning customer the tighter 14-day window.
  */
 async function customerHasPriorQboInvoices(customerId: string): Promise<boolean> {
-  const safe = String(customerId || '').replace(/'/g, "''").trim();
+  const safe = escapeQboQueryLiteral(String(customerId || '').trim());
   if (!safe) return true;
   try {
     const data = await qboQuery(
@@ -199,7 +200,7 @@ function formatCourseDateRange(
 }
 
 function escapeQboLiteral(value: string): string {
-  return value.replace(/'/g, "''");
+  return escapeQboQueryLiteral(value);
 }
 
 // ─── Fuzzy QBO customer matcher ──────────────────────────────────────────────
@@ -1085,10 +1086,15 @@ export async function createCompanyApplicationInvoice(
     });
   }
 
-  const txnDate = new Date().toISOString().slice(0, 10);
+  // Singapore calendar date, not UTC: the server runs in UTC, so an invoice
+  // raised between 00:00 and 08:00 SGT was dated the day before (and its due
+  // date with it). SGT has no daylight saving, so a fixed +8h is exact.
+  const SGT_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const sgtToday = new Date(Date.now() + SGT_OFFSET_MS);
+  const txnDate = sgtToday.toISOString().slice(0, 10);
   const dueDate = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + dueDays);
+    const d = new Date(sgtToday.getTime());
+    d.setUTCDate(d.getUTCDate() + dueDays);
     return d.toISOString().slice(0, 10);
   })();
 
@@ -1234,6 +1240,19 @@ export interface GenerateInvoicesResult {
   skippedAwaitingGrants: number;
   /** Learners the admin chose to bill by hand ("Enrol only") — never invoiced here. */
   skippedBilledManually: number;
+  /**
+   * Learners left off this run's invoices because they are not yet enrolled
+   * with SSG and the caller passed `skipNotEnrolled`. Their classmates were
+   * billed without them; they stay un-invoiced and are billed later (as a late
+   * joiner) once SSG accepts the enrolment.
+   */
+  skippedNotEnrolledLearners: Array<{
+    applicationId: string;
+    name: string;
+    employerOrgName: string;
+    courseRunId: string;
+    reason: string;
+  }>;
   /** Groups where an existing invoice was deleted and reissued to cover a late joiner. */
   replacedGroups: number;
   failed: number;
@@ -1245,6 +1264,8 @@ export interface GenerateInvoicesResult {
     error: string;
     /** True when the failure was specifically the QBO customer lookup, so the UI can offer a "Search QBO & Link" rescue. */
     isCustomerNotFound: boolean;
+    /** True when the group was held back because >=1 learner is not yet SSG-enrolled, so the UI can offer to bill the rest. */
+    isNotEnrolled?: boolean;
   }>;
 }
 
@@ -1325,7 +1346,16 @@ const CA_INVOICE_ROW_SELECT = `SELECT
  */
 export async function generateInvoicesForApplications(
   applicationIds: string[],
-  mode: InvoiceGenerationMode = 'consolidated'
+  mode: InvoiceGenerationMode = 'consolidated',
+  options: {
+    /**
+     * Bill the SSG-enrolled learners of a group and leave out the ones SSG has
+     * not enrolled yet, instead of holding the whole group back. Only the
+     * manual Generate Invoice button sets this, after the admin confirms in a
+     * popup; the automated pipeline keeps holding the group.
+     */
+    skipNotEnrolled?: boolean;
+  } = {}
 ): Promise<GenerateInvoicesResult> {
   const result: GenerateInvoicesResult = {
     generated: 0,
@@ -1334,6 +1364,7 @@ export async function generateInvoicesForApplications(
     skippedNotEnrolled: 0,
     skippedAwaitingGrants: 0,
     skippedBilledManually: 0,
+    skippedNotEnrolledLearners: [],
     replacedGroups: 0,
     failed: 0,
     errors: [],
@@ -1358,7 +1389,14 @@ export async function generateInvoicesForApplications(
   // could both POST to QBO.
   const lockKeys = new Map<string, string>();
   for (const row of rowsRes.rows) {
-    const billingKey = `${(row.employer_uen || '').trim()}|${(row.course_run_id || '').trim()}`;
+    // Rows added from Synced Enrolments may have no UEN. Keying those on an
+    // empty UEN put every UEN-less employer on the same run into ONE group —
+    // one invoice, billed to whichever company sorted first. Fall back to the
+    // employer name so different companies never share an invoice.
+    const employerKey =
+      (row.employer_uen || '').trim() ||
+      `name:${String(row.employer_org_name || '').trim().toLowerCase()}`;
+    const billingKey = `${employerKey}|${(row.course_run_id || '').trim()}`;
     const key = mode === 'per-learner' ? `${billingKey}|${String(row.id)}` : billingKey;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(row);
@@ -1434,6 +1472,30 @@ export async function generateInvoicesForApplications(
         // Finance is adding them to, keeping the PO# cross-reference right.
         for (const r of manualRows) {
           await processGrantInvoicesForGroup([r], String(r.billed_manually_invoice_ref || '').trim());
+        }
+      }
+
+      // Admin chose to invoice the enrolled learners now and leave out the
+      // ones SSG has not enrolled yet. Done before the replacement logic so a
+      // skipped learner never makes the group "hold". If nobody in the group
+      // is enrolled there is nothing to bill, so fall through to the normal
+      // "not yet SSG-enrolled" error below.
+      if (options.skipNotEnrolled) {
+        const notEnrolledRows = pendingRows.filter(r => !/^ENR-/i.test(String(r.enrolment_id || '')));
+        if (notEnrolledRows.length > 0 && notEnrolledRows.length < pendingRows.length) {
+          pendingRows = pendingRows.filter(r => /^ENR-/i.test(String(r.enrolment_id || '')));
+          for (const r of notEnrolledRows) {
+            result.skippedNotEnrolledLearners.push({
+              applicationId: String(r.id),
+              name: String(r.trainee_full_name || '').trim() || String(r.trainee_nric || '').trim() || '(unnamed)',
+              employerOrgName: String(r.employer_org_name || '').trim(),
+              courseRunId: String(r.course_run_id || '').trim(),
+              reason: String(r.auto_enrol_error || '').replace(/^enrol(?:l)?ment:\s*/i, '').trim(),
+            });
+          }
+          console.log(
+            `[ca-invoice] Group ${key}: invoicing without ${notEnrolledRows.length} learner(s) not yet SSG-enrolled (admin chose to skip)`
+          );
         }
       }
 
@@ -1598,6 +1660,7 @@ export async function generateInvoicesForApplications(
           courseRunId: String(first.course_run_id || '').trim(),
           error: `${missing.length} learner(s) not yet SSG-enrolled: ${names}${more}.`,
           isCustomerNotFound: false,
+          isNotEnrolled: true,
         });
         continue;
       }
