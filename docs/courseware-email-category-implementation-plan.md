@@ -2,7 +2,7 @@
 
 Updated: 20 November 2026, Asia/Singapore.
 
-Status: Implementation and local verification complete; three mock review emails sent and verified. Production deployment and live template activation are pending explicit release approval. Review: [PR #159](https://github.com/alfredang/AI-LMS-TMS/pull/159).
+Status: Live in production. [PR #159](https://github.com/alfredang/AI-LMS-TMS/pull/159) merged on 20 November 2026 at 15:34:23 Singapore time as `1b598be2792c041512808c2a50751c9884de121b`. The new app build was verified at 15:51:56, and the reviewed master template was activated directly in the database at 15:52:11 Singapore time. All three scenarios, saved content, CC preservation and the existing schedule were verified.
 
 ## Objective and scope
 
@@ -211,8 +211,8 @@ The HTML drafts use illustrative course data/placeholders for review. Implementa
 - [x] Add the single-source editor's three-scenario preview/test selector, validation and sandboxed HTML preview.
 - [x] Pass focused classifier/renderer, API and MMS-routing tests, localhost editor checks and all three desktop/mobile email renders.
 - [x] Pass API authentication coverage and the production webpack build. The repository-wide type check reports existing errors outside the changed files. The design-token guard passes with Windows path separators normalised in memory; its tracked source is unchanged.
-- [ ] Release the isolated change and verify the new renderer is live before saving conditional content.
-- [ ] Activate the backed-up tenant master subject/body; read back the saved content and confirm CC and schedule preservation.
+- [x] Release the isolated change and verify the new renderer is live before saving conditional content.
+- [x] Activate the backed-up tenant master subject/body; read back the saved content and confirm CC and schedule preservation.
 - [x] Send exactly one clearly labelled mock email for each scenario to the review address explicitly specified in the latest request, without CC/BCC. All use sample class data and no actionable SWDA attendance link.
 - [x] Verify all three messages in Gmail Sent, including recipient, subject and rendered body. Record their scenario, timestamp and message ID in the private daily log and local audit record. This verifies sending, not recipient delivery.
 
@@ -220,7 +220,7 @@ The initial three mock messages were sent on 20 November 2026 at 14:05:05, 14:05
 
 Both send histories are retained: `scratch/courseware-email-20261120/implementation/mock-send-receipts.json` records the initial set; `mock-send-receipts-corrected.json` in the same directory records the corrected final set. The private daily log also records the address correction and message IDs.
 
-The feature is published on `codex/courseware-scenarios` in PR #159. Automatic approval review rejected a direct push to `main` because it could trigger production deployment and requires explicit approval for that action. The review branch was published instead; neither `main` nor the live database template was changed. The remaining release steps are to approve production deployment, verify renderer availability, then save and read back the staged master template while preserving CC and schedules.
+The feature was published on `codex/courseware-scenarios` in PR #159 after automatic approval review initially rejected a direct production push without explicit release approval. The user subsequently approved production implementation, and PR #159 is now merged and deployed. Direct database access was used to activate only the existing tenant subject/body fields after confirming renderer availability. A fresh rollback backup was captured, saved content was read back, and CC and schedules were verified unchanged. Google code and triggers remain unchanged.
 
 ### Assessment wording revision and refreshed samples
 
@@ -228,7 +228,17 @@ The assessment section now reads **Assessment Information - WSQ Courses Only**, 
 
 Nine focused tests and six desktop/mobile renders passed for this revision. One updated mock per scenario was sent to the clarified review address on 20 November 2026 at 15:31:20, 15:31:25 and 15:31:31 Singapore time (funded, non-funded and unrecognised respectively). Gmail Sent headers and exact rendered bodies were verified; no CC/BCC was used.
 
-The latest review master, rendered bodies, screenshots and send receipts are under `scratch/courseware-email-20261120/implementation/assessment-information-review/`. These samples supersede the earlier review sets. The staged activation master has also been refreshed, with the previous wording preserved in `master-before-assessment-wording.json`. Live deployment and template activation remain pending approval.
+The latest review master, rendered bodies, screenshots and send receipts are under `scratch/courseware-email-20261120/implementation/assessment-information-review/`. These samples supersede the earlier review sets. This reviewed master is now active in production; the previous wording is preserved in `master-before-assessment-wording.json` and the fresh production rollback snapshot.
+
+### Production activation verification
+
+- Live app build: `dYv_KNGSVnOX-7EPvQ0FX`; page bundle `index-51e3f4830519430a.js` exposes the three-scenario editor and conditional validation.
+- Activated on 20 November 2026 at 15:52:11 Singapore time; a separate post-activation read confirmed the conditional master is saved.
+- All three rendered scenarios passed against the saved subject/body. The assessment information wording appears only in funded and combined guidance.
+- Existing CC preserved; courseware scheduler remains enabled with `0 7 * * *` in Asia/Singapore. The next normal eligible course-day send is 21 November 2026 at 07:00 Singapore time. No bulk-send/run-now action was invoked.
+- Homepage and DB-backed health passed after activation. Google registry metadata remains unchanged; Google trigger coverage is still not inferred.
+- Private rollback snapshot: `scratch/courseware-email-20261120/implementation/production-before-2026-11-20T07-39-32-644Z.json`.
+- Private activation receipt: `scratch/courseware-email-20261120/implementation/production-activation-receipt.json`, containing exact readback, body hash and scenario verification evidence. Rollout observations are retained in `production-rollout-observations.jsonl`.
 
 ### Conditional markers
 
