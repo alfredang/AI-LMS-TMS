@@ -10,10 +10,10 @@
  */
 
 import { callQbProxy } from './qbProxyClient';
+import { escapeQboQueryLiteral } from './qboQueryLiteral';
 
 function escapeQbQueryString(value: string): string {
-  // QBO query language uses single quotes, so any apostrophe must be doubled.
-  return value.replace(/'/g, "''");
+  return escapeQboQueryLiteral(value);
 }
 
 /**
