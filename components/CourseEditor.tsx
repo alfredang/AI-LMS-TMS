@@ -355,7 +355,7 @@ const EditableTopicAccordion: React.FC<{
                                                 }`}
                                             >
                                                 <Icon name={IconName.Menu} className="w-3.5 h-3.5 text-muted flex-shrink-0" />
-                                                <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded flex-shrink-0 ${
+                                                <span className={`text-[11px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${
                                                     rl.type === 'file' ? 'bg-info-bg text-primary' :
                                                     rl.type === 'document' ? 'bg-warning-bg text-warning' :
                                                     rl.type === 'youtube' ? 'bg-danger-bg text-danger' :
@@ -372,7 +372,7 @@ const EditableTopicAccordion: React.FC<{
                                                     onClick={(e) => e.stopPropagation()}
                                                     onMouseDown={(e) => e.stopPropagation()}
                                                     onChange={e => onUpdateResourceLink(rl.id, 'title', e.target.value)}
-                                                    className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                    className="flex-1 min-w-0 px-1.5 py-1 text-sm border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                 />
                                                 {rl.type === 'activity' ? (
                                                     // Activity rows let the developer choose between a URL (external
@@ -425,7 +425,7 @@ const EditableTopicAccordion: React.FC<{
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         onMouseDown={(e) => e.stopPropagation()}
                                                                         onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
-                                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                                        className="flex-1 min-w-0 px-1.5 py-1 text-sm border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                                     />
                                                                 )}
                                                             </>
@@ -459,7 +459,7 @@ const EditableTopicAccordion: React.FC<{
                                                         onClick={(e) => e.stopPropagation()}
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                         onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
-                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                        className="flex-1 min-w-0 px-1.5 py-1 text-sm border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                     />
                                                 )}
                                                 <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-muted hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
@@ -478,14 +478,17 @@ const EditableTopicAccordion: React.FC<{
                                         {/* Three asset types: a link, an embedded video and a quiz.
                                             Rows of the older Document / Activity types still render and
                                             stay editable above; they are just no longer offered here. */}
-                                        <div className="flex flex-wrap gap-2 pt-1">
-                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'file')} className="inline-flex items-center gap-1.5 rounded-md border border-default bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface-secondary hover:border-strong hover:bg-info-bg hover:text-info transition-colors">
-                                                <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
-                                                + URL Link
+                                        <div className="flex flex-wrap gap-2.5 pt-2 pb-1">
+                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'file')} className="inline-flex items-center gap-2 rounded-lg border border-strong bg-surface px-3.5 py-2 text-sm font-semibold text-on-surface shadow-sm transition-colors hover:bg-info-bg hover:text-info">
+                                                <Icon name={IconName.ExternalLink} className="w-5 h-5 text-info" />
+                                                URL Link
                                             </button>
-                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="inline-flex items-center gap-1.5 rounded-md border border-default bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface-secondary hover:border-strong hover:bg-danger-bg hover:text-danger transition-colors">
-                                                <Icon name={IconName.Video} className="w-3.5 h-3.5" />
-                                                + Embed Video
+                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="inline-flex items-center gap-2 rounded-lg border border-strong bg-surface px-3.5 py-2 text-sm font-semibold text-on-surface shadow-sm transition-colors hover:bg-danger-bg hover:text-danger">
+                                                {/* YouTube mark */}
+                                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-danger" fill="currentColor" aria-hidden="true">
+                                                    <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z" />
+                                                </svg>
+                                                Embed Video
                                             </button>
                                             <button
                                                 type="button"
@@ -494,10 +497,15 @@ const EditableTopicAccordion: React.FC<{
                                                     const id = onAddResourceLink(subtopic.id, 'quiz');
                                                     if (id) setOpenQuizEditorId(id);
                                                 }}
-                                                className="inline-flex items-center gap-1.5 rounded-md border border-default bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface-secondary hover:border-strong hover:bg-success-bg hover:text-success transition-colors"
+                                                className="inline-flex items-center gap-2 rounded-lg border border-strong bg-surface px-3.5 py-2 text-sm font-semibold text-on-surface shadow-sm transition-colors hover:bg-success-bg hover:text-success"
                                             >
-                                                <Icon name={IconName.FileText} className="w-3.5 h-3.5" />
-                                                + Quiz
+                                                {/* Quiz: checklist */}
+                                                <svg viewBox="0 0 24 24" className="w-5 h-5 text-success" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                    <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+                                                    <rect x="9" y="3" width="6" height="4" rx="1" />
+                                                    <path d="m9 14 2 2 4-4" />
+                                                </svg>
+                                                Quiz
                                             </button>
                                         </div>
                                     </div>
