@@ -1,4 +1,4 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -37,6 +37,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
   if (!answers || typeof answers !== 'object') {
     return res.status(400).json({ success: false, error: 'answers object is required' });
+  }
+  // An attempt is always recorded against the signed-in user; only staff and
+  // machine callers may record one for somebody else.
+  const authUser = (req as AuthedApiRequest).authUser;
+  const isStaff = !!authUser && (authUser.isService || ['admin', 'trainingProvider', 'trainer', 'developer'].some((r) => authUser.roles.has(r)));
+  if (authUser && !isStaff && authUser.id !== userId) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
   }
 
   try {

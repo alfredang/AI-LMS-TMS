@@ -102,6 +102,15 @@ const nextConfig = {
           source: '/uploads/:path*',
           destination: '/api/uploads/:path*',
         },
+        // App links: let the tenant's mobile app open /quiz/... links (see the route).
+        {
+          source: '/.well-known/apple-app-site-association',
+          destination: '/api/public/app-links?kind=ios',
+        },
+        {
+          source: '/.well-known/assetlinks.json',
+          destination: '/api/public/app-links?kind=android',
+        },
       ],
       afterFiles: [],
       fallback: [],

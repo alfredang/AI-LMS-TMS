@@ -178,7 +178,7 @@ const EditableTopicAccordion: React.FC<{
     // block. Stored in the `resource_links` JSONB column on the course row,
     // so older rows without the field simply render as URL activities.
     resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[];
-    onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => void;
+    onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => string;
     onUpdateResourceLink: (id: string, field: 'title' | 'url' | 'instructions', value: string) => void;
     // Quiz rows use a dedicated callback to update title + questions
     // atomically, since the editor modal edits both together.
@@ -362,7 +362,7 @@ const EditableTopicAccordion: React.FC<{
                                                     rl.type === 'activity' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
                                                     'bg-success-bg text-success'
                                                 }`}>
-                                                    {rl.type === 'file' ? 'Web' : rl.type === 'document' ? 'Doc' : rl.type === 'youtube' ? 'YT' : rl.type === 'activity' ? 'Act' : 'Quiz'}
+                                                    {rl.type === 'file' ? 'Link' : rl.type === 'document' ? 'Doc' : rl.type === 'youtube' ? 'Video' : rl.type === 'activity' ? 'Act' : 'Quiz'}
                                                 </span>
                                                 <input
                                                     type="text"
@@ -453,7 +453,7 @@ const EditableTopicAccordion: React.FC<{
                                                 ) : (
                                                     <input
                                                         type="url"
-                                                        placeholder="URL"
+                                                        placeholder={rl.type === 'youtube' ? 'YouTube link (https://www.youtube.com/watch?v=…)' : 'URL'}
                                                         value={rl.url}
                                                         draggable={false}
                                                         onClick={(e) => e.stopPropagation()}
@@ -475,12 +475,21 @@ const EditableTopicAccordion: React.FC<{
                                                     instead — see the bottom of this component. */}
                                             </div>
                                         ))}
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-muted hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ Web</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'document')} className="text-[10px] text-muted hover:text-amber-500 px-1 py-0.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">+ Document</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-muted hover:text-red-500 px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">+ YouTube</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'activity')} className="text-[10px] text-muted hover:text-purple-500 px-1 py-0.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">+ Activity</button>
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'quiz')} className="text-[10px] text-muted hover:text-green-500 px-1 py-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">+ Quiz</button>
+                                        {/* Three asset types: a link, an embedded video and a quiz.
+                                            Rows of the older Document / Activity types still render and
+                                            stay editable above; they are just no longer offered here. */}
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 focus-within:opacity-100 transition-opacity">
+                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-muted hover:text-info px-1 py-0.5 rounded hover:bg-info-bg transition-colors">+ URL Link</button>
+                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-muted hover:text-danger px-1 py-0.5 rounded hover:bg-danger-bg transition-colors">+ Embed Video</button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    // A new quiz opens its question editor straight away.
+                                                    const id = onAddResourceLink(subtopic.id, 'quiz');
+                                                    if (id) setOpenQuizEditorId(id);
+                                                }}
+                                                className="text-[10px] text-muted hover:text-success px-1 py-0.5 rounded hover:bg-success-bg transition-colors"
+                                            >+ Quiz</button>
                                         </div>
                                     </div>
                                 </li>
@@ -1718,7 +1727,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const addResourceLink = (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => {
-        setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
+        const id = `rl_${Date.now()}`;
+        setResourceLinks(prev => [...prev, { id, topicId, type, title: '', url: '' }]);
+        return id;
     };
 
     const updateResourceLink = (id: string, field: 'title' | 'url' | 'instructions', value: string) => {
@@ -1893,14 +1904,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     return (
         <div>
             {/* Header */}
-            <div className={`z-20 bg-background flex flex-col gap-3 pb-2 border-b border-default ${isReadOnly ? 'mb-2' : 'pt-0 mb-4'}`}>
-                <div className={!isNewCourse ? 'space-y-0' : undefined}>
+            <div className="z-20 bg-background flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2 mb-2 border-b border-default">
+                <div className="min-w-0 flex-1 basis-64">
                     <h2 className={`font-bold dark:text-white ${!isNewCourse ? 'text-[1.625rem] leading-tight' : 'text-2xl'}`}>{isNewCourse ? 'Create Course' : course.title}</h2>
                     {!isNewCourse && course.courseCode && (
                         <p className="text-sm text-muted mt-0">{course.courseCode}</p>
                     )}
                 </div>
-                <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2 ml-auto">
                     <Button variant="ghost" onClick={() => {
                         setEditingCourse(null);
                         setCourseEditMode(null);

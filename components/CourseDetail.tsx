@@ -20,6 +20,8 @@ import { PracticeExamPanel } from './trainer/PracticeExamPanel';
 import { ClassFeedbackSection } from './trainer/ClassFeedbackSection';
 import { SwdaEnrolmentSection } from './trainer/SwdaEnrolmentSection';
 import QuizTakerModal from './QuizTakerModal';
+import EmbeddedVideo from './EmbeddedVideo';
+import QuizQrOverlay from './QuizQrOverlay';
 import { AssessmentUploadZone, AssessmentUploadState, UploadSuccessAlert, runAssessmentUpload } from './learner/AssessmentUploadZone';
 
 // --- Types (assuming these exist in your project) ---
@@ -1960,6 +1962,8 @@ interface TopicAccordionProps {
 
 export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted, defaultOpen }) => {
     const [openQuizId, setOpenQuizId] = React.useState<string | null>(null);
+    // Quiz whose QR code is shown full screen (staff view).
+    const [qrQuizId, setQrQuizId] = React.useState<string | null>(null);
     const [isOpen, setIsOpen] = React.useState(defaultOpen !== false);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
 
@@ -2083,6 +2087,9 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                         const questions = rl.questions as QuizResourceQuestion[];
                                                         const prev = latestQuizScores?.[rl.id] || null;
                                                         const canTake = userRole === UserRole.Learner && !!userId && !!courseId;
+                                                        // Staff show the quiz QR code on the classroom screen;
+                                                        // learners scan it and take the quiz on their phone.
+                                                        const canShowQr = userRole !== UserRole.Learner && !!courseId;
                                                         return (
                                                             <div key={rl.id}>
                                                                 <div className="p-2 rounded-md bg-success-bg border border-green-200 dark:border-green-800/50 flex items-center justify-between gap-2">
@@ -2103,6 +2110,20 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                                             </span>
                                                                         )}
                                                                     </div>
+                                                                    {canShowQr && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setQrQuizId(rl.id);
+                                                                            }}
+                                                                            className="btn btn-outline flex-shrink-0 !px-2.5 !py-1 !text-xs gap-1.5"
+                                                                            title="Show the quiz QR code full screen"
+                                                                        >
+                                                                            <Icon name={IconName.QrCode} className="w-4 h-4" />
+                                                                            Show QR
+                                                                        </button>
+                                                                    )}
                                                                     {canTake && (
                                                                         <button
                                                                             onClick={(e) => {
@@ -2115,6 +2136,15 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                                         </button>
                                                                     )}
                                                                 </div>
+                                                                {qrQuizId === rl.id && canShowQr && (
+                                                                    <QuizQrOverlay
+                                                                        courseId={courseId!}
+                                                                        quizId={rl.id}
+                                                                        title={rl.title || 'Quiz'}
+                                                                        questionCount={questions.length}
+                                                                        onClose={() => setQrQuizId(null)}
+                                                                    />
+                                                                )}
                                                                 {openQuizId === rl.id && canTake && (
                                                                     <QuizTakerModal
                                                                         title={rl.title || 'Quiz'}
@@ -2156,6 +2186,11 @@ export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress,
                                                                 </p>
                                                             </div>
                                                         );
+                                                    }
+                                                    // Embed Video: played inside the page, with a zoom
+                                                    // button for the classroom screen.
+                                                    if (rl.type === 'youtube' && rl.url) {
+                                                        return <EmbeddedVideo key={rl.id} url={rl.url} title={rl.title} />;
                                                     }
                                                     return (
                                                         <a
