@@ -2,7 +2,7 @@
 
 Updated: 20 November 2026, Asia/Singapore.
 
-Status: Implementation authorised. One shared template with three conditional scenarios is implemented locally and being verified for release. Live activation and the three final review emails are tracked below.
+Status: Implementation and local verification complete; three mock review emails sent and verified. Production deployment and live template activation are pending explicit release approval. Review: [PR #159](https://github.com/alfredang/AI-LMS-TMS/pull/159).
 
 ## Objective and scope
 
@@ -163,7 +163,7 @@ Store this branding/contact content once in the tenant's master template or conf
 | Test-email rendering | `pages/api/training-provider/send-test-email.ts` |
 | Focused verification | Classifier/renderer and sender-routing tests using synthetic recipients and sources |
 
-Final names may follow repository conventions; these are proposed implementation locations, not files already implemented. No schema migration or three-pair template storage is planned.
+These implementation locations are now present, together with `lib/learner/coursewareMasterTemplate.ts` and `tests/courseware-email-template.test.ts`. No schema migration or three-pair template storage was introduced.
 
 ## Validation and acceptance criteria
 
@@ -191,7 +191,7 @@ If content rendering fails, restore the backed-up subject/body pair. The rendere
 
 ## Review artifacts
 
-The following local review artifacts are gitignored under `scratch/`; this implementation plan is the durable repository document. They illustrate the three expected outputs. Their separate HTML files are review snapshots, not a proposal for three production templates. Building the single conditional master source is implementation work still pending.
+The following local review artifacts are gitignored under `scratch/`; this implementation plan is the durable repository document. They illustrate the three expected outputs. Their separate HTML files are review snapshots, not three production templates. The single conditional master source is implemented and staged under `scratch/courseware-email-20261120/implementation/master.json`, with the final rendered mock bodies in `mock-emails.json` in that directory.
 
 - [Funded HTML draft](../scratch/courseware-email-20261120/three-category-drafts/wsq-swda.html)
 - [Non-funded HTML draft](../scratch/courseware-email-20261120/three-category-drafts/non-funded.html)
@@ -211,8 +211,12 @@ The HTML drafts use illustrative course data/placeholders for review. Implementa
 - [x] Pass API authentication coverage and the production webpack build. The repository-wide type check reports existing errors outside the changed files. The design-token guard passes with Windows path separators normalised in memory; its tracked source is unchanged.
 - [ ] Release the isolated change and verify the new renderer is live before saving conditional content.
 - [ ] Activate the backed-up tenant master subject/body; read back the saved content and confirm CC and schedule preservation.
-- [ ] As the final operational step, send exactly one clearly labelled mock email for each scenario to the user-confirmed review address, without CC/BCC. Use sample class data and no actionable SWDA attendance link.
-- [ ] Verify all three sends and record their scenario, subject, timestamp and message ID in the private daily log/local audit record. Mark the implementation complete only after this evidence is recorded.
+- [x] Send exactly one clearly labelled mock email for each scenario to the review address explicitly specified in the latest request, without CC/BCC. All use sample class data and no actionable SWDA attendance link.
+- [x] Verify all three messages in Gmail Sent, including recipient, subject and rendered body. Record their scenario, timestamp and message ID in the private daily log and local audit record. This verifies sending, not recipient delivery.
+
+The three mock messages were sent on 20 November 2026 at 14:05:05, 14:05:25 and 14:06:11 Singapore time for funded, non-funded and unrecognised scenarios respectively. Private receipt details are in `scratch/courseware-email-20261120/implementation/mock-send-receipts.json` and `.claude/daily-logs/2026-11-20.md`.
+
+The feature is published on `codex/courseware-scenarios` in PR #159. Automatic approval review rejected a direct push to `main` because it could trigger production deployment and requires explicit approval for that action. The review branch was published instead; neither `main` nor the live database template was changed. The remaining release steps are to approve production deployment, verify renderer availability, then save and read back the staged master template while preserving CC and schedules.
 
 ### Conditional markers
 
