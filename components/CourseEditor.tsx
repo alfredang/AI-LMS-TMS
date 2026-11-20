@@ -304,7 +304,7 @@ const EditableTopicAccordion: React.FC<{
                                             value={subtopic.title}
                                             onChange={e => onUpdateSubtopic(topic.id, subtopic.id, e.target.value)}
                                             className={inputGhostClasses(false)}
-                                            placeholder="Topic title"
+                                            placeholder="Sub topic title"
                                         />
                                         <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-muted hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <Icon name={IconName.Delete} className="w-4 h-4" />
@@ -478,9 +478,15 @@ const EditableTopicAccordion: React.FC<{
                                         {/* Three asset types: a link, an embedded video and a quiz.
                                             Rows of the older Document / Activity types still render and
                                             stay editable above; they are just no longer offered here. */}
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 focus-within:opacity-100 transition-opacity">
-                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-muted hover:text-info px-1 py-0.5 rounded hover:bg-info-bg transition-colors">+ URL Link</button>
-                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-muted hover:text-danger px-1 py-0.5 rounded hover:bg-danger-bg transition-colors">+ Embed Video</button>
+                                        <div className="flex flex-wrap gap-2 pt-1">
+                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'file')} className="inline-flex items-center gap-1.5 rounded-md border border-default bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface-secondary hover:border-strong hover:bg-info-bg hover:text-info transition-colors">
+                                                <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                                                + URL Link
+                                            </button>
+                                            <button type="button" onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="inline-flex items-center gap-1.5 rounded-md border border-default bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface-secondary hover:border-strong hover:bg-danger-bg hover:text-danger transition-colors">
+                                                <Icon name={IconName.Video} className="w-3.5 h-3.5" />
+                                                + Embed Video
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -488,8 +494,11 @@ const EditableTopicAccordion: React.FC<{
                                                     const id = onAddResourceLink(subtopic.id, 'quiz');
                                                     if (id) setOpenQuizEditorId(id);
                                                 }}
-                                                className="text-[10px] text-muted hover:text-success px-1 py-0.5 rounded hover:bg-success-bg transition-colors"
-                                            >+ Quiz</button>
+                                                className="inline-flex items-center gap-1.5 rounded-md border border-default bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface-secondary hover:border-strong hover:bg-success-bg hover:text-success transition-colors"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-3.5 h-3.5" />
+                                                + Quiz
+                                            </button>
                                         </div>
                                     </div>
                                 </li>
@@ -798,7 +807,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const selectedApprovedTrainers = (course.approvedTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
-    const favoriteTrainers = (course.favoriteTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
     // Search results only appear once the admin starts typing — the full
     // directory is never listed by default.
     const availableTrainerChoices = trainerSearch.trim()
@@ -875,28 +883,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         } finally {
             setDefaultTrainerBusy(false);
         }
-    };
-
-    // Star/unstar a trainer as a favorite for THIS course. Favorites are kept
-    // at the FRONT of the approved order (stable within each group), so the
-    // invitation cascade prefers them.
-    const toggleFavoriteTrainer = (trainerName: string) => {
-        const name = normalizeApprovedTrainerName(trainerName);
-        const newFavs = favoriteTrainers.includes(name)
-            ? favoriteTrainers.filter(n => n !== name)
-            : [...favoriteTrainers, name];
-        const reordered = defaultFirst([
-            ...selectedApprovedTrainers.filter(n => newFavs.includes(n)),
-            ...selectedApprovedTrainers.filter(n => !newFavs.includes(n)),
-        ]);
-        setCourse(prev => ({
-            ...prev,
-            favoriteTrainers: newFavs,
-            approvedTrainers: reordered,
-            numOfTrainers: reordered.length,
-            trainersList: reordered.join(' | '),
-            trainersEmailList: buildTrainersEmailList(reordered),
-        }));
     };
 
     const addApprovedTrainer = (trainerName: string) => {
@@ -1428,7 +1414,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
                 trainersList: selectedApprovedTrainers.join(' | '),
-                favoriteTrainers: favoriteTrainers.join(' | '),
+                // Favourite stars were removed; the default trainer covers that need.
+                // Sending blank clears any stars saved earlier.
+                favoriteTrainers: '',
                 // Sync assessmentMethods links to legacy columns so view mode always shows latest.
                 // A disabled method clears its legacy column, otherwise the stale link keeps showing.
                 writtenAssessmentLink: course.assessmentMethods?.writtenAssessment?.enabled
@@ -2122,7 +2110,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         <thead className="sticky top-0 bg-surface-elevated text-left text-xs uppercase text-muted">
                                             <tr>
                                                 <th className="px-3 py-2 w-10">#</th>
-                                                <th className="px-2 py-2 w-10" title="Favorite for this course">★</th>
                                                 <th className="px-3 py-2">Trainer</th>
                                                 <th className="px-3 py-2">Telephone</th>
                                                 <th className="px-3 py-2">Email</th>
@@ -2131,13 +2118,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         <tbody className="divide-y divide-default">
                                             {selectedApprovedTrainers.map((trainerName, index) => {
                                                 const contact = trainerContactByName.get(trainerName);
-                                                const isFavorite = favoriteTrainers.includes(trainerName);
                                                 return (
-                                                    <tr key={trainerName} className={isFavorite ? 'bg-warning-bg' : 'bg-surface'}>
+                                                    <tr key={trainerName} className="bg-surface">
                                                         <td className="px-3 py-2 font-semibold text-muted">{index + 1}.</td>
-                                                        <td className="px-2 py-2 text-lg leading-none">
-                                                            <span className={isFavorite ? 'text-warning' : 'text-muted'}>{isFavorite ? '★' : '☆'}</span>
-                                                        </td>
                                                         <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
                                                         <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{contact?.telephone || '—'}</td>
                                                         <td className="px-3 py-2 text-on-surface-secondary">{contact?.email || '—'}</td>
@@ -2791,10 +2774,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         >
                             <div className="space-y-4">
                                 {/* Approved trainers — ORDERED table (order = invitation preference).
-                                    ★ pins a favorite for this course to the front; rows drag to reorder. */}
+                                    Rows drag to reorder; the default trainer is set per row. */}
                                 <div>
                                     <div className="text-sm text-muted mb-2">
-                                        {selectedApprovedTrainers.length} approved trainer{selectedApprovedTrainers.length === 1 ? '' : 's'} — order is the invitation preference (drag rows to reorder; ★ favorites stay on top)
+                                        {selectedApprovedTrainers.length} approved trainer{selectedApprovedTrainers.length === 1 ? '' : 's'} — order is the invitation preference (drag rows to reorder)
                                     </div>
                                     {selectedApprovedTrainers.length > 0 ? (
                                         <div className={`overflow-x-auto rounded-md border border-strong ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
@@ -2802,7 +2785,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                 <thead className="sticky top-0 bg-surface-elevated text-left text-xs uppercase text-muted">
                                                     <tr>
                                                         <th className="px-3 py-2 w-10">#</th>
-                                                        <th className="px-2 py-2 w-10" title="Favorite for this course">★</th>
                                                         <th className="px-3 py-2">Trainer</th>
                                                         <th className="px-3 py-2">Telephone</th>
                                                         <th className="px-3 py-2">Email</th>
@@ -2813,7 +2795,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                 <tbody className="divide-y divide-default">
                                                     {selectedApprovedTrainers.map((trainerName, index) => {
                                                         const contact = trainerContactByName.get(trainerName);
-                                                        const isFavorite = favoriteTrainers.includes(trainerName);
                                                         const isDefaultTrainer = !!defaultTrainerName && defaultTrainerName.toLowerCase() === trainerName.toLowerCase();
                                                         return (
                                                             <tr
@@ -2836,24 +2817,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                                                 className={`cursor-grab ${
                                                                     approvedTrainerDropTarget === trainerName
                                                                         ? 'bg-info-bg'
-                                                                        : isFavorite
-                                                                        ? 'bg-warning-bg'
                                                                         : 'bg-surface'
                                                                 } ${draggedApprovedTrainer === trainerName ? 'opacity-60' : ''}`}
                                                                 title="Drag to reorder trainer"
                                                             >
                                                                 <td className="px-3 py-2 font-semibold text-muted">{index + 1}.</td>
-                                                                <td className="px-2 py-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => toggleFavoriteTrainer(trainerName)}
-                                                                        className={`text-lg leading-none ${isFavorite ? 'text-warning' : 'text-muted hover:text-amber-400'}`}
-                                                                        title={isFavorite ? 'Unstar favorite' : 'Star as favorite for this course (moves to top)'}
-                                                                        aria-label={`${isFavorite ? 'Unstar' : 'Star'} ${trainerName}`}
-                                                                    >
-                                                                        {isFavorite ? '★' : '☆'}
-                                                                    </button>
-                                                                </td>
                                                                 <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
                                                                 <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{contact?.telephone || '—'}</td>
                                                                 <td className="px-3 py-2 text-on-surface-secondary">{contact?.email || '—'}</td>
