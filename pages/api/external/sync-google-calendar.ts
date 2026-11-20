@@ -215,6 +215,15 @@ async function _runSyncGoogleCalendarInner(options?: SyncCalendarOptions) {
     }
     if (classType && run.class_type !== classType) changes.push(`class_type → ${classType}`);
 
+    // Rule (lib/calendar/meetLinkRule.ts): a Virtual/Hybrid class's Meet link must be
+    // the one on its calendar event. A stored Meet link the event does not carry is
+    // reported, not cleared: it may be the only room learners have right now.
+    const virtualOrHybrid = !!classType || /^(virtual|hybrid)$/i.test(run.class_type || '');
+    if (virtualOrHybrid && !own.meetLink && nextLink === undefined && current && isGoogleMeetLink(current)) {
+      console.warn(`  ⚠️ ${run.course_run_id}: Meet link ${current} is not on the class's calendar event.`);
+      results.push({ courseRunId: run.course_run_id, courseTitle: run.course_title, status: 'meet_link_not_on_calendar', meetLink: current });
+    }
+
     if (changes.length === 0) { skipped++; results.push({ courseRunId: run.course_run_id, status: 'no_changes' }); continue; }
 
     if (!dryRun && nextLink !== undefined) await storeRunMeetLink(run.id, nextLink);

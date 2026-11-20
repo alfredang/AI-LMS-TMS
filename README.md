@@ -152,6 +152,7 @@ One shared style set serves every role (Admin, Training Provider, Finance, Payro
   - **Voice Agents**: ElevenLabs, Retell AI, Vapi
   - **Video Agents**: HeyGen, Synthesia
 - **Virtual Tools** — Google Meet, Microsoft Teams, Zoom (integrated for virtual class delivery — meeting links auto-generated and attached to course runs)
+- **Meet link matches the calendar** — for a Virtual or Hybrid class the Google Meet link shown on the class is the one on the class's own Google Calendar event; a hand-typed Meet link that differs is rejected with the correct link shown, the calendar sync reports any class whose Meet link is not on its event, and deleted course runs no longer appear in a trainer's class list
 
 ### Admin Features
 - **Admin Dashboard** — KPI cards: Ongoing Classes, Upcoming Classes, Completed Classes, Assigned Trainers (Local), Missing Trainers (Local/TPG)

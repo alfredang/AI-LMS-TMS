@@ -56,6 +56,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           WHERE crt.course_run_id = cr.id AND crt.trainer_id = $1
         )
       )
+      -- a run staff deleted (e.g. a duplicate no longer on SSG) must not show as a class
+      AND COALESCE(cr.is_deleted, false) = false
       ORDER BY
         CASE WHEN cr.end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
         cr.start_date DESC

@@ -1,6 +1,8 @@
 import type { calendar_v3 } from 'googleapis';
 import pool from '../db';
 import { eventDateIso, extractEventRunId } from './eventMatch';
+import { getCalendarReadClient } from './calendarClient';
+import type { RunCalendarMeet } from './meetLinkRule';
 
 /**
  * Google Meet link helpers. The Google Calendar event is the ONLY source of
@@ -92,4 +94,39 @@ export async function storeRunMeetLink(runUuid: string, meetLink: string | null)
     [runUuid, meetLink]
   );
   return (r.rowCount || 0) > 0;
+}
+
+/**
+ * What the calendar holds for one run: its live events and their Meet link. Used to
+ * enforce the rule in ./meetLinkRule. Returns null when the calendar cannot be read
+ * (sync disabled, Google unreachable, run not found) so callers do not block on it.
+ */
+export async function runCalendarMeet(runUuid: string): Promise<RunCalendarMeet | null> {
+  try {
+    const run = (await pool.query<{ id: string; course_run_id: string | null; sd: string | null; ed: string | null }>(
+      `SELECT id, course_run_id, to_char(start_date, 'YYYY-MM-DD') AS sd,
+              to_char(COALESCE(end_date, start_date), 'YYYY-MM-DD') AS ed
+         FROM course_run WHERE id::text = $1`,
+      [runUuid]
+    )).rows[0];
+    if (!run) return null;
+    const client = await getCalendarReadClient();
+    if (!client) return null;
+    let events: calendar_v3.Schema$Event[] | undefined;
+    if (run.sd && run.ed) {
+      const r = await client.calendar.events.list({
+        calendarId: client.calendarId,
+        timeMin: `${run.sd}T00:00:00+08:00`,
+        timeMax: `${run.ed}T23:59:59+08:00`,
+        singleEvents: true,
+        maxResults: 2500,
+      });
+      events = r.data.items || [];
+    }
+    const own = await collectRunCalendarEvents(client.calendar, client.calendarId, run, events);
+    return { eventCount: own.events.length, meetLink: own.meetLink };
+  } catch (e) {
+    console.warn('[meetLink] could not read the calendar for run', runUuid, e instanceof Error ? e.message : e);
+    return null;
+  }
 }
