@@ -74,7 +74,7 @@ type SharedJob = {
 type CronLog = {
   id: number;
   created_at: string;
-  cron: 'daily_fresh' | 'weekly_blocked';
+  cron: 'daily_fresh' | 'weekly_blocked' | 'storefront_request';
   status: 'started' | 'nothing_to_do' | 'already_running' | 'error';
   considered: number | null;
   skipped_previously_failed: number | null;
@@ -578,7 +578,7 @@ const stopPolling = useCallback(() => {
                 <div key={l.id} className="px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="font-mono text-on-surface-secondary">{new Date(l.created_at).toLocaleString()}</span>
                   <span className={`px-1.5 py-0.5 rounded ${l.cron === 'weekly_blocked' ? 'bg-warning-bg text-warning' : 'bg-info-bg text-primary'}`}>
-                    {l.cron === 'weekly_blocked' ? 'Weekly retry' : 'Daily fresh'}
+                    {l.cron === 'weekly_blocked' ? 'Weekly retry' : l.cron === 'storefront_request' ? 'Website request' : 'Daily fresh'}
                   </span>
                   <span className={`font-medium ${l.status === 'error' ? 'text-danger' : l.status === 'started' ? 'text-success' : 'text-on-surface-secondary'}`}>
                     {l.status}

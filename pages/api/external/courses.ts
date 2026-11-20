@@ -118,7 +118,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .join(',\n         ');
 
     const conditions: string[] = [
-      `(c.course_code NOT LIKE 'TGS-%' OR c.course_availability_status = 'active')`,
+      // A course SSG has no future run for (or whose renewal is processing) stays listed:
+      // registration is never closed for it; only courses without SSG support are left out.
+      `(c.course_code NOT LIKE 'TGS-%' OR COALESCE(c.course_availability_status, 'unknown') NOT IN ('expired', 'rejected', 'no_support'))`,
     ];
     const params: (string | number)[] = [];
     let idx = 1;

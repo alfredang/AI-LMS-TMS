@@ -60,8 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   OR NULLIF(c.new_course_code, '') = $1`;
     } else {
       params.push(`%${search}%`);
+      // A course SSG has no future run for stays listed: registration is never closed for it.
       where = `WHERE (c.title ILIKE $1 OR c.course_code ILIKE $1)
-                 AND (c.course_code NOT LIKE 'TGS-%' OR c.course_availability_status = 'active')`;
+                 AND (c.course_code NOT LIKE 'TGS-%' OR COALESCE(c.course_availability_status, 'unknown') NOT IN ('expired', 'rejected', 'no_support'))`;
     }
 
     const result = await pool.query(
