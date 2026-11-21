@@ -269,7 +269,7 @@ async function seedDefaults() {
         {
             id: 'sync_google_calendar',
             name: 'Sync Google Calendar (Virtual Classes)',
-            description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual and stores the Google Meet link. Runs daily at 1:00 AM SGT.',
+            description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual, stores the Google Meet link and turns auto-recording on for the Meet room. Runs daily at 1:00 AM SGT.',
             cron_expression: '0 1 * * *', // 1:00 AM SGT daily
             api_endpoint: '/api/external/sync-google-calendar',
         },
