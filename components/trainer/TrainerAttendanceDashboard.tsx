@@ -558,7 +558,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     const records = attendanceRecords
       // Trainees only: the trainer's own SSG sign-in is not a learner's attendance
       .filter(r => !/trainer|assessor/i.test(String(r?.trainee?.attendeeType || '')))
-      .map(r => ({ nric: r.nric || r.trainee?.id || '', isPresent: (() => { const s = (r.status || '').toLowerCase(); return s === 'confirmed' || s === 'present' || s === 'attended'; })(), reasonOfAbsence: '' }))
+      // name + email let the server link a learner who self-registered without an NRIC to this SSG row
+      .map(r => ({ nric: r.nric || r.trainee?.id || '', isPresent: isPresentStatus(r.status), reasonOfAbsence: '', fullName: r.trainee?.name || '', email: extractContact(r.trainee).email }))
       .filter(r => r.nric && r.isPresent);
     if (records.length === 0) return;
     fetch('/api/trainer/attendance-records', {
@@ -576,7 +577,9 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             return updated;
           });
           // A learner's placeholder row was merged into their SSG row: drop it from the list now
-          if (json.folded) refreshManualQuiet(selectedManualSession);
+          // Pick up rows the server linked or merged (one row per learner)
+          refreshManualQuiet(selectedManualSession);
+          refreshSessionCounts(selectedCourse?.courseRunId);
         }
       })
       .catch(() => {});
@@ -607,13 +610,62 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     return rows;
   };
 
+  // NRICs listed from the enrolments (same rule as buildEnrolledRows: a Cancelled enrolment is not listed).
   const enrolNricSet = (records: any[]) => new Set(
     records.map((item: any) => {
       const enrol = item?.enrolment ?? item;
+      if ((enrol?.status || enrol?.enrolmentStatus || '').toLowerCase() === 'cancelled') return '';
       const trainee = enrol?.trainee ?? {};
       return (trainee?.id || trainee?.nric || '').trim();
     }).filter(Boolean)
   );
+
+  // The session's SSG e-attendance, readable from the polling closures.
+  const attendanceRecordsRef = useRef<any[]>([]);
+  attendanceRecordsRef.current = attendanceRecords;
+
+  const isTraineeRecord = (r: any) => !/trainer|assessor/i.test(String(r?.trainee?.attendeeType || ''));
+
+  // Name + contact for learners who are not listed from the enrolments: taken from the SSG
+  // e-attendance record, else from a Cancelled enrolment (staff cancel and re-create them mid-class).
+  const contactsByNric = (enrolRecords: any[], ssgRecords: any[]) => {
+    const map: Record<string, { fullName: string; email: string; phone: string }> = {};
+    for (const item of enrolRecords) {
+      const trainee = (item?.enrolment ?? item)?.trainee ?? {};
+      const nric = String(trainee?.id || trainee?.nric || '').trim();
+      if (nric && !map[nric]) map[nric] = { fullName: trainee?.fullName || trainee?.name || '', ...extractContact(trainee) };
+    }
+    for (const r of ssgRecords) {
+      if (!isTraineeRecord(r)) continue;
+      const nric = String(r?.nric || r?.trainee?.id || '').trim();
+      if (!nric) continue;
+      const c = extractContact(r?.trainee);
+      const old = map[nric];
+      map[nric] = { fullName: r?.trainee?.name || old?.fullName || '', email: c.email || old?.email || '', phone: c.phone || old?.phone || '' };
+    }
+    return map;
+  };
+
+  /** Everyone on the session's SSG e-attendance must be on the roster: add those who are neither
+   *  listed from the enrolments nor in the saved rows yet (no enrolment, no learner account). */
+  const withSsgAttendees = (extras: ManualRow[], enrolRecords: any[], ssgRecords: any[]): ManualRow[] => {
+    const listed = enrolNricSet(enrolRecords);
+    const have = new Set(extras.map(e => e.nric));
+    const contacts = contactsByNric(enrolRecords, ssgRecords);
+    const added: ManualRow[] = [];
+    for (const r of ssgRecords) {
+      if (!isTraineeRecord(r) || !isPresentStatus(r?.status)) continue;
+      const nric = String(r?.nric || r?.trainee?.id || '').trim();
+      if (!nric || listed.has(nric) || have.has(nric)) continue;
+      have.add(nric);
+      const c = contacts[nric];
+      added.push({ nric, fullName: c?.fullName || 'Learner (name not on file)', email: c?.email || '', phone: c?.phone || '', isPresent: true, reasonOfAbsence: '' });
+    }
+    // SSG is the source of truth: a learner on the SSG e-attendance is present
+    const ssgPresent = new Set(ssgRecords.filter(r => isTraineeRecord(r) && isPresentStatus(r?.status)).map(r => String(r?.nric || r?.trainee?.id || '').trim()));
+    const fixed = extras.map(e => (ssgPresent.has(e.nric) && !e.isPresent && !dirtyRef.current[e.nric] ? { ...e, isPresent: true, reasonOfAbsence: '' } : e));
+    return added.length || fixed.some((e, i) => e !== extras[i]) ? [...fixed, ...added] : extras;
+  };
 
   // Keep the trainer's unsaved changes when rows are rebuilt from fresh data.
   const keepDirty = (fresh: ManualRow[], prev: ManualRow[]): ManualRow[] => {
@@ -624,12 +676,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
   // Rebuild manualAttendance + re-filter extraAttendees whenever data changes
   useEffect(() => {
-    if (!selectedManualSession || enrolmentRecords.length === 0) return;
+    if (!selectedManualSession) return;
     const merged = buildEnrolledRows(enrolmentRecords, attendanceRecords, manualAttendanceDbMap);
     setManualAttendance(prev => keepDirty(merged, prev));
     // Keep only extras whose NRIC is not covered by enrolments
     const enrolNrics = enrolNricSet(enrolmentRecords);
-    setExtraAttendees(prev => prev.filter(e => !enrolNrics.has(e.nric)));
+    setExtraAttendees(prev => withSsgAttendees(prev.filter(e => !enrolNrics.has(e.nric)), enrolmentRecords, attendanceRecords));
   }, [enrolmentRecords, manualAttendanceDbMap, selectedManualSession, attendanceRecords]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selectedManualSession whenever the top SSG session or manualSessions list changes
@@ -690,13 +742,27 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     } catch { /* silent */ }
   };
 
-  const extrasFrom = (dbRecords: any[], enrolNrics: Set<string>): ManualRow[] =>
-    dbRecords
-      .filter((rec: any) => rec.fullName && rec.nric && !enrolNrics.has(rec.nric))
-      .map((rec: any) => ({
-        nric: rec.nric, fullName: rec.fullName, email: rec.email || '', phone: '',
+  // Saved rows of learners who are not listed from the enrolments. A row saved from the SSG
+  // e-attendance has no learner account, so its name comes from the SSG record: it was left out
+  // before, which made the roster show fewer present learners than SSG and the session tab.
+  const extrasFrom = (dbRecords: any[], enrolRecords: any[]): ManualRow[] => {
+    const enrolNrics = enrolNricSet(enrolRecords);
+    const ssgRecords = attendanceRecordsRef.current;
+    const contacts = contactsByNric(enrolRecords, ssgRecords);
+    const rows: ManualRow[] = [];
+    for (const rec of dbRecords) {
+      if (!rec.nric || enrolNrics.has(rec.nric)) continue;
+      const c = contacts[rec.nric];
+      const fullName = rec.fullName || c?.fullName || '';
+      // No learner account and not present (e.g. a Cancelled enrolment): stays off the roster
+      if (!rec.fullName && !rec.isPresent) continue;
+      rows.push({
+        nric: rec.nric, fullName: fullName || 'Learner (name not on file)', email: rec.email || c?.email || '', phone: c?.phone || '',
         isPresent: rec.isPresent, reasonOfAbsence: rec.reasonOfAbsence || '',
-      }));
+      });
+    }
+    return withSsgAttendees(rows, enrolRecords, ssgRecords);
+  };
 
   const dbMapFrom = (dbRecords: any[]): DbAttendance => {
     const dbMap: DbAttendance = {};
@@ -729,7 +795,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         setManualAttendanceDbMap(dbMap);
         // Read the latest enrolments through the setter (this runs from stale closures too)
         setEnrolmentRecords(prev => {
-          setExtraAttendees(extrasFrom(json.data, enrolNricSet(prev)));
+          setExtraAttendees(extrasFrom(json.data, prev));
           if (prev.length > 0) setManualAttendance(buildEnrolledRows(prev, attendanceRecords, dbMap));
           return prev;
         });
@@ -750,7 +816,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       if (!json.success || sessionId !== selectedManualSessionRef.current) return;
       setManualAttendanceDbMap(dbMapFrom(json.data));
       setEnrolmentRecords(prev => {
-        const fresh = extrasFrom(json.data, enrolNricSet(prev));
+        const fresh = extrasFrom(json.data, prev);
         setExtraAttendees(old => keepDirty(fresh, old));
         return prev;
       });
@@ -1933,320 +1999,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       </div>
       )}
 
-      {/* ── SWDA Enrolment: SSG enrolments + enrolment-form submissions (Pending), per class — collapsible ── */}
-      <div id="swda-enrolment" className={`bg-surface rounded-lg border border-default shadow-sm scroll-mt-24 ${selectedCourseRunId ? '' : '[&>div:first-child]:border-b-0'}`}>
-        <SectionHeader
-          title="SWDA Enrolment"
-          count={enrolmentTableRows.length > 0 ? enrolmentTableRows.length : undefined}
-          badges={enrolmentTableRows.length > 0 ? (
-            <div className="flex items-center gap-1.5 text-xs ml-1">
-              <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 font-semibold">{enrolmentCounts.confirmed} Confirmed</span>
-              <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 font-semibold">{enrolmentCounts.pending} Pending</span>
-              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">{enrolmentCounts.cancelled} Cancelled</span>
-            </div>
-          ) : undefined}
-          loading={isLoadingEnrolments}
-          right={
-            <>
-              {/* The learners not on SWDA yet, in SWDA's own upload template. Shown to the class's
-                  trainer as well as staff: the upload needs the full NRIC/FIN, which the enrolment
-                  requests already carry for anyone allowed to open this class. */}
-              {uploadLearners.length > 0 && (
-                <button
-                  onClick={() => { downloadUploadTemplate().catch(err => { console.error('SWDA template download failed:', err); setUploadTemplateNote('Could not create the SWDA upload file. Please try again.'); }); }}
-                  title={`SWDA Enrolment Upload Template filled in with the ${uploadLearners.length} learner${uploadLearners.length === 1 ? '' : 's'} not on SWDA yet (save as CSV to upload on TPGateway → Enrolments → Bulk Upload)`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-                  </svg>
-                  Download SWDA Template
-                </button>
-              )}
-              {enrolmentTableRows.length > 0 && (
-                <button
-                  onClick={() => { downloadEnrolmentsExcel().catch(err => console.error('Excel download failed:', err)); }}
-                  title="Download all enrolments in this table as an Excel file"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-                  </svg>
-                  Download Excel
-                </button>
-              )}
-              {selectedCourse?.courseRunCode && (
-                <button
-                  onClick={() => fetchEnrolments(selectedCourse.courseRunCode!)}
-                  disabled={isLoadingEnrolments}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshIcon className="w-3.5 h-3.5" />
-                  Refetch Enrolments
-                </button>
-              )}
-              {selectedCourseRunId && <CollapseToggle open={enrolmentsOpen} onToggle={() => setEnrolmentsOpen(v => !v)} />}
-            </>
-          }
-        />
-        {/* No class selected: the prompt sits beside the title and the empty table is not drawn */}
-        {enrolmentsOpen && selectedCourseRunId && (<>
-        {uploadTemplateNote && (
-          <p className="px-4 py-2 text-xs text-on-surface-secondary border-b border-default">{uploadTemplateNote}</p>
-        )}
-        {enrolmentError && (
-          <p className="px-4 py-2 text-xs text-danger flex items-center gap-1.5 border-b border-default">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {enrolmentError}
-          </p>
-        )}
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-elevated border-b border-default">
-            <tr>
-              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Course Run ID</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Start Date</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">End Date</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Ref</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Trainee Name</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  NRIC
-                  {isAdminMode && (
-                    <button onClick={() => setShowEnrolNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                      {showEnrolNric ? 'Hide' : 'Show'}
-                    </button>
-                  )}
-                </div>
-              </th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  Contact Number
-                  <button onClick={() => setShowEnrolContact(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                    {showEnrolContact ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-              </th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Date of Birth</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Sponsorship</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Employer</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Status</th>
-              {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th> */}
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Date</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Account</th>
-              {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Total Attendance Taken</th> */}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoadingEnrolments ? (
-              Array.from({ length: 5 }).map((_, idx) => (
-                <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 16 }).map((__, col) => (
-                    <td key={col} className="px-3 py-3">
-                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : enrolmentTableRows.length > 0 ? (
-              enrolmentTableRows.map((item: any, idx: number) => {
-                const enrol = item?.enrolment ?? item;
-                const trainee = enrol?.trainee ?? {};
-                const run = enrol?.course?.run ?? {};
-                const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
-                const maskedNric = nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric;
-                return (
-                  <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
-                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{run?.id || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{run?.startDate || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{run?.endDate || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '—'}</td>
-                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{trainee?.fullName || trainee?.name || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{nric ? (showEnrolNric ? nric : maskedNric) : '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{(() => {
-                      const c = trainee?.contactNumber || trainee?.phone || trainee?.mobileNumber || trainee?.mobile;
-                      if (!c) return '—';
-                      let full: string;
-                      if (typeof c === 'object') {
-                        const parts = [c.countryCode, c.areaCode, c.phoneNumber].filter(Boolean);
-                        full = parts.join(' ') || '—';
-                      } else {
-                        full = String(c);
-                      }
-                      if (!showEnrolContact) {
-                        return full.length > 4 ? `${'•'.repeat(full.length - 4)}${full.slice(-4)}` : '••••';
-                      }
-                      return full;
-                    })()}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{enrolmentDob(trainee) || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary">{trainee?.email?.full || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.sponsorshipType || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.employer?.name || '—'}</td>
-                    <td className="px-3 py-3"><StatusBadge value={enrol?.status || enrol?.enrolmentStatus || '—'} /></td>
-                    {/* <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td> */}
-                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">{item?._request ? (
-                      item._request.userId ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success" title="Registered on the class from the SWDA Enrolment form">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                          Registered
-                        </span>
-                      ) : <span className="text-muted text-xs">—</span>
-                    ) : (() => {
-                      const email: string = trainee?.email?.full || trainee?.email || '';
-                      if (!email) return <span className="text-muted text-xs">—</span>;
-                      const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
-                      if (enrolStatus === 'cancelled') return <span className="text-muted text-xs">—</span>;
-                      const status = learnerAccountMap[email.toLowerCase()];
-                      if (status === 'exists') return (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                          Active
-                        </span>
-                      );
-                      if (status === 'done') return (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                          Created
-                        </span>
-                      );
-                      if (status === 'creating') return (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted">
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
-                          Creating...
-                        </span>
-                      );
-                      const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
-                      if (status === 'error') return (
-                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="text-xs text-danger hover:underline">
-                          Retry
-                        </button>
-                      );
-                      if (status === 'missing') return (
-                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-primary text-white rounded hover:bg-primary-hover transition-colors">
-                          Create Account
-                        </button>
-                      );
-                      return <div className="h-3 w-20 rounded bg-surface-elevated animate-pulse" />;
-                    })()}</td>
-                    {/* Total Attendance Taken column hidden */}
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={16} className="px-3 py-10 text-center text-sm text-muted italic">
-                  No enrolment records found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        </div>{/* end overflow-x-auto */}
-        </>)}
-      </div>
-
-      {/* Take Attendance: the check-in QR of the selected session */}
-      {checkinOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setCheckinOpen(false)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="take-attendance-title"
-            className="relative w-full max-w-md rounded-2xl border border-default bg-surface shadow-2xl p-6 text-center space-y-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 id="take-attendance-title" className="text-2xl font-bold text-on-surface">Take Attendance</h3>
-            <p className="text-lg font-semibold text-blue-400">{selectedSessionLabel}</p>
-            <p className="text-sm text-on-surface-secondary">
-              Learners scan this to check in for this session — no login. A learner not yet in this class is registered
-              automatically on their first check-in. From the next session their phone number alone fills in their details.
-            </p>
-            <p className="text-xs text-warning">This marks Manual Attendance in the LMS. Learners still take SSG e-attendance with the SSG QR code.</p>
-            <div className="flex justify-center">
-              {checkinLoading ? (
-                <div className="w-64 h-64 rounded-xl bg-white flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-                </div>
-              ) : checkinError ? (
-                <p className="text-sm text-danger py-10">{checkinError}</p>
-              ) : checkinUrl ? (
-                <button type="button" onClick={() => setCheckinZoom(true)} title="Show full screen" className="bg-white p-4 rounded-xl cursor-zoom-in">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qrSrc(checkinUrl, 600)} alt={`Check-in QR code for ${selectedSessionLabel}`} width={240} height={240} />
-                </button>
-              ) : null}
-            </div>
-            {checkinUrl && (
-              <input
-                type="text"
-                readOnly
-                value={checkinUrl}
-                aria-label="Check-in link"
-                onFocus={e => e.target.select()}
-                className="input-themed w-full border rounded-lg px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
-              />
-            )}
-            <div className="flex justify-center gap-3">
-              <button
-                type="button"
-                disabled={!checkinUrl}
-                onClick={() => navigator.clipboard?.writeText(checkinUrl).then(() => { setCheckinCopied(true); setTimeout(() => setCheckinCopied(false), 2000); }).catch(() => {})}
-                className="px-4 py-2 rounded-lg border border-default text-sm font-medium text-on-surface hover:bg-surface-elevated transition-colors disabled:opacity-50"
-              >
-                {checkinCopied ? 'Copied' : 'Copy link'}
-              </button>
-              <button
-                type="button"
-                disabled={!checkinUrl}
-                onClick={() => setCheckinZoom(true)}
-                className="px-4 py-2 rounded-lg border border-default text-sm font-medium text-on-surface hover:bg-surface-elevated transition-colors disabled:opacity-50"
-              >
-                Full screen
-              </button>
-              <button
-                type="button"
-                onClick={() => setCheckinOpen(false)}
-                className="px-4 py-2 rounded-lg border border-blue-500 text-sm font-medium text-blue-400 hover:bg-blue-500/10 transition-colors"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {checkinZoom && checkinUrl && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Check-in QR code full screen"
-          onClick={() => setCheckinZoom(false)}
-          className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center gap-4 p-6 cursor-zoom-out"
-        >
-          <button
-            type="button"
-            onClick={() => setCheckinZoom(false)}
-            className="absolute top-4 right-4 p-2 rounded-full text-white bg-white/10 hover:bg-white/25 transition-colors"
-            aria-label="Close full screen QR code"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          <h2 className="text-2xl md:text-4xl font-bold text-white text-center">Take Attendance</h2>
-          <p className="text-lg md:text-2xl font-semibold text-blue-300 text-center">{selectedSessionLabel}</p>
-          <div className="bg-white p-4 md:p-6 rounded-2xl">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrSrc(checkinUrl, 1000)} alt={`Check-in QR code for ${selectedSessionLabel}`} style={{ width: 'min(68vh, 86vw)', height: 'min(68vh, 86vw)', imageRendering: 'pixelated' }} />
-          </div>
-          {selectedCourse?.courseRunCode && <p className="text-base md:text-xl text-white font-medium">Class {selectedCourse.courseRunCode}</p>}
-          <p className="text-xs md:text-sm text-muted break-all text-center">{checkinUrl}</p>
-        </div>
-      )}
-
       {/* ── Manual Attendance Taking: session tabs + Take Attendance QR, then the selected session's roster
            (QR check-ins and SSG e-attendance land here too) ── */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -2664,6 +2416,320 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         )}
         </>)}
       </div>
+
+      {/* ── SWDA Enrolment: SSG enrolments + enrolment-form submissions (Pending), per class — collapsible ── */}
+      <div id="swda-enrolment" className={`bg-surface rounded-lg border border-default shadow-sm scroll-mt-24 ${selectedCourseRunId ? '' : '[&>div:first-child]:border-b-0'}`}>
+        <SectionHeader
+          title="SWDA Enrolment"
+          count={enrolmentTableRows.length > 0 ? enrolmentTableRows.length : undefined}
+          badges={enrolmentTableRows.length > 0 ? (
+            <div className="flex items-center gap-1.5 text-xs ml-1">
+              <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 font-semibold">{enrolmentCounts.confirmed} Confirmed</span>
+              <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 font-semibold">{enrolmentCounts.pending} Pending</span>
+              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">{enrolmentCounts.cancelled} Cancelled</span>
+            </div>
+          ) : undefined}
+          loading={isLoadingEnrolments}
+          right={
+            <>
+              {/* The learners not on SWDA yet, in SWDA's own upload template. Shown to the class's
+                  trainer as well as staff: the upload needs the full NRIC/FIN, which the enrolment
+                  requests already carry for anyone allowed to open this class. */}
+              {uploadLearners.length > 0 && (
+                <button
+                  onClick={() => { downloadUploadTemplate().catch(err => { console.error('SWDA template download failed:', err); setUploadTemplateNote('Could not create the SWDA upload file. Please try again.'); }); }}
+                  title={`SWDA Enrolment Upload Template filled in with the ${uploadLearners.length} learner${uploadLearners.length === 1 ? '' : 's'} not on SWDA yet (save as CSV to upload on TPGateway → Enrolments → Bulk Upload)`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  Download SWDA Template
+                </button>
+              )}
+              {enrolmentTableRows.length > 0 && (
+                <button
+                  onClick={() => { downloadEnrolmentsExcel().catch(err => console.error('Excel download failed:', err)); }}
+                  title="Download all enrolments in this table as an Excel file"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  Download Excel
+                </button>
+              )}
+              {selectedCourse?.courseRunCode && (
+                <button
+                  onClick={() => fetchEnrolments(selectedCourse.courseRunCode!)}
+                  disabled={isLoadingEnrolments}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshIcon className="w-3.5 h-3.5" />
+                  Refetch Enrolments
+                </button>
+              )}
+              {selectedCourseRunId && <CollapseToggle open={enrolmentsOpen} onToggle={() => setEnrolmentsOpen(v => !v)} />}
+            </>
+          }
+        />
+        {/* No class selected: the prompt sits beside the title and the empty table is not drawn */}
+        {enrolmentsOpen && selectedCourseRunId && (<>
+        {uploadTemplateNote && (
+          <p className="px-4 py-2 text-xs text-on-surface-secondary border-b border-default">{uploadTemplateNote}</p>
+        )}
+        {enrolmentError && (
+          <p className="px-4 py-2 text-xs text-danger flex items-center gap-1.5 border-b border-default">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {enrolmentError}
+          </p>
+        )}
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-elevated border-b border-default">
+            <tr>
+              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Course Run ID</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Start Date</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">End Date</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Ref</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Trainee Name</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  NRIC
+                  {isAdminMode && (
+                    <button onClick={() => setShowEnrolNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                      {showEnrolNric ? 'Hide' : 'Show'}
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  Contact Number
+                  <button onClick={() => setShowEnrolContact(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                    {showEnrolContact ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Date of Birth</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Sponsorship</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Employer</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Status</th>
+              {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th> */}
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Date</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Account</th>
+              {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Total Attendance Taken</th> */}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoadingEnrolments ? (
+              Array.from({ length: 5 }).map((_, idx) => (
+                <tr key={idx} className="border-b border-default">
+                  {Array.from({ length: 16 }).map((__, col) => (
+                    <td key={col} className="px-3 py-3">
+                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : enrolmentTableRows.length > 0 ? (
+              enrolmentTableRows.map((item: any, idx: number) => {
+                const enrol = item?.enrolment ?? item;
+                const trainee = enrol?.trainee ?? {};
+                const run = enrol?.course?.run ?? {};
+                const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
+                const maskedNric = nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric;
+                return (
+                  <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
+                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{run?.id || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{run?.startDate || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{run?.endDate || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '—'}</td>
+                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{trainee?.fullName || trainee?.name || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{nric ? (showEnrolNric ? nric : maskedNric) : '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{(() => {
+                      const c = trainee?.contactNumber || trainee?.phone || trainee?.mobileNumber || trainee?.mobile;
+                      if (!c) return '—';
+                      let full: string;
+                      if (typeof c === 'object') {
+                        const parts = [c.countryCode, c.areaCode, c.phoneNumber].filter(Boolean);
+                        full = parts.join(' ') || '—';
+                      } else {
+                        full = String(c);
+                      }
+                      if (!showEnrolContact) {
+                        return full.length > 4 ? `${'•'.repeat(full.length - 4)}${full.slice(-4)}` : '••••';
+                      }
+                      return full;
+                    })()}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{enrolmentDob(trainee) || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary">{trainee?.email?.full || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.sponsorshipType || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.employer?.name || '—'}</td>
+                    <td className="px-3 py-3"><StatusBadge value={enrol?.status || enrol?.enrolmentStatus || '—'} /></td>
+                    {/* <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td> */}
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">{item?._request ? (
+                      item._request.userId ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success" title="Registered on the class from the SWDA Enrolment form">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Registered
+                        </span>
+                      ) : <span className="text-muted text-xs">—</span>
+                    ) : (() => {
+                      const email: string = trainee?.email?.full || trainee?.email || '';
+                      if (!email) return <span className="text-muted text-xs">—</span>;
+                      const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+                      if (enrolStatus === 'cancelled') return <span className="text-muted text-xs">—</span>;
+                      const status = learnerAccountMap[email.toLowerCase()];
+                      if (status === 'exists') return (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Active
+                        </span>
+                      );
+                      if (status === 'done') return (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Created
+                        </span>
+                      );
+                      if (status === 'creating') return (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
+                          Creating...
+                        </span>
+                      );
+                      const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
+                      if (status === 'error') return (
+                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="text-xs text-danger hover:underline">
+                          Retry
+                        </button>
+                      );
+                      if (status === 'missing') return (
+                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-primary text-white rounded hover:bg-primary-hover transition-colors">
+                          Create Account
+                        </button>
+                      );
+                      return <div className="h-3 w-20 rounded bg-surface-elevated animate-pulse" />;
+                    })()}</td>
+                    {/* Total Attendance Taken column hidden */}
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={16} className="px-3 py-10 text-center text-sm text-muted italic">
+                  No enrolment records found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        </div>{/* end overflow-x-auto */}
+        </>)}
+      </div>
+
+      {/* Take Attendance: the check-in QR of the selected session */}
+      {checkinOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setCheckinOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="take-attendance-title"
+            className="relative w-full max-w-md rounded-2xl border border-default bg-surface shadow-2xl p-6 text-center space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 id="take-attendance-title" className="text-2xl font-bold text-on-surface">Take Attendance</h3>
+            <p className="text-lg font-semibold text-blue-400">{selectedSessionLabel}</p>
+            <p className="text-sm text-on-surface-secondary">
+              Learners scan this to check in for this session — no login. A learner not yet in this class is registered
+              automatically on their first check-in. From the next session their phone number alone fills in their details.
+            </p>
+            <p className="text-xs text-warning">This marks Manual Attendance in the LMS. Learners still take SSG e-attendance with the SSG QR code.</p>
+            <div className="flex justify-center">
+              {checkinLoading ? (
+                <div className="w-64 h-64 rounded-xl bg-white flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                </div>
+              ) : checkinError ? (
+                <p className="text-sm text-danger py-10">{checkinError}</p>
+              ) : checkinUrl ? (
+                <button type="button" onClick={() => setCheckinZoom(true)} title="Show full screen" className="bg-white p-4 rounded-xl cursor-zoom-in">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrSrc(checkinUrl, 600)} alt={`Check-in QR code for ${selectedSessionLabel}`} width={240} height={240} />
+                </button>
+              ) : null}
+            </div>
+            {checkinUrl && (
+              <input
+                type="text"
+                readOnly
+                value={checkinUrl}
+                aria-label="Check-in link"
+                onFocus={e => e.target.select()}
+                className="input-themed w-full border rounded-lg px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
+              />
+            )}
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                disabled={!checkinUrl}
+                onClick={() => navigator.clipboard?.writeText(checkinUrl).then(() => { setCheckinCopied(true); setTimeout(() => setCheckinCopied(false), 2000); }).catch(() => {})}
+                className="px-4 py-2 rounded-lg border border-default text-sm font-medium text-on-surface hover:bg-surface-elevated transition-colors disabled:opacity-50"
+              >
+                {checkinCopied ? 'Copied' : 'Copy link'}
+              </button>
+              <button
+                type="button"
+                disabled={!checkinUrl}
+                onClick={() => setCheckinZoom(true)}
+                className="px-4 py-2 rounded-lg border border-default text-sm font-medium text-on-surface hover:bg-surface-elevated transition-colors disabled:opacity-50"
+              >
+                Full screen
+              </button>
+              <button
+                type="button"
+                onClick={() => setCheckinOpen(false)}
+                className="px-4 py-2 rounded-lg border border-blue-500 text-sm font-medium text-blue-400 hover:bg-blue-500/10 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {checkinZoom && checkinUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Check-in QR code full screen"
+          onClick={() => setCheckinZoom(false)}
+          className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center gap-4 p-6 cursor-zoom-out"
+        >
+          <button
+            type="button"
+            onClick={() => setCheckinZoom(false)}
+            className="absolute top-4 right-4 p-2 rounded-full text-white bg-white/10 hover:bg-white/25 transition-colors"
+            aria-label="Close full screen QR code"
+          >
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <h2 className="text-2xl md:text-4xl font-bold text-white text-center">Take Attendance</h2>
+          <p className="text-lg md:text-2xl font-semibold text-blue-300 text-center">{selectedSessionLabel}</p>
+          <div className="bg-white p-4 md:p-6 rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrSrc(checkinUrl, 1000)} alt={`Check-in QR code for ${selectedSessionLabel}`} style={{ width: 'min(68vh, 86vw)', height: 'min(68vh, 86vw)', imageRendering: 'pixelated' }} />
+          </div>
+          {selectedCourse?.courseRunCode && <p className="text-base md:text-xl text-white font-medium">Class {selectedCourse.courseRunCode}</p>}
+          <p className="text-xs md:text-sm text-muted break-all text-center">{checkinUrl}</p>
+        </div>
+      )}
 
       {/* ── Course Session Attendance (SSG QR / e-attendance records) ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">

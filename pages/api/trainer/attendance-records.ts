@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { foldUidPlaceholders } from '../../../lib/attendance/foldPlaceholders';
+import { resolveSsgAttendee } from '../../../lib/attendance/linkSsgAttendee';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const client = await pool.connect();
@@ -45,7 +46,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
       const { sessionId, records } = req.body as {
         sessionId: string;
-        records: { nric: string; isPresent: boolean; reasonOfAbsence?: string }[];
+        // email + fullName come with SSG e-attendance records only (to find the learner's account)
+        records: { nric: string; isPresent: boolean; reasonOfAbsence?: string; email?: string; fullName?: string }[];
       };
 
       if (!sessionId || !Array.isArray(records)) {
@@ -72,6 +74,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             [r.nric]
           );
           userId = lookup.rows[0]?.user_id ?? null;
+          // SSG e-attendance of a learner who self-registered without an NRIC: find their account,
+          // so this row and their placeholder row become one (folded below)
+          if (!userId && r.isPresent && (r.email || r.fullName)) {
+            userId = await resolveSsgAttendee(client, sessionId, r.nric, r.email, r.fullName);
+          }
         }
 
         await client.query(
