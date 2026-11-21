@@ -8,7 +8,8 @@
  * absent on the placeholder.
  *
  * This folds each placeholder into the learner's NRIC row:
- *   1. an NRIC row exists for the same learner → it takes "present" if either row
+ *   1. an NRIC row exists for the same learner (same account, or the NRIC on their
+ *      profile or on their enrolment in this run) → it takes "present" if either row
  *      has it, and the placeholder is deleted;
  *   2. no NRIC row yet but the profile now has an NRIC → the placeholder is re-keyed
  *      to the NRIC (keeps what the trainer marked), so SSG e-attendance lands on it.
@@ -38,7 +39,12 @@ export async function foldUidPlaceholders(db: Queryable, sessionId: string, user
           AND r.id <> p.id
           AND LEFT(r.nric, 5) <> '_uid_'
           AND (r.user_id = p.user_id
-               OR (COALESCE(TRIM(lp.nric), '') <> '' AND UPPER(r.nric) = UPPER(TRIM(lp.nric))))
+               OR (COALESCE(TRIM(lp.nric), '') <> '' AND UPPER(r.nric) = UPPER(TRIM(lp.nric)))
+               -- the NRIC may be on the learner's enrolment in this run only (no profile NRIC)
+               OR EXISTS (SELECT 1 FROM course_session cs
+                            JOIN enrollment e ON e.course_run_id = cs.course_run_id
+                           WHERE cs.id = p.session_id AND e.user_id = p.user_id
+                             AND COALESCE(TRIM(e.nric), '') <> '' AND UPPER(r.nric) = UPPER(TRIM(e.nric))))
         WHERE p.session_id = $1
           AND p.user_id IS NOT NULL
           AND p.nric = '_uid_' || p.user_id::text

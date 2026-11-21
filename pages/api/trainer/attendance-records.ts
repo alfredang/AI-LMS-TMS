@@ -76,7 +76,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           userId = lookup.rows[0]?.user_id ?? null;
           // SSG e-attendance of a learner who self-registered without an NRIC: find their account,
           // so this row and their placeholder row become one (folded below)
-          if (!userId && r.isPresent && (r.email || r.fullName)) {
+          if (!userId && r.isPresent) {
             userId = await resolveSsgAttendee(client, sessionId, r.nric, r.email, r.fullName);
           }
         }

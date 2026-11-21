@@ -7,7 +7,8 @@
  * Manual Attendance then shows them absent on one row and present on the other, and
  * the totals stop matching SSG.
  *
- * resolveSsgAttendee finds the account for an SSG record with no NRIC match:
+ * resolveSsgAttendee finds the account for an SSG record with no profile NRIC match:
+ *   0. by the NRIC on the learner's enrolment in this run;
  *   1. by email, among the run's enrolments and this session's placeholder rows
  *      (then the NRIC is saved on the profile, so every later session links by NRIC);
  *   2. by name, among this session's placeholder rows, only when exactly one fits.
@@ -47,6 +48,18 @@ export async function resolveSsgAttendee(
   email?: string | null,
   fullName?: string | null,
 ): Promise<string | null> {
+  // The learner's enrolment in this run carries the NRIC (their profile may not)
+  const byEnrolment = await db.query(
+    `SELECT DISTINCT e.user_id
+       FROM course_session cs
+       JOIN enrollment e ON e.course_run_id = cs.course_run_id
+      WHERE cs.id = $1 AND e.user_id IS NOT NULL
+        AND UPPER(TRIM(e.nric)) = UPPER($2)
+      LIMIT 2`,
+    [sessionId, nric]
+  );
+  if (byEnrolment.rows.length === 1) return byEnrolment.rows[0].user_id;
+
   const mail = String(email ?? '').trim().toLowerCase();
 
   if (mail) {
