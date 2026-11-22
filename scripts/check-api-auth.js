@@ -17,6 +17,9 @@ const API = path.join(__dirname, '..', 'pages', 'api');
 const PUBLIC = new Set([
   'mobile/auth.ts', // Public OTP entry point: registered learner/trainer only, DB rate limits and single-use codes.
   'mobile/login.ts', // Public password sign-in for the apps: existing learner/trainer accounts only, DB rate limits.
+  'mobile/google-start.ts', // Admin Google sign-in for the apps: only stores a state bound to the app's challenge and redirects to Google.
+  'mobile/google-exchange.ts', // Single-use 2-minute code + PKCE-style verifier, allow-listed admin emails only, IP rate limit.
+  'internal/trainer-payouts.ts', // Server-to-server bridge for the storefront; requires the MOBILE_BRIDGE_SECRET header (timing-safe).
   'health.ts', // liveness probe (no data)
   'app-version.ts',
   'favicon.png.ts',

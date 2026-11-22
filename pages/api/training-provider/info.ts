@@ -1,3 +1,4 @@
+import { mobileAppLinks } from '@lib/mobileAppLinks';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -197,6 +198,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       briefingOnAssessment: trainingProvider.briefing_on_assessment || '',
           privacyPolicy: privacyPolicy || null,
           acceptableUsePolicy: acceptableUsePolicy || null,
+          ...mobileAppLinks(),
           virtualMeetingProvider,
           referenceLinks: {
             masterListUrl: refLinks.master_list_url || '',
@@ -298,7 +300,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         feedbackFormExternalLink: '',
         briefingOnAssessment: '',
         privacyPolicy: null,
-        acceptableUsePolicy: null
+        acceptableUsePolicy: null,
+        ...mobileAppLinks(),
       };
 
       console.log('✅ Training provider info (default):', responseData);
@@ -352,6 +355,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       briefingOnAssessment: trainingProvider.briefing_on_assessment || '',
       privacyPolicy: fallbackPrivacyPolicy || null,
       acceptableUsePolicy: fallbackAcceptableUsePolicy || null,
+      ...mobileAppLinks(),
       virtualMeetingProvider: fallbackVirtualMeetingProvider
     };
 

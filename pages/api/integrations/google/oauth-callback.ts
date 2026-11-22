@@ -3,6 +3,7 @@ import pool from '@lib/db';
 import { invalidateGmailSenderCache } from '../../../../lib/gmailOauthSend';
 import { invalidateGoogleAuthCache } from '../../../../lib/google-auth/googleAuth';
 import { getGoogleOauthRedirectUri } from '../../../../lib/googleOauthRenew';
+import { finishMobileGoogleSignIn, MOBILE_STATE_PREFIX } from '../../../../lib/mobileGoogleSignIn';
 
 // GET /api/integrations/google/oauth-callback — Google OAuth redirect target
 // for the "Renew via Google Sign-In" flow. Public by design (the browser
@@ -16,6 +17,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { code, state, error: oauthError } = req.query;
+
+  // Admin sign-in from the TIA TMS apps shares this registered redirect URI. It never
+  // touches the stored refresh token (lib/mobileGoogleSignIn.ts).
+  if (typeof state === 'string' && state.startsWith(MOBILE_STATE_PREFIX)) {
+    return finishMobileGoogleSignIn(req, res);
+  }
 
   if (oauthError) {
     return res.status(400).send(htmlPage('Google Sign-In Failed', `Google returned: ${oauthError}`, false));

@@ -11,6 +11,9 @@ export interface TrainingProviderData {
   forceFirstPasswordChange: boolean;
   privacyPolicy: string | null;
   acceptableUsePolicy: string | null;
+  /** Store links for this tenant's mobile app; null when it has none (see lib/mobileAppLinks.ts). */
+  mobileAppIosUrl?: string | null;
+  mobileAppAndroidUrl?: string | null;
 }
 
 export interface TrainingProviderResponse {
