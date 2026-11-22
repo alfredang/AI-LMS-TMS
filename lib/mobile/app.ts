@@ -2,6 +2,7 @@ import pool from '../db';
 import { isAssignedTrainer } from '../auth/courseRunAccess';
 import { labelSessions, toIsoDate } from '../attendance/sessionLabel';
 import { ensureMobileSchema } from './schema';
+import { venueAddress } from './venue';
 import { DEFAULT_FEEDBACK_FORM_SECTIONS } from '../feedbackFormDefaults';
 
 // Shared logic behind the learner/trainer app routes (/api/mobile/*), used by both the iOS
@@ -149,22 +150,6 @@ function methodsFor(courseMethods: any, runMethods: any, published: any, legacy:
   }));
 }
 
-/** The class venue as a postal address for the map link. A run with its own street gives
- *  "Blk Street #Floor-Unit Building, Singapore Postal"; a run with no street (most runs carry only
- *  floor, unit and postal code) is held at the academy, so the provider's address is used.
- *  Online-only classes have no venue. */
-function venueAddress(run: any, providerAddress: unknown): string | null {
-  const t = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-  const format = t(run.format).toLowerCase();
-  if (!format.includes('hybrid') && (format.includes('online') || format.includes('virtual'))) return null;
-  const street = t(run.venue_street);
-  if (street) {
-    const unit = t(run.venue_floor) && t(run.venue_unit) ? `#${t(run.venue_floor)}-${t(run.venue_unit)}` : '';
-    const line = [t(run.venue_block), street, unit, t(run.venue_building)].filter(Boolean).join(' ');
-    return [line, t(run.venue_postal_code) ? `Singapore ${t(run.venue_postal_code)}` : ''].filter(Boolean).join(', ');
-  }
-  return t(providerAddress) || null;
-}
 
 export async function classDetail(userId: string, role: MobileRole, runId: string) {
   const trainer = role === 'trainer';
