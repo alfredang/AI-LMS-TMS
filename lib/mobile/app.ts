@@ -2,6 +2,7 @@ import pool from '../db';
 import { isAssignedTrainer } from '../auth/courseRunAccess';
 import { labelSessions, toIsoDate } from '../attendance/sessionLabel';
 import { ensureMobileSchema } from './schema';
+import { DEFAULT_FEEDBACK_FORM_SECTIONS } from '../feedbackFormDefaults';
 
 // Shared logic behind the learner/trainer app routes (/api/mobile/*), used by both the iOS
 // and the Android app. Rule for everything here: the caller's identity is the verified
@@ -312,9 +313,8 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
       ORDER BY 2`,
     [runId, userId]
   )).rows;
-  const feedbackCount = (await pool.query(
-    `SELECT count(*)::int AS n FROM feedback_form_response WHERE course_run_id::text=$1`, [runId]
-  ).catch(() => ({ rows: [{ n: 0 }] }))).rows[0].n;
+  const feedbackSummary = await classFeedbackSummary(runId).catch(() => null);
+  const feedbackCount = feedbackSummary?.count ?? 0;
   return {
     ...base,
     // Course Feedback card: the provider's external form, else the built-in one for this class.
@@ -323,7 +323,48 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
     swdaEnrolmentURL: `/enrol/${encodeURIComponent(run.id)}`,
     ssgAttendanceURL: da ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${da}` : null,
     assessments: methods.map(m => ({ ...m, submissions: [] })),
-    roster, feedbackCount,
+    roster, feedbackCount, feedbackSummary,
+  };
+}
+
+/** The class page's Post Course Feedback Summary, as the website's trainer view shows it
+ *  (/api/trainer/class-feedback): the average of each 1–5 rating question on the form the
+ *  responses were given on, the overall average, and the comments. Trainers never see who
+ *  wrote what, so no names or emails are sent. Called only after the trainer check. */
+async function classFeedbackSummary(runId: string) {
+  const rows = (await pool.query(
+    `SELECT template_id, answers FROM feedback_form_response WHERE course_run_id::text=$1 ORDER BY submitted_at ASC`,
+    [runId]
+  )).rows;
+  const ids = rows.map((r: any) => r.template_id).filter(Boolean).map(String);
+  const mostUsed = ids.sort((a, b) => ids.filter(x => x === b).length - ids.filter(x => x === a).length)[0] || null;
+  const tmpl = (await pool.query(
+    `SELECT sections FROM feedback_form_template
+      WHERE ($1::uuid IS NOT NULL AND id = $1::uuid) OR $1::uuid IS NULL
+      ORDER BY (id = $1::uuid) DESC NULLS LAST, is_active DESC, created_at ASC LIMIT 1`,
+    [mostUsed]
+  ).catch(() => ({ rows: [] as any[] }))).rows[0];
+  const sections: any[] = tmpl?.sections?.length ? tmpl.sections : DEFAULT_FEEDBACK_FORM_SECTIONS;
+  const fields: any[] = sections.flatMap((sec: any) => sec.fields || []);
+  const ratingFields = fields.filter(f => f.type === 'rating1to5');
+  const commentFields = fields.filter(f => f.type === 'textarea');
+  const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null; };
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const questions = ratingFields.map(f => {
+    const vals = rows.map((r: any) => num(r.answers?.[f.id])).filter((v): v is number => v !== null);
+    return { label: String(f.label || ''), average: vals.length ? round1(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
+  });
+  const avgs = questions.map(q => q.average).filter((v): v is number => v !== null);
+  const comments = rows
+    .flatMap((r: any) => commentFields.map(f => String(r.answers?.[f.id] ?? '').trim()))
+    .filter(c => c.length > 1 && !/^(nil|na|n\/a|none|-)$/i.test(c))
+    .slice(-30)
+    .reverse();
+  return {
+    count: rows.length,
+    overall: avgs.length ? round1(avgs.reduce((a, b) => a + b, 0) / avgs.length) : null,
+    questions,
+    comments,
   };
 }
 
