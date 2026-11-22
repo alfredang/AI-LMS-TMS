@@ -148,13 +148,30 @@ function methodsFor(courseMethods: any, runMethods: any, published: any, legacy:
   }));
 }
 
+/** The class venue as a postal address for the map link. A run with its own street gives
+ *  "Blk Street #Floor-Unit Building, Singapore Postal"; a run with no street (most runs carry only
+ *  floor, unit and postal code) is held at the academy, so the provider's address is used.
+ *  Online-only classes have no venue. */
+function venueAddress(run: any, providerAddress: unknown): string | null {
+  const t = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const format = t(run.format).toLowerCase();
+  if (!format.includes('hybrid') && (format.includes('online') || format.includes('virtual'))) return null;
+  const street = t(run.venue_street);
+  if (street) {
+    const unit = t(run.venue_floor) && t(run.venue_unit) ? `#${t(run.venue_floor)}-${t(run.venue_unit)}` : '';
+    const line = [t(run.venue_block), street, unit, t(run.venue_building)].filter(Boolean).join(' ');
+    return [line, t(run.venue_postal_code) ? `Singapore ${t(run.venue_postal_code)}` : ''].filter(Boolean).join(', ');
+  }
+  return t(providerAddress) || null;
+}
+
 export async function classDetail(userId: string, role: MobileRole, runId: string) {
   const trainer = role === 'trainer';
   const run = (await pool.query(
     `SELECT cr.id::text, cr.course_run_id AS "runCode", c.title, coalesce(nullif(c.new_course_code,''),c.course_code) AS code,
             cr.start_date::text AS "startDate", cr.end_date::text AS "endDate", cr.class_type AS format,
             cr.class_status::text AS "classStatus", cr.virtual_meeting_link AS "meetingURL", cr.digital_attendance_id AS da,
-            concat_ws(', ', nullif(cr.venue_building,''),nullif(cr.venue_street,''),nullif(cr.venue_room,'')) AS venue,
+            cr.venue_block, cr.venue_street, cr.venue_floor, cr.venue_unit, cr.venue_building, cr.venue_postal_code,
             c.slides_url, c.learner_guide_url, c.activities_url, c.lesson_plan_url, c.trainer_slides_url,
             c.facilitator_guide_url, c.assessment_plan_url,
             c.courseware_link, c.lab_simulator_url, c.practice_exam_url, c.skillsfuture_link,
@@ -179,7 +196,7 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
   const tp = (await pool.query(
     `SELECT coalesce(show_lesson_plan_learner_view,false) AS lesson, coalesce(feedback_form_enabled,false) AS feedback,
             feedback_form_external_link AS external, coalesce(show_certificate_delivery,false) AS delivery,
-            briefing_on_assessment AS briefing FROM training_provider ORDER BY created_at ASC LIMIT 1`
+            briefing_on_assessment AS briefing, company_address AS address FROM training_provider ORDER BY created_at ASC LIMIT 1`
   ).catch(() => ({ rows: [] as any[] }))).rows[0] || {};
 
   // Same items, names and order as the class page's Courseware section on the website.
@@ -241,7 +258,7 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
   const briefing = String(tp.briefing || '').split('\n').map(l => l.trim()).filter(Boolean);
   const base: any = {
     id: run.id, runCode: run.runCode, title: run.title, code: run.code, startDate: run.startDate, endDate: run.endDate,
-    format: run.format, classStatus: run.classStatus, meetingURL: httpsOnly(run.meetingURL), venue: run.venue || null,
+    format: run.format, classStatus: run.classStatus, meetingURL: httpsOnly(run.meetingURL), venue: venueAddress(run, tp.address),
     materials, sessions, traqomURL: TRAQOM_URL,
     // The class page's Course Details and Class Details panels.
     courseDetails: {
