@@ -19,6 +19,15 @@ const METHODS: [string, string][] = [
   ['project', 'Project'], ['assignment', 'Assignment'],
 ];
 export const METHOD_KEYS = METHODS.map(m => m[0]);
+/** Same default as the website's Briefing on Assessment when the provider has set none. */
+const DEFAULT_ASSESSMENT_BRIEFING = [
+  'Place phones & other materials under the table or on the floor',
+  'No photos or recording of assessment scripts',
+  'No discussion during assessment',
+  'Use black/blue pen for assessment [hard copies]',
+  'No usage of liquid paper or correction tape',
+  'Assessment scripts will be collected when the time is up',
+];
 const LEGACY_TYPE: Record<string, string> = { written: 'writtenAssessment', practical: 'practicalExam' };
 
 const httpsOnly = (v: unknown): string | null => {
@@ -148,6 +157,16 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
             concat_ws(', ', nullif(cr.venue_building,''),nullif(cr.venue_street,''),nullif(cr.venue_room,'')) AS venue,
             c.slides_url, c.learner_guide_url, c.activities_url, c.lesson_plan_url, c.trainer_slides_url,
             c.facilitator_guide_url, c.assessment_plan_url,
+            c.courseware_link, c.lab_simulator_url, c.practice_exam_url, c.skillsfuture_link,
+            c.course_type, c.tsc_title, c.tsc_code, c.casl_skills, c.training_hours, c.assessment_hours,
+            c.funding_validity::text AS funding_end,
+            (SELECT h.valid_from::text FROM course_code_history h WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_start,
+            COALESCE(
+              (SELECT string_agg(crt.trainer_name, ', ' ORDER BY crt.assigned_at, crt.trainer_name)
+                 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name <> ''),
+              NULLIF(cr.assigned_trainer_name, ''),
+              (SELECT au_t.full_name FROM app_user au_t WHERE au_t.id = cr.assigned_trainer_id)
+            ) AS trainer_names,
             c.assessment_methods AS course_methods, cr.assessment_methods AS run_methods,
             cr.published_assessment_methods AS published,
             coalesce(cr.written_assessment_published,false) AS written, coalesce(cr.practical_assessment_published,false) AS practical
@@ -159,18 +178,34 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
 
   const tp = (await pool.query(
     `SELECT coalesce(show_lesson_plan_learner_view,false) AS lesson, coalesce(feedback_form_enabled,false) AS feedback,
-            feedback_form_external_link AS external FROM training_provider ORDER BY created_at ASC LIMIT 1`
+            feedback_form_external_link AS external, coalesce(show_certificate_delivery,false) AS delivery,
+            briefing_on_assessment AS briefing FROM training_provider ORDER BY created_at ASC LIMIT 1`
   ).catch(() => ({ rows: [] as any[] }))).rows[0] || {};
 
+  // Same items, names and order as the class page's Courseware section on the website.
   const material = (id: string, title: string, url: unknown) => ({ id, title, url: httpsOnly(url) });
-  const materials = [
-    ...(trainer ? [material('trainer-slides', 'Trainer slides', run.trainer_slides_url)] : []),
-    material('slides', 'Learner slides', run.slides_url),
-    material('guide', 'Learner Guide', run.learner_guide_url),
-    material('activities', 'Labs & activities', run.activities_url),
-    ...(trainer || tp.lesson ? [material('lesson-plan', 'Lesson Plan', run.lesson_plan_url)] : []),
-    ...(trainer ? [material('facilitator-guide', 'Facilitator Guide', run.facilitator_guide_url), material('assessment-plan', 'Assessment Plan', run.assessment_plan_url)] : []),
-  ].filter(m => m.url);
+  const materials = (trainer
+    ? [
+      material('courseware-link', 'Courseware Link', run.courseware_link),
+      material('lesson-plan', 'Lesson Plan', run.lesson_plan_url),
+      material('guide', 'Learner Guide', run.learner_guide_url),
+      material('facilitator-guide', 'Facilitator Guide', run.facilitator_guide_url),
+      material('trainer-slides', 'Trainer Slides', run.trainer_slides_url),
+      material('activities', 'Activities/Lab', run.activities_url),
+      material('lab-simulator', 'Lab Simulator', run.lab_simulator_url),
+      material('practice-exam', 'Practice Exam', run.practice_exam_url),
+      material('assessment-plan', 'Assessment Plan', run.assessment_plan_url),
+      material('skillsfuture', 'SkillsFuture Link', run.skillsfuture_link),
+    ]
+    : [
+      ...(tp.lesson ? [material('lesson-plan', 'Lesson Plan', run.lesson_plan_url)] : []),
+      material('guide', 'Learner Guide', run.learner_guide_url),
+      material('slides', 'Learner Slides', run.slides_url),
+      material('activities', 'Activities/Lab', run.activities_url),
+      material('lab-simulator', 'Lab Simulator', run.lab_simulator_url),
+      material('practice-exam', 'Practice Exam', run.practice_exam_url),
+      material('skillsfuture', 'SkillsFuture Link', run.skillsfuture_link),
+    ]).filter(m => m.url);
 
   const rawSessions = (await pool.query(
     `SELECT cs.id::text, cs.start_date, cs.start_time, cs.end_time,
@@ -193,10 +228,36 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
 
   const methods = methodsFor(run.course_methods, run.run_methods, run.published, { written: run.written, practical: run.practical });
   const da = typeof run.da === 'string' && /^RA\w{4,}$/.test(run.da.trim()) ? run.da.trim() : null;
+  const casl = run.course_type === 'CASL';
+  const hours = (v: unknown) => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v));
+  const announcements = (await pool.query(
+    `SELECT id::text, title, message, link_url AS "linkURL", file_name AS "fileName", file_url AS "fileURL",
+            posted_by AS "postedBy", created_at AS "createdAt"
+       FROM course_announcement WHERE course_run_id::text=$1 ORDER BY created_at DESC LIMIT 50`,
+    [runId]
+  ).catch(() => ({ rows: [] as any[] }))).rows.map((a: any) => ({
+    ...a, linkURL: httpsOnly(a.linkURL), fileURL: httpsOnly(a.fileURL),
+  }));
+  const briefing = String(tp.briefing || '').split('\n').map(l => l.trim()).filter(Boolean);
   const base: any = {
     id: run.id, runCode: run.runCode, title: run.title, code: run.code, startDate: run.startDate, endDate: run.endDate,
     format: run.format, classStatus: run.classStatus, meetingURL: httpsOnly(run.meetingURL), venue: run.venue || null,
     materials, sessions, traqomURL: TRAQOM_URL,
+    // The class page's Course Details and Class Details panels.
+    courseDetails: {
+      tscTitle: casl ? 'NA' : run.tsc_title || null,
+      tscCode: casl ? 'NA' : run.tsc_code || null,
+      caslSkills: casl ? run.casl_skills || null : null,
+      fundingValidityStart: run.funding_start ? String(run.funding_start).slice(0, 10) : null,
+      fundingValidityEnd: run.funding_end ? String(run.funding_end).slice(0, 10) : null,
+      trainingHours: hours(run.training_hours),
+      assessmentHours: hours(run.assessment_hours),
+    },
+    trainerNames: String(run.trainer_names || '').split(',').map(t => t.trim()).filter(Boolean),
+    digitalAttendanceId: typeof run.da === 'string' && run.da.trim() ? run.da.trim() : null,
+    announcements,
+    briefingOnAssessment: briefing.length ? briefing : DEFAULT_ASSESSMENT_BRIEFING,
+    showCourseFeedback: !!tp.delivery,
   };
 
   if (!trainer) {
@@ -239,6 +300,10 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
   ).catch(() => ({ rows: [{ n: 0 }] }))).rows[0].n;
   return {
     ...base,
+    // Course Feedback card: the provider's external form, else the built-in one for this class.
+    courseFeedbackURL: httpsOnly(tp.external) || `/feedback/${encodeURIComponent(run.id)}`,
+    // SWDA Enrolment: the class's public enrolment form, for learners not yet enrolled.
+    swdaEnrolmentURL: `/enrol/${encodeURIComponent(run.id)}`,
     ssgAttendanceURL: da ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${da}` : null,
     assessments: methods.map(m => ({ ...m, submissions: [] })),
     roster, feedbackCount,
