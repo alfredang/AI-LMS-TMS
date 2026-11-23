@@ -65,6 +65,7 @@ const FINANCE_ITEMS: SearchPaletteItem[] = [
   { id: 'uploadDocument', label: 'Supporting Document', section: 'Claim Management → Claim' },
   { id: 'grantImport', label: 'Bulk Grant Payment Sync', section: 'Claim Management → Grant Payment' },
   { id: 'sfcPaymentSync', label: 'SFC Payment Sync', section: 'Claim Management → Grant Payment' },
+  { id: 'receivablesRecon', label: 'Receivables Reconciliation', section: 'Claim Management → Grant Payment' },
   { id: 'proformaInvoice', label: 'ProForma Invoice', section: 'Claim Management → Invoices' },
   { id: 'taxInvoice', label: 'Tax Invoice', section: 'Claim Management → Invoices' },
   { id: 'receipt', label: 'Receipt', section: 'Claim Management → Invoices' },
