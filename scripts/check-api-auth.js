@@ -20,6 +20,7 @@ const PUBLIC = new Set([
   'mobile/google-start.ts', // Admin Google sign-in for the apps: only stores a state bound to the app's challenge and redirects to Google.
   'mobile/google-exchange.ts', // Single-use 2-minute code + PKCE-style verifier, allow-listed admin emails only, IP rate limit.
   'internal/trainer-payouts.ts', // Server-to-server bridge for the storefront; requires the MOBILE_BRIDGE_SECRET header (timing-safe).
+  'internal/class-feedback.ts', // Server-to-server bridge for the storefront; requires the MOBILE_BRIDGE_SECRET header (timing-safe), non-WSQ handover classes only.
   'health.ts', // liveness probe (no data)
   'app-version.ts',
   'favicon.png.ts',

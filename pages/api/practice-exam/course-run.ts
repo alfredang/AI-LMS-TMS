@@ -156,6 +156,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         } catch (e: any) {
           warning = `Could not load registrations: ${e?.message || 'unknown error'}`;
         }
+        // The class's trainers are registered automatically, so they can always open the
+        // practice exam; a failure is left for the Register button and never blocks the panel.
+        if (!warning) {
+          const missing = learners.filter(l => l.isTrainer && !registered.has(l.email));
+          await mapLimit(missing, 2, async (t) => {
+            try {
+              const r = await registerLearner({
+                name: t.name || t.email, email: t.email, exam: run.examCode!, courseRunId: run.courseRunId,
+                remark: 'Trainer, registered automatically from TMS',
+              });
+              if (r.ok) {
+                registered.set(t.email, { email: t.email, name: t.name, signedIn: false, courseRunId: run.courseRunId, registeredAt: r.registeredAt ?? new Date().toISOString(), remark: null });
+              } else {
+                console.warn(`[practice-exam] auto-register trainer for ${run.courseRunId} failed: ${r.error || r.status}`);
+              }
+            } catch (e: any) {
+              console.warn(`[practice-exam] auto-register trainer for ${run.courseRunId} failed: ${e?.message}`);
+            }
+          });
+        }
       }
 
       return res.status(200).json({

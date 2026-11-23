@@ -316,10 +316,14 @@ export async function classDetail(userId: string, role: MobileRole, runId: strin
  *  (/api/trainer/class-feedback): the average of each 1–5 rating question on the form the
  *  responses were given on, the overall average, and the comments. Trainers never see who
  *  wrote what, so no names or emails are sent. Called only after the trainer check. */
-async function classFeedbackSummary(runId: string) {
+export async function classFeedbackSummary(runId: string | null, sourceRunKey: string | null = null) {
+  // A class handed over to the storefront (MMS) may hold responses under its handover key
+  // (calendar:...) instead of, or as well as, the TMS course_run id.
   const rows = (await pool.query(
-    `SELECT template_id, answers FROM feedback_form_response WHERE course_run_id::text=$1 ORDER BY submitted_at ASC`,
-    [runId]
+    `SELECT template_id, answers FROM feedback_form_response
+      WHERE ($1::text IS NOT NULL AND course_run_id::text=$1) OR ($2::text IS NOT NULL AND source_run_key=$2)
+      ORDER BY submitted_at ASC`,
+    [runId, sourceRunKey]
   )).rows;
   const ids = rows.map((r: any) => r.template_id).filter(Boolean).map(String);
   const mostUsed = ids.sort((a, b) => ids.filter(x => x === b).length - ids.filter(x => x === a).length)[0] || null;
