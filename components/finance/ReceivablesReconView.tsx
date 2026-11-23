@@ -24,7 +24,8 @@ type StatusKey =
   | 'cancelled'
   | 'waiting_tpg'
   | 'check'
-  | 'customer_owes';
+  | 'customer_owes'
+  | 'credit_note';
 
 const SOURCES: Array<{ key: SourceKey; label: string; hint: string }> = [
   { key: 'grn', label: 'SSG Grant (GRN)', hint: 'GRN invoices billed to WSG — paid by TPG' },
@@ -44,16 +45,26 @@ const STATUSES: Record<StatusKey, { label: string; tone: string; action: string 
   waiting_tpg: { label: 'Waiting for TPG', tone: 'violet', action: 'Nothing to receive yet — TPG has not paid' },
   check: { label: 'Needs checking', tone: 'amber', action: 'No grant / claim found in the LMS — check TPG' },
   customer_owes: { label: 'Customer owes', tone: 'gray', action: 'Follow up with the customer' },
+  credit_note: { label: 'Credit note issued', tone: 'green', action: 'No action — a QuickBooks credit note already covers it' },
 };
 const ACTIONABLE: StatusKey[] = ['tpg_paid_not_received', 'tpg_completed_no_file', 'paid_elsewhere', 'partial_left', 'cancelled'];
 const groupOf = (s: StatusKey): StatusGroup =>
-  ACTIONABLE.includes(s) ? 'action' : s === 'check' ? 'check' : s === 'waiting_tpg' ? 'waiting' : 'owes';
+  ACTIONABLE.includes(s)
+    ? 'action'
+    : s === 'check'
+      ? 'check'
+      : s === 'waiting_tpg'
+        ? 'waiting'
+        : s === 'credit_note'
+          ? 'credited'
+          : 'owes';
 
 const TONE: Record<string, string> = {
   red: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
   amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
   violet: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
   gray: 'bg-surface-hover text-on-surface-secondary',
+  green: 'bg-success-bg text-success',
 };
 
 interface OverdueRow {

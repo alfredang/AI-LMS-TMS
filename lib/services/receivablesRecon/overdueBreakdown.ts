@@ -35,7 +35,8 @@ export type StatusKey =
   | 'cancelled'
   | 'waiting_tpg'
   | 'check'
-  | 'customer_owes';
+  | 'customer_owes'
+  | 'credit_note';
 
 export const STATUS_LABELS: Record<StatusKey, string> = {
   tpg_paid_not_received: 'TPG paid – not received in QB',
@@ -46,6 +47,7 @@ export const STATUS_LABELS: Record<StatusKey, string> = {
   waiting_tpg: 'Waiting for TPG (processing / pending payout)',
   check: 'Needs checking (no grant / claim record)',
   customer_owes: 'Customer owes',
+  credit_note: 'Credit note issued in QuickBooks',
 };
 
 /** Statuses Finance can act on today (receive, move, delete / credit-note). */
@@ -275,6 +277,7 @@ export async function computeOverdueBreakdown(
   const pays = await qbQueryAll('Payment', `TxnDate >= '2025-06-01'`, tick('payments'));
   const recentInv = await qbQueryAll('Invoice', `TxnDate >= '2025-06-01'`, tick('invoices'));
   const unappliedCms = await qbQueryAll('CreditMemo', `Balance > '0'`, tick('credit notes'));
+  const recentCms = await qbQueryAll('CreditMemo', `TxnDate >= '2025-06-01'`, tick('credit notes'));
   progress('Matching invoices against TPG…');
 
   const payById = new Map(pays.map((p) => [String(p.Id), p]));
@@ -476,6 +479,37 @@ export async function computeOverdueBreakdown(
       add(i, company ? 'company_tc' : 'individual_tc', cancelled ? 'cancelled' : 'customer_owes', rest, `${enrs.join(', ') || 'Not linked to an LMS enrolment'}${someCancelled}${paid}`, { enr: enrs });
     } else {
       add(i, 'other', 'customer_owes', bal, '');
+    }
+  }
+
+  // A credit note already raised for an invoice settles it from Finance's side even while the invoice
+  // still shows a balance: mark those rows "credit note issued" instead of an action. A credit note
+  // counts when its number or text cites the invoice number; for a GRN invoice also when it cites one
+  // of the invoice's grants (company TC credit notes list every learner's "Grant Ref #"). TC and
+  // SFC-CA invoices match on their own number only — their lines cite grants too, which would pull
+  // in other learners. While TPG is still processing / paying the grant or claim ("waiting"), the
+  // invoice still expects TPG's money, so it keeps that status and only gets a note: a learner's TC
+  // credit note reverses the TC's grant lines too, which does not mean TPG will not pay.
+  const cnByRef = new Map<string, Array<{ doc: string; date: string; customer: string; total: number }>>();
+  const REF = /GRN-\d{4}-\d{6}|SFC-CA-\d{4}-\d{6}(?:-R\d+)?|\bTC\d{2}-\d{4}-[0-9A-Z]+(?:-R\d+)?/g;
+  for (const cm of recentCms) {
+    const cmText = up([cm.DocNumber, cm.PrivateNote, cm.CustomerMemo?.value, ...A(cm.Line).map((l: any) => l.Description || '')].join(' ')).replace(/`/g, '');
+    const note = { doc: String(cm.DocNumber || cm.Id), date: String(cm.TxnDate || ''), customer: String(cm.CustomerRef?.name || ''), total: r2(cm.TotalAmt) };
+    for (const ref of new Set(cmText.match(REF) || [])) (cnByRef.get(ref) || cnByRef.set(ref, []).get(ref)!).push(note);
+  }
+  for (const row of rows) {
+    const refs = [up(row.invoiceNo), ...(row.source === 'grn' ? row.grantIds : [])];
+    const hits = new Map<string, { note: { doc: string; date: string; customer: string; total: number }; ref: string }>();
+    for (const ref of refs) for (const note of cnByRef.get(ref) || []) if (!hits.has(note.doc)) hits.set(note.doc, { note, ref });
+    if (!hits.size) continue;
+    const cited = [...hits.values()]
+      .map(({ note, ref }) => `Credit note ${note.doc} (${note.customer}, ${note.date}, $${note.total}) cites ${ref}`)
+      .join('; ');
+    if (row.status === 'waiting_tpg') {
+      row.detail = `${row.detail} · Note: ${cited} — TPG has not paid yet, so it stays open`;
+    } else {
+      row.status = 'credit_note';
+      row.detail = `${cited} · was: ${row.detail}`;
     }
   }
 

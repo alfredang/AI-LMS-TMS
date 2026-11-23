@@ -14,7 +14,7 @@ import React, { useEffect, useState } from 'react';
  */
 
 export type ChartSourceKey = 'grn' | 'sfc_ca' | 'sfc_tc' | 'company_tc' | 'individual_tc' | 'other';
-export type StatusGroup = 'action' | 'check' | 'waiting' | 'owes';
+export type StatusGroup = 'action' | 'check' | 'waiting' | 'owes' | 'credited';
 
 const SOURCE_COLOR: Record<ChartSourceKey, [light: string, dark: string]> = {
   grn: ['#2a78d6', '#3987e5'],
@@ -31,6 +31,7 @@ export const STATUS_GROUPS: Array<{ key: StatusGroup; label: string; hint: strin
   // Violet, not blue: blue already means "SSG Grant" in the source donut.
   { key: 'waiting', label: 'Waiting for TPG', hint: 'TPG has not paid yet', color: ['#6250d6', '#9085e9'] },
   { key: 'owes', label: 'Customer owes', hint: 'Company / learner to pay the TC', color: ['#a8a7a1', '#6b6a64'] },
+  { key: 'credited', label: 'Credit note issued', hint: 'A QuickBooks credit note already covers it', color: ['#0ca30c', '#0ca30c'] },
 ];
 
 export function useIsDarkTheme(): boolean {
@@ -106,7 +107,7 @@ export const OverdueSummary: React.FC<{
             );
           })}
         </div>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3 mt-4">
           {STATUS_GROUPS.map((m) => {
             const g = byKey.get(m.key);
             const isActive = active === m.key;
