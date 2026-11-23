@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
+import { ensureColumns } from './dbSchemaGuard';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config(); // Also try default .env
@@ -45,121 +46,50 @@ pool.on('error', (err) => {
   console.error('PostgreSQL connection error:', err);
 });
 
-// Auto-migrations: safe to run on every startup (all use IF NOT EXISTS)
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_doc_number text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
+// Auto-migrations, run on every startup. Columns are added only when the catalog shows them
+// missing, with a lock timeout — a plain `ADD COLUMN IF NOT EXISTS` locks the table even when the
+// column exists and queues every query behind any long-running read (see lib/dbSchemaGuard.ts).
+const warnAutoMigration = (err: Error) => {
+  console.warn('Auto-migration warning:', err.message);
+};
 
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_drive_file_id text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
+ensureColumns(pool, 'da_application', {
+  invoice_doc_number: 'text',
+  invoice_drive_file_id: 'text',
+  invoice_drive_web_view_link: 'text',
+  grant_invoice_drive_file_id: 'text',
+  grant_invoice_drive_web_view_link: 'text',
+  sfc_invoice_drive_file_id: 'text',
+  sfc_invoice_drive_web_view_link: 'text',
+  grant_invoice_id: 'character varying(100)',
+  sfc_invoice_id: 'character varying(100)',
+}).catch(warnAutoMigration);
 
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_drive_web_view_link text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS grant_invoice_drive_file_id text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS grant_invoice_drive_web_view_link text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS sfc_invoice_drive_file_id text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS sfc_invoice_drive_web_view_link text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS grant_invoice_id character varying(100);
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS sfc_invoice_id character varying(100);
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS show_lesson_plan_learner_view boolean DEFAULT false NOT NULL;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS show_certificate_delivery boolean DEFAULT false NOT NULL;
-    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_label text DEFAULT 'TP Course Evaluation' NOT NULL;
-    UPDATE training_provider
-      SET show_certificate_delivery = true,
-          certificate_delivery_label = 'Certificate of Achievement'
-      WHERE uen = '201200696W'
-        AND certificate_delivery_label IN ('TP Course Evaluation', 'Certificate Delivery');
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
-
-pool
-  .query(`
-    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_link text DEFAULT 'https://goo.gl/R2eumq' NOT NULL;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
+ensureColumns(pool, 'training_provider', {
+  show_lesson_plan_learner_view: 'boolean DEFAULT false NOT NULL',
+  show_certificate_delivery: 'boolean DEFAULT false NOT NULL',
+  certificate_delivery_label: "text DEFAULT 'TP Course Evaluation' NOT NULL",
+  certificate_delivery_link: "text DEFAULT 'https://goo.gl/R2eumq' NOT NULL",
+})
+  .then(() =>
+    pool.query(`
+      UPDATE training_provider
+        SET show_certificate_delivery = true,
+            certificate_delivery_label = 'Certificate of Achievement'
+        WHERE uen = '201200696W'
+          AND certificate_delivery_label IN ('TP Course Evaluation', 'Certificate Delivery');
+    `)
+  )
+  .catch(warnAutoMigration);
 
 // Optional courseware links shown on the Learner/Trainer class page.
-// See database/migrations/add_course_lab_simulator_and_practice_exam_url.sql.
-pool
-  .query(`
-    ALTER TABLE course ADD COLUMN IF NOT EXISTS lab_simulator_url text;
-    ALTER TABLE course ADD COLUMN IF NOT EXISTS practice_exam_url text;
-    -- Developer-only GitHub repository link (add_course_github_url.sql).
-    ALTER TABLE course ADD COLUMN IF NOT EXISTS github_url text;
-  `)
-  .catch((err) => {
-    console.warn('Auto-migration warning:', err.message);
-  });
+// See database/migrations/add_course_lab_simulator_and_practice_exam_url.sql;
+// github_url is the developer-only GitHub repository link (add_course_github_url.sql).
+ensureColumns(pool, 'course', {
+  lab_simulator_url: 'text',
+  practice_exam_url: 'text',
+  github_url: 'text',
+}).catch(warnAutoMigration);
 
 // Durable course_run -> Google Calendar event mapping (per session date).
 // See database/migrations/create_course_run_calendar_event.sql.
@@ -215,15 +145,18 @@ pool
       created_at     timestamptz NOT NULL DEFAULT now(),
       updated_at     timestamptz NOT NULL DEFAULT now()
     );
-    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS assessor_signed_at timestamptz;
-    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS assessor_signed_by uuid;
-    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS original_file_url text;
-    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS original_file_name character varying(255);
-    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS drive_folder_id text;
   `)
   .catch((err) => {
     console.warn('Auto-migration warning:', err.message);
   });
+
+ensureColumns(pool, 'link_assessment_submission', {
+  assessor_signed_at: 'timestamptz',
+  assessor_signed_by: 'uuid',
+  original_file_url: 'text',
+  original_file_name: 'character varying(255)',
+  drive_folder_id: 'text',
+}).catch(warnAutoMigration);
 
 // Assessment Summary Record e-signing (learner + trainer blocks, generated PDF).
 // See database/migrations/add_assessment_summary_signature.sql.

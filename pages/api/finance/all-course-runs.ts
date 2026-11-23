@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { queryWithTimeout, STATEMENT_TIMEOUT_CODE } from '../../../lib/dbSchemaGuard';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { ensureSsgEnrolmentGrantRollupColumns } from '../../../lib/services/grantImport/ensureSsgEnrolmentGrantRollups';
@@ -23,6 +24,11 @@ const RUN_START_NORM_SQL = `(
 )`;
 
 const TODAY_SG_SQL = `to_char((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date, 'YYYY-MM-DD')`;
+
+// Server-side cap per query. One view of this page ran 9+ minutes on prod (2026-11-23) and its
+// read locks stalled a Bulk SFC upload and ~30 other sessions; a capped query releases them.
+const QUERY_TIMEOUT_MS = 30_000;
+const timedQuery = (sql: string, params: unknown[] = []) => queryWithTimeout(pool, sql, params, QUERY_TIMEOUT_MS);
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -159,14 +165,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (individualNonDaOnly) {
-      conditions.push(`NOT EXISTS (
-        SELECT 1 FROM public.da_application da2
-        WHERE LOWER(TRIM(COALESCE(da2.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
-          AND LOWER(COALESCE(da2.application_status, '')) NOT IN ('cancelled', 'rejected', 'failed')
+      // NOT IN over a subquery, not a correlated NOT EXISTS: the planner underestimates how many
+      // enrolments pass the other filters (21 vs 17,103 measured) and ran the NOT EXISTS as a nested
+      // loop over every DA / company application per enrolment — 97s on prod-sized data, and the
+      // likely 9-minute query of 2026-11-23. NOT IN is executed as one hashed lookup. Same result:
+      // both sides are COALESCEd, so no NULL can make NOT IN differ from NOT EXISTS.
+      conditions.push(`LOWER(TRIM(COALESCE(se.enrolment_id,''))) NOT IN (
+        SELECT LOWER(TRIM(COALESCE(da2.enrolment_id,''))) FROM public.da_application da2
+        WHERE LOWER(COALESCE(da2.application_status, '')) NOT IN ('cancelled', 'rejected', 'failed')
       )`);
-      conditions.push(`NOT EXISTS (
-        SELECT 1 FROM public.company_application ca2
-        WHERE LOWER(TRIM(COALESCE(ca2.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
+      conditions.push(`LOWER(TRIM(COALESCE(se.enrolment_id,''))) NOT IN (
+        SELECT LOWER(TRIM(COALESCE(ca2.enrolment_id,''))) FROM public.company_application ca2
       )`);
       // SSG's own sponsorshipType — only self-sponsored ("Individual") rows belong
       // on this page; "Employer"-sponsored rows are excluded even without a
@@ -402,10 +411,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const filterParams = params.slice(0, paramIndex - 1);
 
     const [dataResult, countResult, statsResult, statusResult] = await Promise.all([
-      pool.query(dataQuery, params),
-      pool.query(countQuery, filterParams),
-      pool.query(statsQuery),
-      pool.query(statusBreakdownQuery),
+      timedQuery(dataQuery, params),
+      timedQuery(countQuery, filterParams),
+      timedQuery(statsQuery),
+      timedQuery(statusBreakdownQuery),
     ]);
 
     // Rows on this page with no grants stored: ask TPG for just those (a new enrolment, or one
@@ -415,7 +424,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       .filter((r: { bl_grant_id?: string | null; nbl_grant_id?: string | null }) => !r.bl_grant_id && !r.nbl_grant_id)
       .map((r: { enrolment_id: string }) => r.enrolment_id);
     if (rowsWithoutGrants.length > 0 && (await syncGrantsForShownRows(rowsWithoutGrants))) {
-      rows = (await pool.query(dataQuery, params)).rows;
+      rows = (await timedQuery(dataQuery, params)).rows;
     }
 
     return res.status(200).json({
@@ -438,6 +447,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       },
     });
   } catch (error) {
+    if ((error as { code?: string })?.code === STATEMENT_TIMEOUT_CODE) {
+      console.warn('[finance/all-course-runs] query hit the timeout', { query: req.query });
+      return res.status(503).json({
+        error: 'This view took too long to load. Narrow the search or the start-date range and try again.',
+      });
+    }
     console.error('[ERROR] [finance/all-course-runs] Failed to fetch:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }

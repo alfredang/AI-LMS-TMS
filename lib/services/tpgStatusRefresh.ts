@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import pool from '@/lib/db';
+import { ensureColumns } from '@/lib/dbSchemaGuard';
 import { refreshGrantsForEnrolments } from './billingSync';
 import { getSSGCredentialsService } from '@/lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '@/lib/ssg/utils/http-utils';
@@ -39,7 +40,8 @@ export interface TpgStatusRefreshResult {
 let claimColumnEnsured = false;
 export async function ensureClaimCheckedColumn(): Promise<void> {
   if (claimColumnEnsured) return;
-  await pool.query(`ALTER TABLE public.ssg_claims ADD COLUMN IF NOT EXISTS tpg_checked_at timestamptz`);
+  // Catalog check first — a bare ADD COLUMN IF NOT EXISTS locks ssg_claims even when the column exists.
+  await ensureColumns(pool, 'ssg_claims', { tpg_checked_at: 'timestamptz' });
   claimColumnEnsured = true;
 }
 

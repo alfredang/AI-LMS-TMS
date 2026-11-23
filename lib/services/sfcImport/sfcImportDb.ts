@@ -1,12 +1,23 @@
 import pool from '@/lib/db';
+import { ensureColumns, ensureIndex } from '@/lib/dbSchemaGuard';
 
+const gSchema = globalThis as unknown as { __sfcImportSchemaEnsured?: Promise<void> };
+
+/**
+ * Creates / backfills the Bulk SFC tables and the columns this feature adds to shared tables.
+ *
+ * Runs once per process (requireSfcImportSchema). It used to run before EVERY SFC database call —
+ * every row insert of an upload — and `ALTER TABLE … ADD COLUMN IF NOT EXISTS` takes an ACCESS
+ * EXCLUSIVE lock even when the column exists: on 2026-11-23 an upload sat at "Reading file" behind
+ * a long Consolidated Finance read on ssg_claims, with every other ssg_claims query queued behind it.
+ * Columns and indexes now go through lib/dbSchemaGuard (catalog check first, lock timeout).
+ */
 export async function ensureSfcImportSchema(): Promise<void> {
-  await pool.query(`
-    ALTER TABLE public.ssg_claims
-      ADD COLUMN IF NOT EXISTS claim_payment_status VARCHAR DEFAULT 'NOT_RECEIVED',
-      ADD COLUMN IF NOT EXISTS qb_payment_id VARCHAR,
-      ADD COLUMN IF NOT EXISTS last_sfc_import_at TIMESTAMPTZ
-  `);
+  await ensureColumns(pool, 'ssg_claims', {
+    claim_payment_status: "VARCHAR DEFAULT 'NOT_RECEIVED'",
+    qb_payment_id: 'VARCHAR',
+    last_sfc_import_at: 'TIMESTAMPTZ',
+  });
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public.sfc_import_batches (
@@ -28,9 +39,9 @@ export async function ensureSfcImportSchema(): Promise<void> {
     )
   `);
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_created_at ON public.sfc_import_batches(created_at DESC)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_status ON public.sfc_import_batches(status)`);
-  await pool.query(`ALTER TABLE public.sfc_import_batches ADD COLUMN IF NOT EXISTS needs_review_count INT DEFAULT 0`);
+  await ensureIndex(pool, 'idx_sfc_import_batches_created_at', `CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_created_at ON public.sfc_import_batches(created_at DESC)`);
+  await ensureIndex(pool, 'idx_sfc_import_batches_status', `CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_status ON public.sfc_import_batches(status)`);
+  await ensureColumns(pool, 'sfc_import_batches', { needs_review_count: 'INT DEFAULT 0' });
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public.sfc_import_rows (
@@ -69,14 +80,16 @@ export async function ensureSfcImportSchema(): Promise<void> {
   `);
 
   // Backfill columns for existing DBs (idempotent)
-  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS da_application_id VARCHAR`);
-  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS da_sfc_invoice_id VARCHAR`);
-  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS main_qbo_invoice_id VARCHAR`);
-  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS main_qbo_doc_number VARCHAR`);
+  await ensureColumns(pool, 'sfc_import_rows', {
+    da_application_id: 'VARCHAR',
+    da_sfc_invoice_id: 'VARCHAR',
+    main_qbo_invoice_id: 'VARCHAR',
+    main_qbo_doc_number: 'VARCHAR',
+  });
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_rows_batch_id ON public.sfc_import_rows(batch_id)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_rows_claim_id ON public.sfc_import_rows(claim_id)`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sfc_import_rows_batch_row ON public.sfc_import_rows(batch_id, row_index)`);
+  await ensureIndex(pool, 'idx_sfc_import_rows_batch_id', `CREATE INDEX IF NOT EXISTS idx_sfc_import_rows_batch_id ON public.sfc_import_rows(batch_id)`);
+  await ensureIndex(pool, 'idx_sfc_import_rows_claim_id', `CREATE INDEX IF NOT EXISTS idx_sfc_import_rows_claim_id ON public.sfc_import_rows(claim_id)`);
+  await ensureIndex(pool, 'idx_sfc_import_rows_batch_row', `CREATE UNIQUE INDEX IF NOT EXISTS idx_sfc_import_rows_batch_row ON public.sfc_import_rows(batch_id, row_index)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public.sfc_import_audit_logs (
@@ -89,27 +102,34 @@ export async function ensureSfcImportSchema(): Promise<void> {
     )
   `);
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_audit_logs_batch ON public.sfc_import_audit_logs(batch_id, created_at DESC)`);
+  await ensureIndex(pool, 'idx_sfc_import_audit_logs_batch', `CREATE INDEX IF NOT EXISTS idx_sfc_import_audit_logs_batch ON public.sfc_import_audit_logs(batch_id, created_at DESC)`);
 
-  await pool.query(`
-    ALTER TABLE public.invoice_jobs
-      ADD COLUMN IF NOT EXISTS qbo_sfc_status VARCHAR,
-      ADD COLUMN IF NOT EXISTS qbo_tg_status VARCHAR,
-      ADD COLUMN IF NOT EXISTS qbo_net_fee_status VARCHAR
-  `);
+  await ensureColumns(pool, 'invoice_jobs', {
+    qbo_sfc_status: 'VARCHAR',
+    qbo_tg_status: 'VARCHAR',
+    qbo_net_fee_status: 'VARCHAR',
+  });
 
-  await pool.query(`
-    ALTER TABLE public.ssg_enrolments
-      ADD COLUMN IF NOT EXISTS personal_data_masked BOOLEAN NOT NULL DEFAULT FALSE
-  `);
+  await ensureColumns(pool, 'ssg_enrolments', { personal_data_masked: 'BOOLEAN NOT NULL DEFAULT FALSE' });
 }
 
-export async function requireSfcImportSchema(): Promise<void> {
+async function ensureAndVerifySfcImportSchema(): Promise<void> {
   await ensureSfcImportSchema();
   const r = await pool.query(`SELECT to_regclass('public.sfc_import_batches') AS t`);
   if (!r.rows?.[0]?.t) {
     throw new Error('SFC Import schema is missing. Apply database/migrations/add_sfc_claim_payment_sync.sql and retry.');
   }
+}
+
+/** Once per process; a failure is not cached, so the next call retries. */
+export function requireSfcImportSchema(): Promise<void> {
+  if (!gSchema.__sfcImportSchemaEnsured) {
+    gSchema.__sfcImportSchemaEnsured = ensureAndVerifySfcImportSchema().catch((e) => {
+      gSchema.__sfcImportSchemaEnsured = undefined;
+      throw e;
+    });
+  }
+  return gSchema.__sfcImportSchemaEnsured;
 }
 
 export async function insertSfcImportBatch(input: {
