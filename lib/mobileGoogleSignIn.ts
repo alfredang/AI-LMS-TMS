@@ -17,6 +17,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import crypto from 'node:crypto';
 import pool from './db';
 import { createSession } from './auth/session';
+import { loadAppRoles } from './mobile/roles';
 import { getGoogleOauthRedirectUri } from './googleOauthRenew';
 
 export const MOBILE_STATE_PREFIX = 'm_';
@@ -165,9 +166,7 @@ export async function exchangeMobileGoogleCode(req: NextApiRequest, res: NextApi
     if (!u || !mobileAdminEmails().includes(String(u.email).toLowerCase())) {
       return res.status(403).json({ error: 'Admin sign-in is not available for this account.' });
     }
-    const roles = (await pool.query(
-      `SELECT lower(role::text) AS role FROM user_role_map WHERE user_id = $1 AND lower(role::text) IN ('learner','trainer')`, [u.id]
-    )).rows.map((r: { role: string }) => r.role);
+    const roles = await loadAppRoles(u.id);
     if (!roles.length) return res.status(403).json({ error: 'This app is for learners and trainers. Your account has neither role.' });
     const token = await createSession(u.id);
     return res.json({ data: { user: { ...u, role: roles[0], roles }, token } });

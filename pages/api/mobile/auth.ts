@@ -2,6 +2,7 @@ import type {NextApiRequest,NextApiResponse} from 'next';
 import crypto from 'node:crypto';
 import pool from '../../../lib/db';
 import {createSession} from '../../../lib/auth/session';
+import {loadAppRoles} from '../../../lib/mobile/roles';
 import {sendViaGmailOAuth,trySendViaGmailServiceAccount} from '../../../lib/gmailOauthSend';
 import {isSmtpEnabled,sendViaSmtp,getSmtpConfig} from '../../../lib/smtp';
 let schema:Promise<unknown>|undefined;
@@ -48,10 +49,10 @@ export default async function handler(req:NextApiRequest,res:NextApiResponse){
  const digest=crypto.createHash('sha256').update(c.salt+otp).digest('hex');
  if(!crypto.timingSafeEqual(Buffer.from(digest,'hex'),Buffer.from(c.digest,'hex'))){await client.query('UPDATE mobile_otp SET attempts=attempts+1 WHERE email=$1',[email]);await client.query('COMMIT');return res.status(401).json({error:'Invalid or expired code'});}
  const u=await client.query(`SELECT id,email,full_name AS "fullName" FROM app_user WHERE id=$1 AND lower(account_status)='active'`,[c.user_id]);
- const roles=await client.query(`SELECT lower(role::text) AS role FROM user_role_map WHERE user_id=$1 AND lower(role::text) IN('learner','trainer')`,[c.user_id]);
- if(!u.rowCount||!roles.rowCount){await client.query('ROLLBACK');return res.status(403).json({error:'Learner or trainer access required'});}
+ const roleList=await loadAppRoles(c.user_id,client);
+ if(!u.rowCount||!roleList.length){await client.query('ROLLBACK');return res.status(403).json({error:'Learner or trainer access required'});}
  await client.query('UPDATE mobile_otp SET used=true WHERE email=$1',[email]);await client.query('COMMIT');
- const token=await createSession(c.user_id);const roleList=roles.rows.map(x=>x.role);
+ const token=await createSession(c.user_id);
  return res.json({data:{user:{...u.rows[0],role:roleList[0],roles:roleList},token}});
  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  }catch{return res.status(500).json({error:'Sign in is temporarily unavailable. Please try again.'});}

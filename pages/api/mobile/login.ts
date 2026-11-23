@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
 import { createSession } from '../../../lib/auth/session';
 import { limited } from '../../../lib/android/auth';
+import { loadAppRoles } from '../../../lib/mobile/roles';
 
 // PUBLIC: password sign-in for the learner/trainer apps (iOS and Android). Existing active
 // accounts only, learner or trainer role only, never creates an account, rate limited per
@@ -32,9 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Compare against a fixed hash when the account is unknown so timing does not reveal it.
     const ok = await bcrypt.compare(password, u?.password_hash || '$2a$10$CwTycUXWue0Thq9StjUM0uJ8rQbJ9bq1Y0R7G7m4uYy3Qw6q9eW3K');
     if (!u?.password_hash || !ok) return res.status(401).json({ error: FAIL });
-    const roles = (await pool.query(
-      `SELECT lower(role::text) AS role FROM user_role_map WHERE user_id=$1 AND lower(role::text) IN ('learner','trainer')`, [u.id]
-    )).rows.map((r: { role: string }) => r.role);
+    const roles = await loadAppRoles(u.id);
     if (!roles.length) return res.status(403).json({ error: 'This app is for learners and trainers. Your account has neither role.' });
 
     let forcePasswordChange = !!u.must;
