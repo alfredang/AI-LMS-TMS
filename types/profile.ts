@@ -232,6 +232,9 @@ export interface TrainingProviderProfile extends BaseProfile {
   showCertificateDelivery?: boolean;
   certificateDeliveryLabel?: string;
   certificateDeliveryLink?: string;
+  /** Store links for this tenant's mobile app (lib/mobileAppLinks.ts); null when it has none. */
+  mobileAppIosUrl?: string | null;
+  mobileAppAndroidUrl?: string | null;
   companyName: string;
   companyShortname: string;
   uen: string;

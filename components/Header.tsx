@@ -8,6 +8,7 @@ import FinanceSearchPalette from './finance/FinanceSearchPalette';
 import TrainingProviderSearchPalette from './training-provider/TrainingProviderSearchPalette';
 import UserAvatar from './common/UserAvatar';
 import HeaderThemeToggle from './common/HeaderThemeToggle';
+import AppStoreBadges from './common/AppStoreBadges';
 
 // ── Live SGT clock ───────────────────────────────────────────────────────────
 // Two-line compact clock shown in the header next to the profile picture.
@@ -279,14 +280,11 @@ const Header: React.FC = () => {
   const navConfig = {
     [UserRole.Learner]: [
       { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
-      { view: View.Calendar, label: 'My Calendar', icon: IconName.Calendar },
-      { view: View.EdTools, label: 'Ed Tools', icon: IconName.BookOpen },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
       { view: View.Dashboard, label: 'Break Timer', icon: IconName.Clock, href: 'https://alfredang.github.io/musical-timer-countdown/' },
-      { view: View.Dashboard, label: 'Digital Whiteboard', icon: IconName.Edit, href: 'https://alfredang.github.io/whiteboard/' },
-      { view: View.Dashboard, label: 'Padlet', icon: IconName.Bookmark, href: 'https://alfredang.github.io/padlet/' },
+      { view: View.Dashboard, label: 'Whiteboard', icon: IconName.Edit, href: 'https://alfredang.github.io/whiteboard/' },
     ],
     [UserRole.Developer]: [
       { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
@@ -422,6 +420,15 @@ const Header: React.FC = () => {
                 </a>
               );
             })}
+            {/* Learners and trainers: the tenant's mobile app store badges (only the stores configured; lib/mobileAppLinks.ts). */}
+            {(role === UserRole.Learner || role === UserRole.Trainer) && (
+              <AppStoreBadges
+                iosUrl={trainingProviderProfile?.mobileAppIosUrl}
+                androidUrl={trainingProviderProfile?.mobileAppAndroidUrl}
+                size="outline"
+                className={`hidden ${role === UserRole.Trainer ? 'xl:flex' : 'md:flex'} !flex-nowrap !gap-1.5 pl-1 sm:pl-2`}
+              />
+            )}
           </nav>
           )}
 

@@ -10,7 +10,7 @@ import { clearMyEventsCache } from '@lib/calendar/myEventsCache';
 import { isLabsUnit } from '@lib/courseLessonUnits';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams'; mobileAppIosUrl?: string | null; mobileAppAndroidUrl?: string | null }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -54,6 +54,8 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: strin
       briefingOnAssessment: result.data.briefingOnAssessment || '',
       referenceLinks: result.data.referenceLinks,
       virtualMeetingProvider: result.data.virtualMeetingProvider || 'google_meet',
+      mobileAppIosUrl: result.data.mobileAppIosUrl || null,
+      mobileAppAndroidUrl: result.data.mobileAppAndroidUrl || null,
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
@@ -500,6 +502,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               feedbackFormEnabled: providerInfo.feedbackFormEnabled,
               feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
               briefingOnAssessment: providerInfo.briefingOnAssessment,
+              mobileAppIosUrl: providerInfo.mobileAppIosUrl ?? null,
+              mobileAppAndroidUrl: providerInfo.mobileAppAndroidUrl ?? null,
               integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
           } catch (error) {
@@ -897,6 +901,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             feedbackFormEnabled: providerInfo.feedbackFormEnabled,
             feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
             briefingOnAssessment: providerInfo.briefingOnAssessment,
+            mobileAppIosUrl: providerInfo.mobileAppIosUrl ?? null,
+            mobileAppAndroidUrl: providerInfo.mobileAppAndroidUrl ?? null,
             integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
@@ -951,6 +957,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               feedbackFormEnabled: providerInfo.feedbackFormEnabled,
               feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
               briefingOnAssessment: providerInfo.briefingOnAssessment,
+              mobileAppIosUrl: providerInfo.mobileAppIosUrl ?? null,
+              mobileAppAndroidUrl: providerInfo.mobileAppAndroidUrl ?? null,
               integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');
