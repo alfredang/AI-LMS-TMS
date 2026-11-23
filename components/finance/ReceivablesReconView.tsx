@@ -67,6 +67,36 @@ const TONE: Record<string, string> = {
   green: 'bg-success-bg text-success',
 };
 
+interface Attendance {
+  enrolmentId: string;
+  status: 'attended' | 'partial' | 'absent' | 'not_taken' | 'no_sessions' | 'error';
+  attended: number;
+  sessions: number;
+  taken: number;
+  checkedAt: string;
+  note?: string;
+}
+
+// TPG attendance shown on "cancelled" rows: did the learner attend before TPG cancelled?
+const ATTENDANCE_TONE: Record<Attendance['status'], string> = {
+  attended: 'bg-success-bg text-success',
+  partial: 'bg-warning-bg text-warning',
+  absent: 'bg-danger-bg text-danger',
+  not_taken: 'bg-surface-hover text-muted',
+  no_sessions: 'bg-surface-hover text-muted',
+  error: 'bg-surface-hover text-muted',
+};
+const attendanceLabel = (a: Attendance) =>
+  a.status === 'no_sessions'
+    ? 'TPG: no sessions on the run'
+    : a.status === 'not_taken'
+      ? `TPG: no attendance taken (${a.sessions} sessions)`
+      : a.status === 'error'
+        ? 'TPG attendance: could not read'
+        : a.status === 'absent'
+          ? `TPG: absent — 0 of ${a.taken} sessions`
+          : `TPG: attended ${a.attended} of ${a.taken} sessions`;
+
 interface OverdueRow {
   source: SourceKey;
   status: StatusKey;
@@ -82,6 +112,7 @@ interface OverdueRow {
   duplicateNo: boolean;
   in2026: boolean;
   detail: string;
+  attendance?: Attendance[];
 }
 interface FloatingCredit {
   type: string;
@@ -238,6 +269,7 @@ const ReceivablesReconView: React.FC = () => {
         Customer: r.customer,
         'Invoice Balance': r.invoiceBalance,
         'Duplicate No.': r.duplicateNo ? 'YES' : '',
+        'TPG Attendance': (r.attendance ?? []).map((a) => `${a.enrolmentId}: ${attendanceLabel(a).replace(/^TPG[^:]*: ?/, '')}`).join('; '),
         Detail: r.detail,
       }));
     for (const s of SOURCES) {
@@ -507,6 +539,24 @@ const ReceivablesReconView: React.FC = () => {
                         <td className="px-4 py-2 text-right text-on-surface-secondary">{r.daysOverdue}</td>
                         <td className="px-4 py-2">
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${TONE[STATUSES[r.status].tone]}`}>{STATUSES[r.status].label}</span>
+                          {r.status === 'cancelled' && (
+                            <div className="mt-1.5 flex flex-col items-start gap-1">
+                              {r.attendance?.length ? (
+                                r.attendance.map((a) => (
+                                  <span
+                                    key={a.enrolmentId}
+                                    title={`${a.enrolmentId} · checked on TPG ${when(a.checkedAt)}${a.note ? ` · ${a.note}` : ''}`}
+                                    className={`inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap ${ATTENDANCE_TONE[a.status]}`}
+                                  >
+                                    {attendanceLabel(a)}
+                                    {r.attendance!.length > 1 ? ` · ${a.enrolmentId}` : ''}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted">TPG attendance not checked yet — Refresh</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-xs text-on-surface-secondary break-words max-w-xl">{r.detail}</td>
                       </tr>

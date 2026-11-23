@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import { callQbProxyData } from '@/lib/quickbooks/qbProxyClient';
+import type { TpgAttendance } from './tpgAttendance';
 
 /**
  * Receivables Reconciliation — where the QuickBooks "Overdue" figure comes from.
@@ -71,6 +72,8 @@ export interface OverdueRow {
   enrolmentIds: string[];
   grantIds: string[];
   claimIds: string[];
+  /** TPG attendance of the row's enrolments — set on "cancelled" rows only (see attachAttendance). */
+  attendance?: Array<TpgAttendance & { enrolmentId: string }>;
 }
 
 export interface FloatingCredit {
@@ -92,6 +95,8 @@ export interface OverdueBreakdown {
   floatingCredit: FloatingCredit[];
   /** Enrolment statuses read live from TPG by the last "Refresh TPG" (carried into later QuickBooks-only refreshes). */
   liveEnrolmentStatus: LiveEnrolmentStatus;
+  /** TPG attendance by enrolment id, carried into later refreshes (only re-read by a TPG check). */
+  tpgAttendance?: Record<string, TpgAttendance>;
   tpgDataAsOf: {
     grantFileUpTo: string | null;
     sfcFileUpTo: string | null;
@@ -552,4 +557,22 @@ export async function computeOverdueBreakdown(
       enrolmentsCheckedAt: enrolmentsCheckedAt || null,
     },
   };
+}
+
+/** Enrolments behind the rows TPG cancelled — the ones whose attendance Finance needs to see. */
+export function cancelledEnrolmentIds(result: OverdueBreakdown): string[] {
+  return [...new Set(result.rows.filter((r) => r.status === 'cancelled').flatMap((r) => r.enrolmentIds.map((e) => up(e))))];
+}
+
+/** Put TPG attendance on the cancelled rows and keep the map on the result. */
+export function attachAttendance(result: OverdueBreakdown, attendance: Record<string, TpgAttendance>): void {
+  result.tpgAttendance = attendance;
+  for (const row of result.rows) {
+    if (row.status !== 'cancelled') continue;
+    const found = row.enrolmentIds
+      .map((e) => ({ enrolmentId: up(e), a: attendance[up(e)] }))
+      .filter((x) => x.a)
+      .map(({ enrolmentId, a }) => ({ enrolmentId, ...a }));
+    if (found.length) row.attendance = found;
+  }
 }
