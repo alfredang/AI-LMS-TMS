@@ -1,10 +1,11 @@
-import { mobileAppLinks } from '@lib/mobileAppLinks';
+import { mobileAppLinks, refreshMobileAppLinks } from '@lib/mobileAppLinks';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getBaseUrl } from '../../../lib/config';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  await refreshMobileAppLinks();
   await cors(req, res);
 
   if (req.method !== 'GET') {
