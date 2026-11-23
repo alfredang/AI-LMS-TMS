@@ -288,7 +288,6 @@ const Header: React.FC = () => {
     ],
     [UserRole.Developer]: [
       { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
-      { view: View.Dashboard, label: 'Courseware Tools', icon: IconName.BookOpen, developerPage: DeveloperPage.CoursewareTools },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
@@ -328,7 +327,17 @@ const Header: React.FC = () => {
           </div>
 
           {/* Center Section: Admin & Finance get a wide search bar; other roles keep their nav. */}
-          {showSearchBar ? (
+          {isAdmin ? (
+            /* Admin: the tenant's mobile app store badges in place of the search bar; the function search stays on ⌘K. */
+            <div className="flex items-center justify-center px-2">
+              <AppStoreBadges
+                iosUrl={trainingProviderProfile?.mobileAppIosUrl}
+                androidUrl={trainingProviderProfile?.mobileAppAndroidUrl}
+                size="outline"
+                className="hidden md:flex !flex-nowrap !gap-1.5"
+              />
+            </div>
+          ) : showSearchBar ? (
             <div className="flex items-center justify-center px-2">
               <button
                 onClick={() => setIsSearchOpen(true)}
@@ -420,8 +429,8 @@ const Header: React.FC = () => {
                 </a>
               );
             })}
-            {/* Learners and trainers: the tenant's mobile app store badges (only the stores configured; lib/mobileAppLinks.ts). */}
-            {(role === UserRole.Learner || role === UserRole.Trainer) && (
+            {/* Learners, trainers and developers: the tenant's mobile app store badges (only the stores configured; lib/mobileAppLinks.ts). */}
+            {(role === UserRole.Learner || role === UserRole.Trainer || role === UserRole.Developer) && (
               <AppStoreBadges
                 iosUrl={trainingProviderProfile?.mobileAppIosUrl}
                 androidUrl={trainingProviderProfile?.mobileAppAndroidUrl}

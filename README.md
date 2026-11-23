@@ -82,6 +82,7 @@ One shared style set serves every role (Admin, Training Provider, Finance, Payro
 - **Header profile area** in the ai-mms style: profile photo (`components/common/UserAvatar.tsx`, initials when there is no photo; Drive-hosted photos are fetched with the session token via `hooks/useAuthedImageSrc.ts`), a white dropdown with My Profile / Help and Support / Logout, and a readable date and time.
 - **Tokens** (`styles/globals.css`) mapped into Tailwind (`tailwind.config.js`) — pages use semantic classes (`bg-surface`, `text-on-surface`, `text-muted`, `border-default`, `text-primary`, status colours) and shared component classes (`.card`, `.btn-*`, `.input`, `.table`, `.tabs`, `.chip-*`, `.nav-item`), never raw grey/hex colours.
 - **Tenant brand colour** is applied per theme with an automatic contrast adjustment (`utils/colorUtils.ts`).
+- **Mobile app badges in the header** (`components/common/AppStoreBadges.tsx`): outlined **App Store / Google Play** pills in the top nav for Learner (beside My Classes), Trainer (beside My Classes, Break Timer, Whiteboard; from the `xl` breakpoint), Developer (beside Course Management) and Admin (in place of the search bar — the function search stays on ⌘K). The login screen shows the stores' black badges. Links are per tenant (`lib/mobileAppLinks.ts`: `MOBILE_APP_IOS_URL` / `MOBILE_APP_ANDROID_URL`, else `training_provider.app_support.iosUrl` / `androidUrl`); each badge appears only when its store link is set.
 - **Checks**: `npm run check:design-tokens` blocks new raw colour classes (runs in lint and build); `scripts/ui-theme-sweep.mjs` screenshots each role in light and dark and counts colour-contrast violations.
 
 ## Features
@@ -95,7 +96,7 @@ One shared style set serves every role (Admin, Training Provider, Finance, Payro
 - Certificate download after completion — issued only once the class has ended (from 6:00 PM SGT on the last day, or earlier if the trainer marks the learner Competent) and the minimum attendance is met; admins/trainers can still issue manually
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
-- **Header quick nav** — My Classes, My Calendar and Ed Tools links in the top header (Billing remains in the sidebar as Billing History)
+- **Header quick nav** — My Classes and the mobile app's **App Store / Google Play** badges in the top header (My Calendar, Ed Tools and Billing History stay in the sidebar)
 - **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Networking, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`; clicking a tools group opens the same tool card page as the trainer role (GenAI Tools stays link-only for learners)
 
 ### Trainer Features
@@ -745,6 +746,8 @@ This project is proprietary software developed by Tertiary Infotech Pte Ltd. All
 ## Native iOS companion
 
 The learner/trainer-only Tertiary Learning iPhone and iPad app uses the scoped mobile API, email OTP, courseware, a class calendar and APNs class reminders. See [iOS backend setup](docs/mobile-ios.md).
+
+**Roles and updates (both apps).** Sign-in needs Learner or Trainer; an account that also holds Developer gets it in its role list so the app can switch views (`lib/mobile/roles.ts`; each endpoint still checks its own role). `GET /api/public/app-version?platform=ios|android&version=x.y.z` (public, called at launch) returns `minVersion`, `latestVersion`, `storeUrl`, `updateRequired` and `updateAvailable` from `training_provider.app_support` (`iosMinVersion`, `androidMinVersion`, `iosLatestVersion`, `androidLatestVersion`); an app below `minVersion` should block with an update screen. Unset means no forced update.
 
 ### Native Android learner and trainer client
 
