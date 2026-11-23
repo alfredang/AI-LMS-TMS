@@ -63,7 +63,9 @@ export default withAuth(async (req: AuthedApiRequest, res: NextApiResponse) => {
         `SELECT c.id::text, c.title, coalesce(nullif(c.new_course_code,''), c.course_code) AS code,
                 c.course_type AS "courseType", c.status, c.tsc_title AS "tscTitle", c.tsc_code AS "tscCode",
                 c.training_hours::float AS "trainingHours", c.assessment_hours::float AS "assessmentHours",
-                c.funding_validity::text AS "fundingValidityEnd",
+                (SELECT left(h.valid_from::text, 10) FROM course_code_history h
+                  WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS "fundingValidityStart",
+                left(c.funding_validity::text, 10) AS "fundingValidityEnd",
                 (SELECT count(*)::int FROM course_run cr
                   WHERE cr.course_id = c.id AND NOT coalesce(cr.is_deleted,false)
                     AND cr.start_date >= current_date
