@@ -51,7 +51,7 @@ const groupColor = (key: StatusGroup, dark: boolean) => STATUS_GROUPS.find((g) =
 
 export const money0 = (n: number) => `$${Math.round(n).toLocaleString('en-SG')}`;
 const pct = (n: number, total: number) => (total > 0 ? `${((n / total) * 100).toFixed(1)}%` : '—');
-const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800';
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
 interface Slice<K extends string> {
   key: K;
@@ -64,8 +64,8 @@ interface Slice<K extends string> {
 export const ChartCardHeader: React.FC<{ title: string; hint?: string; children?: React.ReactNode }> = ({ title, hint, children }) => (
   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 mb-5">
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{title}</h3>
-      {hint && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{hint}</p>}
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</h3>
+      {hint && <p className="text-xs text-muted mt-1">{hint}</p>}
     </div>
     {children}
   </div>
@@ -88,9 +88,9 @@ export const OverdueSummary: React.FC<{
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-6 lg:gap-10 items-center">
       <div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">Overdue in QuickBooks</div>
-        <div className="text-4xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-white mt-1">{money0(total)}</div>
-        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">{invoiceCount.toLocaleString('en-SG')} invoices</div>
+        <div className="text-sm text-muted">Overdue in QuickBooks</div>
+        <div className="text-4xl font-bold tracking-tight tabular-nums text-on-surface mt-1">{money0(total)}</div>
+        <div className="text-sm text-muted mt-1">{invoiceCount.toLocaleString('en-SG')} invoices</div>
       </div>
 
       <div>
@@ -122,19 +122,19 @@ export const OverdueSummary: React.FC<{
                 aria-pressed={isActive}
                 className={`group text-left rounded-lg border px-3.5 py-3 cursor-pointer transition-colors duration-200 motion-reduce:transition-none ${FOCUS} ${
                   isActive
-                    ? 'border-gray-400 bg-gray-50 dark:border-gray-500 dark:bg-gray-700/50'
-                    : 'border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/30'
+                    ? 'border-strong bg-surface-hover'
+                    : 'border-default hover:bg-surface-hover'
                 }`}
               >
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <div className="flex items-center gap-2 text-sm font-medium text-on-surface-secondary">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: groupColor(m.key, dark) }} aria-hidden="true" />
                   {m.label}
                 </div>
                 <div className="mt-1.5 flex items-baseline gap-2">
-                  <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-white">{money0(g?.amount ?? 0)}</span>
-                  <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{pct(g?.amount ?? 0, total)}</span>
+                  <span className="text-xl font-bold tabular-nums text-on-surface">{money0(g?.amount ?? 0)}</span>
+                  <span className="text-xs tabular-nums text-muted">{pct(g?.amount ?? 0, total)}</span>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-snug">
+                <div className="text-xs text-muted mt-1 leading-snug">
                   {(g?.count ?? 0).toLocaleString('en-SG')} inv. · {m.hint}
                 </div>
               </button>
@@ -167,7 +167,7 @@ export const SourceDonut: React.FC<{
     <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
       <div className="relative w-44 h-44 shrink-0">
         <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90" aria-hidden="true">
-          <circle cx="100" cy="100" r={R} fill="none" strokeWidth={22} className="stroke-gray-100 dark:stroke-gray-700/50" />
+          <circle cx="100" cy="100" r={R} fill="none" strokeWidth={22} className="stroke-surface-hover" />
           {shown.map((s) => {
             const frac = total > 0 ? s.amount / total : 0;
             const len = Math.max(frac * C - (shown.length > 1 ? GAP : 0), 1.5);
@@ -194,20 +194,20 @@ export const SourceDonut: React.FC<{
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-8">
-          <div className="text-[11px] leading-tight text-gray-500 dark:text-gray-400">{focus ? focus.label : 'All sources'}</div>
-          <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white mt-0.5">{money0(focus ? focus.amount : total)}</div>
-          <div className="text-[11px] tabular-nums text-gray-500 dark:text-gray-400">{focus ? pct(focus.amount, total) : '100%'}</div>
+          <div className="text-[11px] leading-tight text-muted">{focus ? focus.label : 'All sources'}</div>
+          <div className="text-lg font-bold tabular-nums text-on-surface mt-0.5">{money0(focus ? focus.amount : total)}</div>
+          <div className="text-[11px] tabular-nums text-muted">{focus ? pct(focus.amount, total) : '100%'}</div>
         </div>
       </div>
 
-      <ul className="w-full min-w-0 divide-y divide-gray-100 dark:divide-gray-700/60">
+      <ul className="w-full min-w-0 divide-y divide-default">
         {shown.map((s) => (
           <li key={s.key}>
             <button
               type="button"
               aria-pressed={active === s.key}
               className={`w-full grid grid-cols-[12px_1fr_auto_3.25rem] items-center gap-3 px-2 py-2 rounded-md text-left text-sm cursor-pointer transition-colors duration-200 motion-reduce:transition-none ${FOCUS} ${
-                active === s.key ? 'bg-gray-100 dark:bg-gray-700/60' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                active === s.key ? 'bg-surface-hover' : 'hover:bg-surface-hover'
               }`}
               onMouseEnter={() => setHover(s.key)}
               onMouseLeave={() => setHover(null)}
@@ -216,14 +216,14 @@ export const SourceDonut: React.FC<{
               onClick={() => onSelect(s.key)}
             >
               <span className="w-3 h-3 rounded-sm" style={{ background: sourceColor(s.key, dark) }} aria-hidden="true" />
-              <span className="min-w-0 text-gray-800 dark:text-gray-100">
+              <span className="min-w-0 text-on-surface">
                 <span className="block truncate" title={s.label}>
                   {s.label}
                 </span>
-                <span className="block text-xs text-gray-500 dark:text-gray-400">{s.count.toLocaleString('en-SG')} inv.</span>
+                <span className="block text-xs text-muted">{s.count.toLocaleString('en-SG')} inv.</span>
               </span>
-              <span className="tabular-nums font-semibold whitespace-nowrap text-gray-900 dark:text-white">{money0(s.amount)}</span>
-              <span className="tabular-nums text-right text-gray-500 dark:text-gray-400">{pct(s.amount, total)}</span>
+              <span className="tabular-nums font-semibold whitespace-nowrap text-on-surface">{money0(s.amount)}</span>
+              <span className="tabular-nums text-right text-muted">{pct(s.amount, total)}</span>
             </button>
           </li>
         ))}
@@ -245,7 +245,7 @@ export const SourceStatusBars: React.FC<{
 
   return (
     <div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-xs text-gray-600 dark:text-gray-300">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-xs text-on-surface-secondary">
         {STATUS_GROUPS.map((g) => (
           <span key={g.key} className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm" style={{ background: groupColor(g.key, dark) }} aria-hidden="true" />
@@ -259,13 +259,13 @@ export const SourceStatusBars: React.FC<{
             <div className="flex items-baseline justify-between gap-3 mb-1.5">
               <button
                 type="button"
-                className={`flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 hover:underline cursor-pointer rounded ${FOCUS}`}
+                className={`flex items-center gap-2 text-sm text-on-surface hover:underline cursor-pointer rounded ${FOCUS}`}
                 onClick={() => onSelect(s.key)}
               >
                 <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: sourceColor(s.key, dark) }} aria-hidden="true" />
                 {s.label}
               </button>
-              <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-white whitespace-nowrap">{money0(s.amount)}</span>
+              <span className="text-sm font-semibold tabular-nums text-on-surface whitespace-nowrap">{money0(s.amount)}</span>
             </div>
             <div className="flex h-2.5 gap-[2px]" style={{ width: `${largest > 0 ? Math.max((s.amount / largest) * 100, 1.5) : 0}%` }}>
               {STATUS_GROUPS.map((g) => {

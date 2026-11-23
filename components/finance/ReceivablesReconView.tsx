@@ -53,7 +53,7 @@ const TONE: Record<string, string> = {
   red: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
   amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
   violet: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  gray: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+  gray: 'bg-surface-hover text-on-surface-secondary',
 };
 
 interface OverdueRow {
@@ -259,8 +259,8 @@ const ReceivablesReconView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div className="max-w-2xl">
-          <h2 className="text-3xl font-bold tracking-tight dark:text-white">Receivables Reconciliation</h2>
-          <p className="text-gray-600 dark:text-gray-300 mt-1.5">
+          <h2 className="text-3xl font-bold tracking-tight text-on-surface">Receivables Reconciliation</h2>
+          <p className="text-on-surface-secondary mt-1.5">
             Where the QuickBooks overdue comes from, checked against TPG. Read-only — receive payments in Bulk Grant Payment Sync or SFC Payment Sync.
           </p>
         </div>
@@ -293,7 +293,7 @@ const ReceivablesReconView: React.FC = () => {
 
       {!result && !job?.running && data && (
         <Card className="p-8 text-center">
-          <p className="text-gray-700 dark:text-gray-200">No breakdown yet. Click “Refresh” to build the first one.</p>
+          <p className="text-on-surface-secondary">No breakdown yet. Click “Refresh” to build the first one.</p>
         </Card>
       )}
 
@@ -306,14 +306,14 @@ const ReceivablesReconView: React.FC = () => {
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
                   f.stale
                     ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
-                    : 'border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                    : 'border-default bg-surface text-on-surface-secondary'
                 }`}
               >
-                <span className="text-gray-500 dark:text-gray-400">{f.label}</span>
+                <span className="text-muted">{f.label}</span>
                 <span className="font-medium">{f.value}</span>
               </span>
             ))}
-            <label className="ml-auto inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer select-none">
+            <label className="ml-auto inline-flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={only2026} onChange={(e) => setOnly2026(e.target.checked)} />
               Invoices dated 2026 only
             </label>
@@ -352,12 +352,12 @@ const ReceivablesReconView: React.FC = () => {
           </div>
 
           <Card className="p-0">
-            <div className="px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Breakdown by source and TPG status</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click a status to list its invoices below</p>
+            <div className="px-6 pt-5 pb-4 border-b border-default">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">Breakdown by source and TPG status</h3>
+              <p className="text-xs text-muted mt-1">Click a status to list its invoices below</p>
             </div>
             <table className="w-full text-sm">
-              <thead className="text-left text-gray-500 dark:text-gray-400">
+              <thead className="text-left text-muted">
                 <tr>
                   <th className="px-4 py-2">Source / status</th>
                   <th className="px-4 py-2 text-right">Invoices</th>
@@ -373,22 +373,22 @@ const ReceivablesReconView: React.FC = () => {
                   const open = !!expanded[s.key];
                   return (
                     <React.Fragment key={s.key}>
-                      <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
-                        <td className="px-4 py-2 font-semibold dark:text-white">
+                      <tr className="border-t border-default bg-surface-elevated">
+                        <td className="px-4 py-2 font-semibold text-on-surface">
                           <button className="flex items-center gap-2" onClick={() => setExpanded((p) => ({ ...p, [s.key]: !open }))}>
-                            <span className="w-4 text-gray-400">{open ? '▾' : '▸'}</span>
+                            <span className="w-4 text-muted">{open ? '▾' : '▸'}</span>
                             <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: sourceColor(s.key, dark) }} />
                             {s.label}
                           </button>
-                          <div className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-6">{s.hint}</div>
+                          <div className="text-xs font-normal text-muted ml-6">{s.hint}</div>
                         </td>
-                        <td className="px-4 py-2 text-right dark:text-gray-200">{sr.length}</td>
-                        <td className="px-4 py-2 text-right font-semibold dark:text-white">
+                        <td className="px-4 py-2 text-right text-on-surface-secondary">{sr.length}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-on-surface">
                           <button className="hover:underline" onClick={() => setFilter({ source: s.key })}>{fmt(sum(sr))}</button>
                         </td>
-                        <td className="px-4 py-2 text-right dark:text-gray-200">{pct(sum(sr))}</td>
+                        <td className="px-4 py-2 text-right text-on-surface-secondary">{pct(sum(sr))}</td>
                         <td className="px-4 py-2 hidden lg:table-cell">
-                          <div className="h-2 w-full max-w-xs rounded bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                          <div className="h-2 w-full max-w-xs rounded bg-surface-hover overflow-hidden">
                             <div className="h-full rounded" style={{ width: total > 0 ? `${(sum(sr) / total) * 100}%` : 0, background: sourceColor(s.key, dark) }} />
                           </div>
                         </td>
@@ -401,7 +401,7 @@ const ReceivablesReconView: React.FC = () => {
                           return (
                             <tr
                               key={k}
-                              className={`border-t border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 ${active ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                              className={`border-t border-default cursor-pointer hover:bg-surface-hover ${active ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
                               onClick={() => {
                                 setFilter({ source: s.key, status: k });
                                 setTab('overdue');
@@ -410,10 +410,10 @@ const ReceivablesReconView: React.FC = () => {
                               <td className="px-4 py-2 pl-10">
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${TONE[STATUSES[k].tone]}`}>{STATUSES[k].label}</span>
                               </td>
-                              <td className="px-4 py-2 text-right dark:text-gray-200">{t.length}</td>
-                              <td className="px-4 py-2 text-right dark:text-gray-200">{fmt(sum(t))}</td>
-                              <td className="px-4 py-2 text-right text-gray-500 dark:text-gray-400">{pct(sum(t))}</td>
-                              <td className="px-4 py-2 text-gray-500 dark:text-gray-400 hidden lg:table-cell">{STATUSES[k].action}</td>
+                              <td className="px-4 py-2 text-right text-on-surface-secondary">{t.length}</td>
+                              <td className="px-4 py-2 text-right text-on-surface-secondary">{fmt(sum(t))}</td>
+                              <td className="px-4 py-2 text-right text-muted">{pct(sum(t))}</td>
+                              <td className="px-4 py-2 text-muted hidden lg:table-cell">{STATUSES[k].action}</td>
                             </tr>
                           );
                         })}
@@ -424,7 +424,7 @@ const ReceivablesReconView: React.FC = () => {
             </table>
           </Card>
 
-          <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex gap-2 border-b border-default">
             {[
               { k: 'overdue' as const, l: `Overdue invoices (${filtered.length})` },
               { k: 'credit' as const, l: `Floating credit (${fmt(sum(result.floatingCredit))})` },
@@ -433,7 +433,7 @@ const ReceivablesReconView: React.FC = () => {
               <button
                 key={t.k}
                 onClick={() => setTab(t.k)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === t.k ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400'}`}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === t.k ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted'}`}
               >
                 {t.l}
               </button>
@@ -442,12 +442,12 @@ const ReceivablesReconView: React.FC = () => {
 
           {tab === 'overdue' && (
             <Card className="p-0">
-              <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-default">
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search invoice no, customer, GRN, enrolment, claim…"
-                  className="flex-1 min-w-[220px] px-3 py-2 border rounded-md text-sm dark:bg-gray-900 dark:border-gray-600 dark:text-white"
+                  className="flex-1 min-w-[220px] px-3 py-2 border rounded-md text-sm bg-surface border-strong text-on-surface"
                 />
                 {(filter.source || filter.status || filter.group) && (
                   <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline" onClick={() => setFilter({})}>
@@ -462,11 +462,11 @@ const ReceivablesReconView: React.FC = () => {
                     ✕
                   </button>
                 )}
-                <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">Total {fmt(sum(filtered))}</span>
+                <span className="text-sm text-muted ml-auto">Total {fmt(sum(filtered))}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-gray-500 dark:text-gray-400">
+                  <thead className="text-left text-muted">
                     <tr>
                       <th className="px-4 py-2">Invoice</th>
                       <th className="px-4 py-2">Customer</th>
@@ -478,31 +478,31 @@ const ReceivablesReconView: React.FC = () => {
                   </thead>
                   <tbody>
                     {filtered.slice(0, shown).map((r, idx) => (
-                      <tr key={`${r.invoiceId}-${r.source}-${r.status}-${idx}`} className="border-t border-gray-100 dark:border-gray-700 align-top">
+                      <tr key={`${r.invoiceId}-${r.source}-${r.status}-${idx}`} className="border-t border-default align-top">
                         <td className="px-4 py-2 whitespace-nowrap">
-                          <div className="font-medium dark:text-white">
+                          <div className="font-medium text-on-surface">
                             {r.invoiceNo}
                             {r.duplicateNo && <span className="ml-2 text-xs text-red-600 dark:text-red-400" title="This invoice number exists more than once in QuickBooks">duplicate no.</span>}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="text-xs text-muted">
                             {dmy(r.invoiceDate)} · due {dmy(r.dueDate)}
                           </div>
                         </td>
-                        <td className="px-4 py-2 dark:text-gray-200">{r.customer}</td>
-                        <td className="px-4 py-2 text-right whitespace-nowrap dark:text-gray-200">
+                        <td className="px-4 py-2 text-on-surface-secondary">{r.customer}</td>
+                        <td className="px-4 py-2 text-right whitespace-nowrap text-on-surface-secondary">
                           {fmt(r.amount)}
-                          {Math.abs(r.amount - r.invoiceBalance) > 0.004 && <div className="text-xs text-gray-500 dark:text-gray-400">of {fmt(r.invoiceBalance)}</div>}
+                          {Math.abs(r.amount - r.invoiceBalance) > 0.004 && <div className="text-xs text-muted">of {fmt(r.invoiceBalance)}</div>}
                         </td>
-                        <td className="px-4 py-2 text-right dark:text-gray-200">{r.daysOverdue}</td>
+                        <td className="px-4 py-2 text-right text-on-surface-secondary">{r.daysOverdue}</td>
                         <td className="px-4 py-2">
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${TONE[STATUSES[r.status].tone]}`}>{STATUSES[r.status].label}</span>
                         </td>
-                        <td className="px-4 py-2 text-xs text-gray-600 dark:text-gray-300 break-words max-w-xl">{r.detail}</td>
+                        <td className="px-4 py-2 text-xs text-on-surface-secondary break-words max-w-xl">{r.detail}</td>
                       </tr>
                     ))}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">No invoices match.</td>
+                        <td colSpan={6} className="px-4 py-6 text-center text-muted">No invoices match.</td>
                       </tr>
                     )}
                   </tbody>
@@ -520,13 +520,13 @@ const ReceivablesReconView: React.FC = () => {
 
           {tab === 'credit' && (
             <Card className="p-0">
-              <p className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+              <p className="px-4 py-3 text-sm text-on-surface-secondary border-b border-default">
                 Money already in QuickBooks but not applied to any invoice. It is not in the overdue figure, and QuickBooks staff screens can tick it onto other open
                 invoices (spillover) — each one should be applied to its own invoice or removed.
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-gray-500 dark:text-gray-400">
+                  <thead className="text-left text-muted">
                     <tr>
                       <th className="px-4 py-2">Type</th>
                       <th className="px-4 py-2">Date</th>
@@ -540,13 +540,13 @@ const ReceivablesReconView: React.FC = () => {
                     {[...result.floatingCredit]
                       .sort((a, b) => b.amount - a.amount)
                       .map((c) => (
-                        <tr key={`${c.type}-${c.id}`} className="border-t border-gray-100 dark:border-gray-700">
-                          <td className="px-4 py-2 dark:text-gray-200">{c.type}</td>
-                          <td className="px-4 py-2 dark:text-gray-200">{dmy(c.date)}</td>
-                          <td className="px-4 py-2 dark:text-gray-200">{c.customer}</td>
-                          <td className="px-4 py-2 dark:text-gray-200">{c.ref || '—'}</td>
-                          <td className="px-4 py-2 text-right dark:text-gray-200">{fmt(c.amount)}</td>
-                          <td className="px-4 py-2 text-right text-gray-500 dark:text-gray-400">{fmt(c.total)}</td>
+                        <tr key={`${c.type}-${c.id}`} className="border-t border-default">
+                          <td className="px-4 py-2 text-on-surface-secondary">{c.type}</td>
+                          <td className="px-4 py-2 text-on-surface-secondary">{dmy(c.date)}</td>
+                          <td className="px-4 py-2 text-on-surface-secondary">{c.customer}</td>
+                          <td className="px-4 py-2 text-on-surface-secondary">{c.ref || '—'}</td>
+                          <td className="px-4 py-2 text-right text-on-surface-secondary">{fmt(c.amount)}</td>
+                          <td className="px-4 py-2 text-right text-muted">{fmt(c.total)}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -558,7 +558,7 @@ const ReceivablesReconView: React.FC = () => {
           {tab === 'history' && (
             <Card className="p-0">
               <table className="w-full text-sm">
-                <thead className="text-left text-gray-500 dark:text-gray-400">
+                <thead className="text-left text-muted">
                   <tr>
                     <th className="px-4 py-2">Refreshed</th>
                     <th className="px-4 py-2 text-right">Overdue in QuickBooks (all)</th>
@@ -571,10 +571,10 @@ const ReceivablesReconView: React.FC = () => {
                     const prev = arr[i + 1];
                     const diff = prev ? h.overdueTotal - prev.overdueTotal : null;
                     return (
-                      <tr key={h.createdAt} className="border-t border-gray-100 dark:border-gray-700">
-                        <td className="px-4 py-2 dark:text-gray-200">{when(h.createdAt)}</td>
-                        <td className="px-4 py-2 text-right dark:text-gray-200">{fmt(h.overdueTotal)}</td>
-                        <td className="px-4 py-2 text-right dark:text-gray-200">{h.invoiceCount}</td>
+                      <tr key={h.createdAt} className="border-t border-default">
+                        <td className="px-4 py-2 text-on-surface-secondary">{when(h.createdAt)}</td>
+                        <td className="px-4 py-2 text-right text-on-surface-secondary">{fmt(h.overdueTotal)}</td>
+                        <td className="px-4 py-2 text-right text-on-surface-secondary">{h.invoiceCount}</td>
                         <td className={`px-4 py-2 text-right ${diff === null ? '' : diff > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                           {diff === null ? '—' : `${diff > 0 ? '+' : ''}${fmt(diff)}`}
                         </td>
