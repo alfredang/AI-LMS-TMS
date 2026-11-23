@@ -2,9 +2,11 @@ import crypto from 'crypto';
 import type { calendar_v3 } from 'googleapis';
 import pool from '../db';
 import { getCalendarClient } from './calendarClient';
-import { ensureClassCalendarEvent } from './ensureClassCalendarEvent';
+import { ensureClassCalendarEvent, stampCalendarCourseInfo } from './ensureClassCalendarEvent';
 import { collectRunCalendarEvents, meetLinkOfEvent, storeRunMeetLink } from './meetLink';
 import { ensureMeetAutoRecording } from './meetRecording';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
+import { enrichCalendarCourseDescription } from './courseInfoDescription';
 
 /**
  * Everything Google-Calendar-side that must happen when a trainer ACCEPTS an
@@ -56,7 +58,8 @@ export async function confirmTrainerOnCalendar(
 
   const runRes = await pool.query(
     `SELECT cr.id, cr.course_run_id, cr.class_type, cr.mode_of_learning::text AS mode_of_learning,
-            cr.virtual_meeting_link, c.title
+            cr.virtual_meeting_link, c.title, ${RUN_COURSE_CODE_SQL} AS course_code,
+            array_remove(ARRAY[c.course_code,c.new_course_code] || ARRAY(SELECT h.code FROM course_code_history h WHERE h.course_id=c.id),NULL) AS course_code_aliases
        FROM course_run cr JOIN course c ON c.id = cr.course_id
       WHERE cr.id = $1 LIMIT 1`,
     [courseRunUuid]
@@ -116,17 +119,16 @@ export async function confirmTrainerOnCalendar(
         await calendar.events.get({ calendarId, eventId }).then(r => r.data).catch(() => null);
       if (!evt || evt.status === 'cancelled') continue;
 
-      // 2) Course Run ID in the description
-      const descText = ((evt.description || '') + ' ' + (evt.location || '')).toLowerCase();
-      if (runIdStr && !descText.includes(runIdStr.toLowerCase())) {
-        const newDesc = `${evt.description ? evt.description + '\n' : ''}Course Run ID: ${runIdStr}`;
-        await calendar.events.patch({
-          calendarId, eventId,
-          requestBody: { description: newDesc },
-          sendUpdates: 'none',
-        });
-        evt.description = newDesc;
-        out.descriptionsStamped++;
+      // 2) Reuse the same missing-field and timestamp rules as the scheduled job.
+      const courseInfo = {
+        title: run.title, courseCode: run.course_code, courseRunId: runIdStr, courseCodeAliases: run.course_code_aliases,
+      };
+      if (enrichCalendarCourseDescription(evt.description, courseInfo).status === 'updated') {
+        const descriptionUpdate = await stampCalendarCourseInfo(calendar, calendarId, eventId, courseInfo);
+        if (descriptionUpdate.status === 'updated') {
+          evt.description = descriptionUpdate.description;
+          out.descriptionsStamped++;
+        }
       }
 
       // 4) Google Meet for virtual classes — generate once, on the first live event.

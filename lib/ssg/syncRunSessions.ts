@@ -104,6 +104,9 @@ export async function fetchAndSyncRunSessions(courseRunUuid: string): Promise<{ 
     const f = await fetchSsgSessions(run.course_run_id, run.course_code);
     if (!f.ok) return { ok: false, upserted: 0, error: f.error };
     const r = await upsertRunSessions(courseRunUuid, f.sessions);
+    void import('../calendar/ensureClassCalendarEvent').then(({ triggerCalendarCourseInfoRefresh }) => {
+      triggerCalendarCourseInfoRefresh(courseRunUuid);
+    }).catch(() => console.warn('[calendar-course-info] session-sync refresh unavailable'));
     return { ok: true, upserted: r.upserted };
   } catch (err) {
     return { ok: false, upserted: 0, error: err instanceof Error ? err.message : String(err) };

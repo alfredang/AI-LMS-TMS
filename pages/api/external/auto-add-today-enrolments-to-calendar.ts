@@ -1,3 +1,5 @@
+import { syncExistingCalendarCourseInfo } from '../../../lib/calendar/ensureClassCalendarEvent';
+import type { CourseInfoRefreshResult } from '../../../lib/calendar/courseInfoRefresh';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '../../../lib/db';
@@ -54,6 +56,7 @@ export async function runAutomation(): Promise<{
   noEvent: number;
   errors: number;
   eventSweep?: EnsureEnrolledRunsResult | { error: string };
+  courseInfo?: CourseInfoRefreshResult | { error: string };
 }> {
   if (gCal.__addTodayCalRunning) {
     console.warn('[auto-add-today-enrolments-to-calendar] Another run is already in progress — skipping');
@@ -73,7 +76,16 @@ export async function runAutomation(): Promise<{
       eventSweep = { error: err instanceof Error ? err.message : String(err) };
       console.error('❌ [auto-add-today-cal] class-event sweep failed:', err);
     }
-    return { ...(await _runAutomationInner()), eventSweep };
+    // Enrich existing descriptions in this job, independently of enrolment eligibility.
+    let courseInfo: CourseInfoRefreshResult | { error: string };
+    try {
+      courseInfo = await syncExistingCalendarCourseInfo();
+      console.log('[auto-add-today-cal] course info:', JSON.stringify(courseInfo));
+    } catch {
+      courseInfo = { error: 'Calendar course information refresh failed' };
+      console.error('[auto-add-today-cal] course information refresh failed');
+    }
+    return { ...(await _runAutomationInner()), eventSweep, courseInfo };
   } finally {
     gCal.__addTodayCalRunning = false;
   }

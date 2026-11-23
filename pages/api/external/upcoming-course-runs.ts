@@ -392,6 +392,9 @@ async function _runUpcomingCourseRunsInner() {
             }
 
             await client.query('COMMIT');
+            void import('../../../lib/calendar/ensureClassCalendarEvent').then(({ triggerCalendarCourseInfoRefresh }) => {
+              triggerCalendarCourseInfoRefresh(ssgRunId);
+            }).catch(() => console.warn('[calendar-course-info] upcoming-run refresh unavailable'));
           } catch (dbErr) {
             await client.query('ROLLBACK');
             throw dbErr;

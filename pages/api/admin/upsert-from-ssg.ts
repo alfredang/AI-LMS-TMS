@@ -25,6 +25,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
 import { syncAllDaApplicantsToCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { triggerCalendarCourseInfoRefresh } from '../../../lib/calendar/ensureClassCalendarEvent';
 import type {
   UpsertFromSsgRequest,
   UpsertFromSsgResponse,
@@ -1059,6 +1060,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           // Ensures any confirmed DA applicants are added to these new sessions.
           if (courseRunStep.courseRunUuid) {
             setImmediate(() => {
+              triggerCalendarCourseInfoRefresh(courseRunStep.courseRunUuid!);
               syncAllDaApplicantsToCalendar(courseRunStep.courseRunUuid!).catch(err => {
                 console.error('❌ [upsert-from-ssg] background DA calendar sync failed:', err);
               });
