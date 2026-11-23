@@ -1,10 +1,7 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { isStaff, requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { Pool } from 'pg';
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-});
+import pool from '../../../lib/db';
 
 // Manual TRAQOM tick from the trainer's Student Grading Roster.
 // SSG exposes only "survey sent" on the attendance feed, never per-learner
@@ -25,6 +22,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     try {
+        // Only a trainer of the class (or staff) may tick it, never on their own enrolment,
+        // and all rows must belong to one class — as for grade-student.
+        const authUser = (req as AuthedApiRequest).authUser!;
+        const rows = (await pool.query(`SELECT course_run_id, user_id FROM enrollment WHERE id::text = ANY($1)`, [ids])).rows;
+        if (rows.length !== ids.length) {
+            return res.status(404).json({ message: 'Enrolment not found' });
+        }
+        if (!isStaff(authUser) && rows.some((r: any) => r.user_id === authUser.id)) {
+            return res.status(403).json({ message: 'You cannot update your own enrolment' });
+        }
+        const runIds = Array.from(new Set(rows.map((r: any) => String(r.course_run_id))));
+        if (runIds.length !== 1) {
+            return res.status(400).json({ message: 'All enrolments must belong to the same course run' });
+        }
+        if (!(await requireCourseRunTrainer(authUser, res, runIds[0]))) return;
+
         const result = await pool.query(
             `UPDATE enrollment
              SET traqom_completed = $1,
