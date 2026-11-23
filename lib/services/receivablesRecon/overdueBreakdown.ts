@@ -36,8 +36,7 @@ export type StatusKey =
   | 'cancelled'
   | 'waiting_tpg'
   | 'check'
-  | 'customer_owes'
-  | 'credit_note';
+  | 'customer_owes';
 
 export const STATUS_LABELS: Record<StatusKey, string> = {
   tpg_paid_not_received: 'TPG paid – not received in QB',
@@ -48,7 +47,6 @@ export const STATUS_LABELS: Record<StatusKey, string> = {
   waiting_tpg: 'Waiting for TPG (processing / pending payout)',
   check: 'Needs checking (no grant / claim record)',
   customer_owes: 'Customer owes',
-  credit_note: 'Credit note issued in QuickBooks',
 };
 
 /** Statuses Finance can act on today (receive, move, delete / credit-note). */
@@ -72,6 +70,8 @@ export interface OverdueRow {
   enrolmentIds: string[];
   grantIds: string[];
   claimIds: string[];
+  /** QuickBooks credit notes that cite this invoice (or, for a GRN invoice, one of its grants). */
+  creditNotes?: CreditNoteRef[];
   /** TPG attendance of the row's enrolments — set on "cancelled" rows only (see attachAttendance). */
   attendance?: Array<TpgAttendance & { enrolmentId: string }>;
 }
@@ -104,6 +104,15 @@ export interface OverdueBreakdown {
     claimsCheckedAt: string | null;
     enrolmentsCheckedAt: string | null;
   };
+}
+
+export interface CreditNoteRef {
+  doc: string;
+  date: string;
+  customer: string;
+  total: number;
+  /** The invoice / grant number the credit note cites. */
+  cites: string;
 }
 
 export type LiveEnrolmentStatus = Record<string, { status: string; checkedAt: string }>;
@@ -487,14 +496,11 @@ export async function computeOverdueBreakdown(
     }
   }
 
-  // A credit note already raised for an invoice settles it from Finance's side even while the invoice
-  // still shows a balance: mark those rows "credit note issued" instead of an action. A credit note
-  // counts when its number or text cites the invoice number; for a GRN invoice also when it cites one
-  // of the invoice's grants (company TC credit notes list every learner's "Grant Ref #"). TC and
-  // SFC-CA invoices match on their own number only — their lines cite grants too, which would pull
-  // in other learners. While TPG is still processing / paying the grant or claim ("waiting"), the
-  // invoice still expects TPG's money, so it keeps that status and only gets a note: a learner's TC
-  // credit note reverses the TC's grant lines too, which does not mean TPG will not pay.
+  // Credit notes already raised in QuickBooks, shown in their own column next to the row's status
+  // (the status itself is never changed). A credit note counts when its number or text cites the
+  // invoice number; for a GRN invoice also when it cites one of the invoice's grants (company TC
+  // credit notes list every learner's "Grant Ref #"). TC and SFC-CA invoices match on their own
+  // number only — their lines cite grants too, which would pull in other learners.
   const cnByRef = new Map<string, Array<{ doc: string; date: string; customer: string; total: number }>>();
   const REF = /GRN-\d{4}-\d{6}|SFC-CA-\d{4}-\d{6}(?:-R\d+)?|\bTC\d{2}-\d{4}-[0-9A-Z]+(?:-R\d+)?/g;
   for (const cm of recentCms) {
@@ -504,18 +510,9 @@ export async function computeOverdueBreakdown(
   }
   for (const row of rows) {
     const refs = [up(row.invoiceNo), ...(row.source === 'grn' ? row.grantIds : [])];
-    const hits = new Map<string, { note: { doc: string; date: string; customer: string; total: number }; ref: string }>();
-    for (const ref of refs) for (const note of cnByRef.get(ref) || []) if (!hits.has(note.doc)) hits.set(note.doc, { note, ref });
-    if (!hits.size) continue;
-    const cited = [...hits.values()]
-      .map(({ note, ref }) => `Credit note ${note.doc} (${note.customer}, ${note.date}, $${note.total}) cites ${ref}`)
-      .join('; ');
-    if (row.status === 'waiting_tpg') {
-      row.detail = `${row.detail} · Note: ${cited} — TPG has not paid yet, so it stays open`;
-    } else {
-      row.status = 'credit_note';
-      row.detail = `${cited} · was: ${row.detail}`;
-    }
+    const hits = new Map<string, CreditNoteRef>();
+    for (const ref of refs) for (const note of cnByRef.get(ref) || []) if (!hits.has(note.doc)) hits.set(note.doc, { ...note, cites: ref });
+    if (hits.size) row.creditNotes = [...hits.values()];
   }
 
   const floatingCredit: FloatingCredit[] = [

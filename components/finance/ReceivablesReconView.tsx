@@ -24,8 +24,7 @@ type StatusKey =
   | 'cancelled'
   | 'waiting_tpg'
   | 'check'
-  | 'customer_owes'
-  | 'credit_note';
+  | 'customer_owes';
 
 const SOURCES: Array<{ key: SourceKey; label: string; hint: string }> = [
   { key: 'grn', label: 'SSG Grant (GRN)', hint: 'GRN invoices billed to WSG — paid by TPG' },
@@ -45,7 +44,6 @@ const STATUSES: Record<StatusKey, { label: string; tone: string; action: string 
   waiting_tpg: { label: 'Waiting for TPG', tone: 'violet', action: 'Nothing to receive yet — TPG has not paid' },
   check: { label: 'Needs checking', tone: 'amber', action: 'No grant / claim found in the LMS — check TPG' },
   customer_owes: { label: 'Customer owes', tone: 'gray', action: 'Follow up with the customer' },
-  credit_note: { label: 'Credit note issued', tone: 'green', action: 'No action — a QuickBooks credit note already covers it' },
 };
 const ACTIONABLE: StatusKey[] = ['tpg_paid_not_received', 'tpg_completed_no_file', 'paid_elsewhere', 'partial_left', 'cancelled'];
 const groupOf = (s: StatusKey): StatusGroup =>
@@ -55,16 +53,13 @@ const groupOf = (s: StatusKey): StatusGroup =>
       ? 'check'
       : s === 'waiting_tpg'
         ? 'waiting'
-        : s === 'credit_note'
-          ? 'credited'
-          : 'owes';
+        : 'owes';
 
 const TONE: Record<string, string> = {
   red: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
   amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
   violet: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
   gray: 'bg-surface-hover text-on-surface-secondary',
-  green: 'bg-success-bg text-success',
 };
 
 interface Attendance {
@@ -113,6 +108,7 @@ interface OverdueRow {
   in2026: boolean;
   detail: string;
   attendance?: Attendance[];
+  creditNotes?: Array<{ doc: string; date: string; customer: string; total: number; cites: string }>;
 }
 interface FloatingCredit {
   type: string;
@@ -214,7 +210,7 @@ const ReceivablesReconView: React.FC = () => {
           (!filter.status || r.status === filter.status) &&
           (!filter.group || groupOf(r.status) === filter.group)
       )
-      .filter((r) => !q || `${r.invoiceNo} ${r.customer} ${r.detail}`.toLowerCase().includes(q))
+      .filter((r) => !q || `${r.invoiceNo} ${r.customer} ${r.detail} ${(r.creditNotes ?? []).map((c) => c.doc).join(' ')}`.toLowerCase().includes(q))
       .sort((a, b) => b.daysOverdue - a.daysOverdue || b.amount - a.amount);
   }, [rows, filter, search]);
 
@@ -269,6 +265,7 @@ const ReceivablesReconView: React.FC = () => {
         Customer: r.customer,
         'Invoice Balance': r.invoiceBalance,
         'Duplicate No.': r.duplicateNo ? 'YES' : '',
+        'Credit Note': (r.creditNotes ?? []).map((c) => `${c.doc} (${c.customer}, ${dmy(c.date)}, $${c.total})`).join('; ') || 'Not issued',
         'TPG Attendance': (r.attendance ?? []).map((a) => `${a.enrolmentId}: ${attendanceLabel(a).replace(/^TPG[^:]*: ?/, '')}`).join('; '),
         Detail: r.detail,
       }));
@@ -489,7 +486,7 @@ const ReceivablesReconView: React.FC = () => {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search invoice no, customer, GRN, enrolment, claim…"
+                  placeholder="Search invoice no, customer, GRN, enrolment, claim, credit note…"
                   className="flex-1 min-w-[220px] px-3 py-2 border rounded-md text-sm bg-surface border-strong text-on-surface"
                 />
                 {(filter.source || filter.status || filter.group) && (
@@ -516,6 +513,7 @@ const ReceivablesReconView: React.FC = () => {
                       <th className="px-4 py-2 text-right">Amount</th>
                       <th className="px-4 py-2 text-right">Days overdue</th>
                       <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2 whitespace-nowrap">Credit note</th>
                       <th className="px-4 py-2">TPG / payment detail</th>
                     </tr>
                   </thead>
@@ -558,12 +556,29 @@ const ReceivablesReconView: React.FC = () => {
                             </div>
                           )}
                         </td>
+                        <td className="px-4 py-2">
+                          {r.creditNotes?.length ? (
+                            <div className="flex flex-col items-start gap-1">
+                              {r.creditNotes.map((c) => (
+                                <span
+                                  key={c.doc}
+                                  title={`${c.doc} · ${c.customer} · ${dmy(c.date)} · ${fmt(c.total)} · cites ${c.cites}`}
+                                  className="inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap bg-success-bg text-success"
+                                >
+                                  Issued · {c.doc}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted whitespace-nowrap">Not issued</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-xs text-on-surface-secondary break-words max-w-xl">{r.detail}</td>
                       </tr>
                     ))}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-muted">No invoices match.</td>
+                        <td colSpan={7} className="px-4 py-6 text-center text-muted">No invoices match.</td>
                       </tr>
                     )}
                   </tbody>

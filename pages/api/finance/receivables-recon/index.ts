@@ -17,7 +17,10 @@ import {
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method === 'GET') {
-      const [snapshot, history] = await Promise.all([getLatestSnapshot(), getSnapshotHistory(30)]);
+      const [latest, history] = await Promise.all([getLatestSnapshot(), getSnapshotHistory(30)]);
+      // Snapshots from before 2026-11-23 can carry the retired 'credit_note' row status (credit notes are
+      // now a column); show none until the next refresh rather than a status the page no longer knows.
+      const snapshot = latest?.result.rows.some((r) => (r.status as string) === 'credit_note') ? null : latest;
       return res.status(200).json({ success: true, data: { job: getReconJobState(), snapshot, history } });
     }
     if (req.method === 'POST') {
