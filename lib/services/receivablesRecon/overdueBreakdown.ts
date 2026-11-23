@@ -462,12 +462,24 @@ export async function computeOverdueBreakdown(
         .map((l: any) => String(l.Description || ''))
         .find((d: string) => /To Less SkillsFuture Credit/i.test(d));
       const sfcAmt = sfcNote ? money((sfcNote.match(/\$\s*([\d,]+(?:\.\d+)?)/) || [])[1]) : 0;
+      let sfcGapNote = '';
       if (sfcAmt > 0) {
         const sfcRec = lk.filter((x) => SFC_PAYOUT_REF.test(x.ref)).reduce((s, x) => s + x.amt, 0);
-        const sOpen = Math.min(rest, Math.max(0, r2(sfcAmt - sfcRec)));
         const nonDa = enrs.filter((e) => !daEnr.has(e));
         const c = claimState(nonDa);
         const elsewhere = c.payout ? (appliedRefAmt.get(`${up(c.payout)}|${c.amt}`) || []).filter((id) => id !== String(i.Id)) : [];
+        // Disbursed claim: TPG owes only what of ITS payout (matched by payout id) is not on the TC yet.
+        // The TC's "To Less SkillsFuture Credit" amount is what the learner meant to use; the claim TPG
+        // paid can be smaller, and that difference is the learner's to pay — not TPG money. Counting it
+        // as "TPG paid – not received" (as before 2026-11-23) invited receiving TPG money twice.
+        const receivedForClaim = c.payout ? lk.filter((x) => x.ref === up(c.payout)).reduce((s, x) => s + x.amt, 0) : 0;
+        const sOpen =
+          c.status === 'DISBURSED'
+            ? Math.min(rest, Math.max(0, r2(c.amt - receivedForClaim)))
+            : Math.min(rest, Math.max(0, r2(sfcAmt - sfcRec)));
+        if (c.status === 'DISBURSED' && c.amt < sfcAmt - 0.005) {
+          sfcGapNote = ` · SFC claim paid by TPG $${c.amt} is less than the $${sfcAmt} SFC on the TC — the $${r2(sfcAmt - c.amt)} difference is the learner's`;
+        }
         const status: StatusKey =
           c.status === 'DISBURSED' && elsewhere.length
             ? 'paid_elsewhere'
@@ -483,14 +495,14 @@ export async function computeOverdueBreakdown(
           'sfc_tc',
           status,
           sOpen,
-          `SFC on TC $${sfcAmt}, received $${r2(sfcRec)} · claim ${c.claimId || '— (none in LMS)'} ${c.status} $${c.amt}${c.payout ? ` · payout ${c.payout} on ${c.disb}` : ''}${elsewhere.length ? ` · already on ${docsOf(elsewhere)}` : ''}`,
+          `SFC on TC $${sfcAmt}, received $${r2(sfcRec)} · claim ${c.claimId || '— (none in LMS)'} ${c.status} $${c.amt}${c.payout ? ` · payout ${c.payout} on ${c.disb}, $${r2(receivedForClaim)} of it received` : ''}${elsewhere.length ? ` · already on ${docsOf(elsewhere)}` : ''}`,
           { enr: nonDa, claims: c.claimId ? [c.claimId] : [] }
         );
         rest = r2(rest - sOpen);
       }
       const paid = lk.length ? ` · paid so far: ${lk.map((x) => `${x.ref || 'no ref'} $${x.amt} (${x.date})`).join('; ')}` : '';
       const someCancelled = !cancelled && enrs.some(cancelledEnr) ? ` · cancelled on TPG: ${enrs.filter(cancelledEnr).join(', ')}` : '';
-      add(i, company ? 'company_tc' : 'individual_tc', cancelled ? 'cancelled' : 'customer_owes', rest, `${enrs.join(', ') || 'Not linked to an LMS enrolment'}${someCancelled}${paid}`, { enr: enrs });
+      add(i, company ? 'company_tc' : 'individual_tc', cancelled ? 'cancelled' : 'customer_owes', rest, `${enrs.join(', ') || 'Not linked to an LMS enrolment'}${someCancelled}${sfcGapNote}${paid}`, { enr: enrs });
     } else {
       add(i, 'other', 'customer_owes', bal, '');
     }
