@@ -8,7 +8,9 @@
 set -euo pipefail
 
 input="$(cat)"
-cmd="$(printf '%s' "$input" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);process.stdout.write(((j.tool_input||{}).command)||"")}catch(e){}})' 2>/dev/null || true)"
+cmd="$(printf '%s' "$input" | /usr/bin/python3 -c 'import json,sys
+try: print((json.load(sys.stdin).get("tool_input") or {}).get("command") or "")
+except Exception: pass' 2>/dev/null || true)"
 [ -z "$cmd" ] && exit 0
 
 deny() {

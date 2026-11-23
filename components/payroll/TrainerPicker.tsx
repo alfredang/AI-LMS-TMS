@@ -139,7 +139,7 @@ const TrainerPicker: React.FC<{
       />
 
       {open && matches.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-default rounded-md shadow-lg">
+        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-surface border border-default rounded-md shadow-lg">
           {matches.map((t) => (
             <button
               key={t.id}
@@ -155,7 +155,7 @@ const TrainerPicker: React.FC<{
                 <span className="block text-ellipsis overflow-hidden whitespace-nowrap text-[11px] text-on-surface-secondary">{t.email}</span>
               </span>
               {!t.is_active && (
-                <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-on-surface-secondary">
+                <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-surface-elevated text-on-surface-secondary">
                   Inactive
                 </span>
               )}
@@ -183,7 +183,7 @@ const TrainerPicker: React.FC<{
               </span>
             </span>
           ) : shown ? (
-            <span className="inline-flex items-start gap-1 text-emerald-700 dark:text-emerald-400">
+            <span className="inline-flex items-start gap-1 text-success">
               <Icon name={IconName.CheckCircle} className="w-3 h-3 flex-shrink-0 mt-0.5" />
               <span>
                 Linked to {shown.full_name} ({shown.email}) — this class shows in their payout
@@ -204,7 +204,7 @@ const TrainerPicker: React.FC<{
               Trainer list unavailable — the name will be matched to an account when you save.
             </span>
           ) : (
-            <span className="inline-flex items-start gap-1 text-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-start gap-1 text-warning">
               <Icon name={IconName.Warning} className="w-3 h-3 flex-shrink-0 mt-0.5" />
               Not linked to an account — the payout is recorded, but it won&apos;t appear in the
               trainer&apos;s own history. Pick them from the list if they have one.

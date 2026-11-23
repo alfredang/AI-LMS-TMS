@@ -269,7 +269,7 @@ async function seedDefaults() {
         {
             id: 'sync_google_calendar',
             name: 'Sync Google Calendar (Virtual Classes)',
-            description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual and stores the Google Meet link. Runs daily at 1:00 AM SGT.',
+            description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual, stores the Google Meet link and turns auto-recording on for the Meet room. Runs daily at 1:00 AM SGT.',
             cron_expression: '0 1 * * *', // 1:00 AM SGT daily
             api_endpoint: '/api/external/sync-google-calendar',
         },
@@ -388,7 +388,7 @@ async function seedDefaults() {
         {
             id: 'sync_course_availability',
             name: 'Sync SSG Course Availability to Website',
-            description: 'Daily SSG authority check: refreshes each TGS course support period and future published runs, stores the resulting availability in TMS, then hides or restores the matching Tertiary Courses SG listing. Runs daily at 6:30 AM SGT before customer emails.',
+            description: 'Daily SSG authority check: refreshes each TGS course support period and future published runs, stores the resulting availability in TMS and sends it to Tertiary Courses SG (information only: the website never hides a course or closes its registration). For each enabled website course SSG has no future run for, the website asks for course runs and its website schedule is published to TPGateway through the WSQ schedule sync; staff are emailed what was published and what needs a person (COURSE_RUNS_NEEDED_RECIPIENTS, else FUNDING_REMINDER_RECIPIENTS). Runs daily at 6:30 AM SGT before customer emails.',
             cron_expression: '30 6 * * *', // 6:30 AM SGT daily
             api_endpoint: '/api/external/sync-course-availability',
         },

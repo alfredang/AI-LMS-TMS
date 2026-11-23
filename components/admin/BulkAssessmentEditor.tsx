@@ -127,7 +127,7 @@ export const fillSkillCodesFromMapping = async (newRows: BulkAssessmentRow[]): P
     } catch { return newRows; }
 };
 
-const cellInputClasses = "w-full px-1.5 py-1 text-xs bg-white border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white";
+const cellInputClasses = "w-full px-1.5 py-1 text-xs bg-surface border border-strong rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:text-white";
 
 interface BulkAssessmentEditorProps {
     rows: BulkAssessmentRow[];
@@ -252,8 +252,8 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
     return (
         <>
             {error && (
-                <Card className="p-4 mb-6 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700">
-                    <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</pre>
+                <Card className="p-4 mb-6 border-red-300 bg-danger-bg dark:border-red-700">
+                    <pre className="text-sm text-danger whitespace-pre-wrap">{error}</pre>
                 </Card>
             )}
 
@@ -262,12 +262,12 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                 <Card className="p-6 mb-6">
                     <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-4">
-                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">
+                            <h3 className="text-lg font-bold text-on-surface-secondary">
                                 {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} to Process
                             </h3>
                             <button
                                 onClick={() => setShowAdvanced(!showAdvanced)}
-                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
+                                className="text-xs text-muted hover:text-on-surface underline"
                             >
                                 {showAdvanced ? 'Hide' : 'Show'} advanced fields
                             </button>
@@ -275,7 +275,7 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                 onClick={saveSkillCodeMapping}
                                 disabled={savingMapping || isSubmitting}
                                 title="Save each course's Skill Code so future entries auto-fill it"
-                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                                className="text-xs text-primary hover:underline disabled:opacity-50"
                             >
                                 {savingMapping ? 'Saving…' : 'Save skill codes for these courses'}
                             </button>
@@ -284,9 +284,9 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                             {isSubmitting ? 'Submitting...' : `Submit All (${rows.length})`}
                         </Button>
                     </div>
-                    {mappingMsg && <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">{mappingMsg}</p>}
+                    {mappingMsg && <p className="text-xs text-primary mb-2">{mappingMsg}</p>}
                     {rows.filter(r => needsSkillCode(r) && !r.skillCode?.trim()).length > 0 && (
-                        <p className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded px-2 py-1.5 mb-3">
+                        <p className="text-xs text-warning bg-warning-bg border border-yellow-300 dark:border-yellow-700 rounded px-2 py-1.5 mb-3">
                             ⚠️ {rows.filter(r => needsSkillCode(r) && !r.skillCode?.trim()).length} WSQ/IBF row(s) have no Skill Code found automatically. <strong>Try the storefront's "Skills Framework" code first. If it fails with TGS-425, submit one assessment for this course directly in SSG TPGateway</strong> — that fixes it automatically. Then enter the working code below and save.
                         </p>
                     )}
@@ -296,37 +296,37 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                             <thead>
                                 {/* Group headers row */}
                                 <tr className="border-b dark:border-gray-700">
-                                    <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800"></th>
-                                    <th colSpan={4} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-300 dark:border-blue-600">
+                                    <th className="sticky left-0 z-10 bg-surface-elevated"></th>
+                                    <th colSpan={4} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-primary bg-info-bg border-r-2 border-blue-300 dark:border-blue-600">
                                         SSG Input Fields
                                     </th>
                                     {showAdvanced && (
-                                        <th colSpan={5} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 border-r-2 border-orange-300 dark:border-orange-600">
+                                        <th colSpan={5} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-warning bg-warning-bg border-r-2 border-orange-300 dark:border-orange-600">
                                             Advanced (auto-filled)
                                         </th>
                                     )}
-                                    <th colSpan={displayColCount} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                                    <th colSpan={displayColCount} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-muted bg-surface-elevated">
                                         Parsed Data from All Course Runs
                                     </th>
                                 </tr>
                                 {/* Column headers row */}
                                 <tr className="border-b-2 dark:border-gray-600">
-                                    <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 p-2 font-bold text-gray-600 dark:text-gray-300 text-left"></th>
-                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[90px] bg-blue-50 dark:bg-blue-900/20">Action</th>
-                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[80px] bg-blue-50 dark:bg-blue-900/20">Result</th>
-                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[150px] bg-blue-50 dark:bg-blue-900/20">Assessment Date <span className="font-normal text-[10px] text-gray-400">(DD/MM/YYYY)</span></th>
-                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[160px] bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-300 dark:border-blue-600">Skill Code</th>
+                                    <th className="sticky left-0 z-10 bg-surface-elevated p-2 font-bold text-on-surface-secondary text-left"></th>
+                                    <th className="p-2 font-bold text-primary text-left min-w-[90px] bg-info-bg">Action</th>
+                                    <th className="p-2 font-bold text-primary text-left min-w-[80px] bg-info-bg">Result</th>
+                                    <th className="p-2 font-bold text-primary text-left min-w-[150px] bg-info-bg">Assessment Date <span className="font-normal text-[10px] text-muted">(DD/MM/YYYY)</span></th>
+                                    <th className="p-2 font-bold text-primary text-left min-w-[160px] bg-info-bg border-r-2 border-blue-300 dark:border-blue-600">Skill Code</th>
                                     {showAdvanced && (
                                         <>
-                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[100px] bg-orange-50/50 dark:bg-orange-900/10">Course Run ID</th>
-                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[130px] bg-orange-50/50 dark:bg-orange-900/10">Course Code</th>
-                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[150px] bg-orange-50/50 dark:bg-orange-900/10">Trainee Name</th>
-                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[110px] bg-orange-50/50 dark:bg-orange-900/10">Trainee ID</th>
-                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[140px] bg-orange-50/50 dark:bg-orange-900/10 border-r-2 border-orange-300 dark:border-orange-600">Enrolment ID</th>
+                                            <th className="p-2 font-bold text-warning text-left min-w-[100px] bg-orange-50/50 dark:bg-orange-900/10">Course Run ID</th>
+                                            <th className="p-2 font-bold text-warning text-left min-w-[130px] bg-orange-50/50 dark:bg-orange-900/10">Course Code</th>
+                                            <th className="p-2 font-bold text-warning text-left min-w-[150px] bg-orange-50/50 dark:bg-orange-900/10">Trainee Name</th>
+                                            <th className="p-2 font-bold text-warning text-left min-w-[110px] bg-orange-50/50 dark:bg-orange-900/10">Trainee ID</th>
+                                            <th className="p-2 font-bold text-warning text-left min-w-[140px] bg-orange-50/50 dark:bg-orange-900/10 border-r-2 border-orange-300 dark:border-orange-600">Enrolment ID</th>
                                         </>
                                     )}
                                     {Array.from({ length: displayColCount }, (_, i) => (
-                                        <th key={i} className={`p-2 font-bold text-left text-xs ${SSG_USED_COLS.has(i) ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10' : 'text-gray-500 dark:text-gray-400'}`}>
+                                        <th key={i} className={`p-2 font-bold text-left text-xs ${SSG_USED_COLS.has(i) ? 'text-primary bg-blue-50/50 dark:bg-blue-900/10' : 'text-muted'}`}>
                                             {ALL_COURSE_RUNS_HEADERS[i] || `Col ${i}`}
                                         </th>
                                     ))}
@@ -341,9 +341,9 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
 
                                     return (
                                         <tr key={idx} className="border-b dark:border-gray-700 hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-                                            <td className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 p-1 text-center">
+                                            <td className="sticky left-0 z-10 bg-surface-elevated p-1 text-center">
                                                 <div className="flex items-center gap-1">
-                                                    <span className="text-gray-400 text-xs w-5">{idx + 1}</span>
+                                                    <span className="text-muted text-xs w-5">{idx + 1}</span>
                                                     <button
                                                         onClick={() => removeRow(idx)}
                                                         className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs px-1"
@@ -369,14 +369,14 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                                 </select>
                                             </td>
                                             <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
-                                                <input type="date" value={row.assessmentDate} onChange={(e) => updateRow(idx, 'assessmentDate', e.target.value)} className={`${cellInputClasses} ${dateChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
-                                                <div className={`text-[10px] mt-0.5 ${!existingDate ? 'text-red-400 italic' : dateChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                <input type="date" value={row.assessmentDate} onChange={(e) => updateRow(idx, 'assessmentDate', e.target.value)} className={`${cellInputClasses} ${dateChanged ? 'border-yellow-400 bg-warning-bg' : ''}`} disabled={isSubmitting} />
+                                                <div className={`text-[10px] mt-0.5 ${!existingDate ? 'text-red-400 italic' : dateChanged ? 'text-warning' : 'text-muted'}`}>
                                                     {existingDate ? `was: ${formatDateDisplay(existingDate)}` : 'existing cell is empty'}
                                                 </div>
                                             </td>
                                             <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10 border-r-2 border-blue-300 dark:border-blue-600">
-                                                <input type="text" value={row.skillCode} onChange={(e) => updateRow(idx, 'skillCode', e.target.value)} className={`${cellInputClasses} ${skillChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} placeholder={row.courseType === 'CASL' ? 'not required' : ''} />
-                                                <div className={`text-[10px] mt-0.5 ${row.courseType === 'CASL' && !existingSkill ? 'text-gray-400' : !existingSkill ? 'text-red-400 italic' : skillChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                <input type="text" value={row.skillCode} onChange={(e) => updateRow(idx, 'skillCode', e.target.value)} className={`${cellInputClasses} ${skillChanged ? 'border-yellow-400 bg-warning-bg' : ''}`} disabled={isSubmitting} placeholder={row.courseType === 'CASL' ? 'not required' : ''} />
+                                                <div className={`text-[10px] mt-0.5 ${row.courseType === 'CASL' && !existingSkill ? 'text-muted' : !existingSkill ? 'text-red-400 italic' : skillChanged ? 'text-warning' : 'text-muted'}`}>
                                                     {existingSkill ? `was: ${existingSkill}`
                                                         : row.courseType === 'CASL' ? 'CASL — no skill code'
                                                         : 'existing cell is empty'}
@@ -397,8 +397,8 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                                     const changed = current !== original;
                                                     return (
                                                         <td key={field} className={`p-1 bg-orange-50/30 dark:bg-orange-900/10 ${isLast ? 'border-r-2 border-orange-300 dark:border-orange-600' : ''}`}>
-                                                            <input type="text" value={current} onChange={(e) => updateRow(idx, field, e.target.value)} className={`${cellInputClasses} ${changed ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
-                                                            <div className={`text-[10px] mt-0.5 ${!original ? 'text-red-400 italic' : changed ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                            <input type="text" value={current} onChange={(e) => updateRow(idx, field, e.target.value)} className={`${cellInputClasses} ${changed ? 'border-yellow-400 bg-warning-bg' : ''}`} disabled={isSubmitting} />
+                                                            <div className={`text-[10px] mt-0.5 ${!original ? 'text-red-400 italic' : changed ? 'text-warning' : 'text-muted'}`}>
                                                                 {original ? `was: ${original}` : 'existing cell is empty'}
                                                             </div>
                                                         </td>
@@ -407,8 +407,8 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                             })()}
                                             {/* All columns from the sheet */}
                                             {Array.from({ length: displayColCount }, (_, i) => (
-                                                <td key={i} className={`p-2 text-xs ${SSG_USED_COLS.has(i) ? 'bg-blue-50/30 dark:bg-blue-900/10 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                    {row.rawCols[i] || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                                                <td key={i} className={`p-2 text-xs ${SSG_USED_COLS.has(i) ? 'bg-blue-50/30 dark:bg-blue-900/10 font-medium' : 'text-muted'}`}>
+                                                    {row.rawCols[i] || <span className="text-muted">—</span>}
                                                 </td>
                                             ))}
                                         </tr>
@@ -425,20 +425,20 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                 <Card className="p-6 mb-6">
                     {summary && (
                         <div className="flex gap-4 mb-4">
-                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                            <span className="text-sm font-bold text-on-surface-secondary">
                                 Total: {summary.total}
                             </span>
-                            <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                            <span className="text-sm font-bold text-success">
                                 Success: {summary.success}
                             </span>
-                            <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                            <span className="text-sm font-bold text-danger">
                                 Errors: {summary.error}
                             </span>
                         </div>
                     )}
 
                     {isSubmitting && (
-                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded text-sm text-blue-700 dark:text-blue-300">
+                        <div className="mb-4 p-3 bg-info-bg rounded text-sm text-primary">
                             Processing {rows.length} assessments... This may take a while (2s delay between SSG calls).
                         </div>
                     )}
@@ -447,43 +447,43 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b dark:border-gray-700">
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">#</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Enrolment ID</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Trainee</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Status</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Ref #</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Date</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Error / Warning</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">#</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">Enrolment ID</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">Trainee</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">Status</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">Assessment Ref #</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">Assessment Date</th>
+                                    <th className="text-left p-2 font-bold text-on-surface-secondary">Error / Warning</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {results.map((r, idx) => (
-                                    <tr key={idx} className={`border-b dark:border-gray-700 ${r.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : r.status === 'success' ? 'bg-green-50 dark:bg-green-900/10' : ''}`}>
-                                        <td className="p-2 text-gray-500">{idx + 1}</td>
+                                    <tr key={idx} className={`border-b dark:border-gray-700 ${r.status === 'error' ? 'bg-danger-bg' : r.status === 'success' ? 'bg-success-bg' : ''}`}>
+                                        <td className="p-2 text-muted">{idx + 1}</td>
                                         <td className="p-2 font-mono text-xs">{r.enrolmentId}</td>
                                         <td className="p-2">{r.traineeFullName}</td>
                                         <td className="p-2">
-                                            {r.status === 'success' && <span className="text-green-600 dark:text-green-400 font-bold">Success</span>}
-                                            {r.status === 'error' && <span className="text-red-600 dark:text-red-400 font-bold">Error</span>}
-                                            {r.status === 'pending' && <span className="text-gray-400 italic">Pending...</span>}
+                                            {r.status === 'success' && <span className="text-success font-bold">Success</span>}
+                                            {r.status === 'error' && <span className="text-danger font-bold">Error</span>}
+                                            {r.status === 'pending' && <span className="text-muted italic">Pending...</span>}
                                         </td>
                                         <td className="p-2 font-mono text-xs">{r.assessmentReferenceNumber || '-'}</td>
                                         <td className="p-2 text-xs">
                                             <div>{r.assessmentDate ? formatDateDisplay(r.assessmentDate) : '-'}</div>
                                             {r.createdOn && (
-                                                <div className="text-[10px] text-gray-400" title="When SSG created/updated this assessment record">
+                                                <div className="text-[10px] text-muted" title="When SSG created/updated this assessment record">
                                                     SSG record: {r.createdOn}{r.updatedOn ? ` (updated ${r.updatedOn})` : ''}
                                                 </div>
                                             )}
                                         </td>
                                         <td className="p-2 text-xs">
-                                            {r.error && <span className="text-red-600 dark:text-red-400">{r.error}</span>}
+                                            {r.error && <span className="text-danger">{r.error}</span>}
                                             {r.error && /TGS-?425/i.test(r.error) && (
-                                                <span className="text-red-600 dark:text-red-400 block mt-0.5">
+                                                <span className="text-danger block mt-0.5">
                                                     <strong>Submit one assessment for this course directly in SSG TPGateway</strong> — that fixes this automatically. Then retry.
                                                 </span>
                                             )}
-                                            {r.paymentWarning && <span className="text-amber-600 dark:text-amber-400 block mt-0.5">⚠ {r.paymentWarning}</span>}
+                                            {r.paymentWarning && <span className="text-warning block mt-0.5">⚠ {r.paymentWarning}</span>}
                                         </td>
                                     </tr>
                                 ))}

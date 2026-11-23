@@ -279,14 +279,14 @@ export default function RunAutomationActionPanel({
               type={showWebhook ? 'text' : 'password'}
               value={webhookDraft}
               onChange={(e) => setWebhookDraft(e.target.value)}
-              className="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500"
+              className="block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white"
               placeholder="https://n8n.../webhook/..."
               disabled={savingWebhook}
             />
             <button
               type="button"
               onClick={() => setShowWebhook((v) => !v)}
-              className="p-2 rounded-md border border-gray-300 dark:border-gray-600 text-on-surface-secondary hover:text-on-surface"
+              className="p-2 rounded-md border border-strong text-on-surface-secondary hover:text-on-surface"
               title={showWebhook ? 'Hide' : 'Show'}
             >
               <Icon name={showWebhook ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
@@ -301,7 +301,7 @@ export default function RunAutomationActionPanel({
                   setToast({ variant: 'error', message: 'Copy failed.' });
                 }
               }}
-              className="p-2 rounded-md border border-gray-300 dark:border-gray-600 text-on-surface-secondary hover:text-on-surface"
+              className="p-2 rounded-md border border-strong text-on-surface-secondary hover:text-on-surface"
               title="Copy"
             >
               <Icon name={IconName.FileText} className="w-4 h-4" />

@@ -52,9 +52,9 @@ const POST_GUIDE_NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }
 ];
 
 
-const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
-const inactiveIconClass = 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white';
-const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
+const inactiveClass = 'text-on-surface hover:bg-surface-hover';
+const inactiveIconClass = 'text-on-surface-secondary group-hover:text-on-surface';
+const subItemClass = 'text-muted hover:bg-surface-hover hover:text-on-surface';
 
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed = false }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
@@ -114,7 +114,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               onClick={(e) => { e.preventDefault(); navigateTo(page); }}
               className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
                 trainerPage === page
-                  ? 'bg-primary/10 text-primary'
+                  ? 'nav-item-active'
                   : inactiveClass
               }`}
             >
@@ -136,7 +136,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               onClick={(e) => { e.preventDefault(); navigateTo(page); }}
               className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
                 trainerPage === page
-                  ? 'bg-primary/10 text-primary'
+                  ? 'nav-item-active'
                   : inactiveClass
               }`}
             >
@@ -179,20 +179,20 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                       name={IconName.ChevronDown}
                       className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                         trainerGuidesOpen ? 'rotate-0' : '-rotate-90'
-                      } ${guidesActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+                      } ${guidesActive ? 'text-primary' : 'text-muted'}`}
                     />
                   )}
                 </button>
 
                 {!collapsed && trainerGuidesOpen && (
-                  <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                  <div className="ml-5 pl-3 border-l border-default space-y-0.5">
                     {TRAINER_GUIDE_ITEMS.map(({ page, label, icon }) => (
                       <a
                         key={page}
                         href="#"
                         onClick={(e) => { e.preventDefault(); navigateTo(page); }}
                         className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${
-                          trainerPage === page ? 'bg-primary/10 text-primary' : subItemClass
+                          trainerPage === page ? 'nav-item-active' : subItemClass
                         }`}
                       >
                         <Icon
@@ -200,7 +200,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                           className={`w-4 h-4 flex-shrink-0 transition-colors ${
                             trainerPage === page
                               ? 'text-primary'
-                              : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                              : 'text-on-surface-secondary group-hover:text-on-surface'
                           }`}
                         />
                         <span className="truncate">{label}</span>
@@ -233,7 +233,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.EdTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -248,12 +248,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 edToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.EdTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.EdTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && edToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {ED_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -262,9 +262,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -278,7 +278,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.ProjectMgtTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -293,12 +293,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 projectMgtOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.ProjectMgtTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.ProjectMgtTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && projectMgtOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {PROJECT_MGT_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -307,9 +307,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -323,7 +323,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.ProblemSolvingTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -338,12 +338,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 problemSolvingOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.ProblemSolvingTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.ProblemSolvingTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && problemSolvingOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {PROBLEM_SOLVING_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -352,9 +352,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -368,7 +368,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.CyberSecurityTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -383,12 +383,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 cyberSecurityOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.CyberSecurityTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.CyberSecurityTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && cyberSecurityOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {CYBER_SECURITY_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -397,9 +397,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -413,7 +413,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.NetworkingTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -428,12 +428,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 networkingToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.NetworkingTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.NetworkingTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && networkingToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {NETWORKING_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -442,9 +442,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -458,7 +458,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.FinanceTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -473,12 +473,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 financeToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.FinanceTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.FinanceTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && financeToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {FINANCE_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -487,9 +487,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -503,7 +503,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.HRTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -518,12 +518,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 hrToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.HRTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.HRTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && hrToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {HR_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -532,9 +532,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -548,7 +548,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.DataAnalyticsTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -563,12 +563,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 dataAnalyticsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.DataAnalyticsTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.DataAnalyticsTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && dataAnalyticsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {DATA_ANALYTICS_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -577,9 +577,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -593,7 +593,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.MLTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -608,12 +608,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 mlToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.MLTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.MLTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && mlToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {ML_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -622,9 +622,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -638,7 +638,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.StatTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -653,12 +653,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 statToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.StatTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.StatTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && statToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {STAT_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -667,9 +667,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -683,7 +683,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.DoeTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -698,12 +698,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 doeToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.DoeTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.DoeTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && doeToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {DOE_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -712,9 +712,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -728,7 +728,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.SpcTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -743,12 +743,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 spcToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.SpcTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.SpcTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && spcToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {SPC_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -757,9 +757,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -773,7 +773,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.SustainabilityTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -788,12 +788,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 sustainabilityToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.SustainabilityTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.SustainabilityTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && sustainabilityToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {SUSTAINABILITY_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -802,9 +802,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -818,7 +818,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.K8sTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -833,12 +833,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 k8sToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.K8sTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.K8sTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && k8sToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {K8S_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -847,9 +847,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -863,7 +863,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.BlockchainTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -878,12 +878,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 blockchainToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.BlockchainTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.BlockchainTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && blockchainToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {BLOCKCHAIN_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -892,9 +892,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -908,7 +908,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.QuantumTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -923,12 +923,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 quantumToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.QuantumTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.QuantumTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && quantumToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {QUANTUM_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -937,9 +937,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -953,7 +953,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.DesignTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -968,12 +968,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 designToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.DesignTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.DesignTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && designToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {DESIGN_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -982,9 +982,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>
@@ -998,7 +998,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.GenAIAuthoring
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -1013,12 +1013,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 genAiOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.GenAIAuthoring ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.GenAIAuthoring ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && genAiOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {GENAI_LINK_GROUPS.map(({ category, items }) => (
                 <div key={category}>
                   <button
@@ -1027,7 +1027,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   >
                     <Icon
                       name={IconName.ChevronDown}
-                      className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-gray-400 dark:text-gray-500 ${
+                      className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-muted ${
                         genAiSubOpen[category] ? 'rotate-0' : '-rotate-90'
                       }`}
                     />
@@ -1041,9 +1041,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                       rel="noopener noreferrer"
                       className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                     >
-                      <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                      <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                       <span className="truncate">{label}</span>
-                      <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                     </a>
                   ))}
                 </div>
@@ -1059,7 +1059,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.AgenticAITools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -1074,12 +1074,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 agenticAiOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.AgenticAITools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.AgenticAITools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && agenticAiOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {AGENTIC_AI_GROUPS.map(({ category, items }) => (
                 <div key={category}>
                   <button
@@ -1088,7 +1088,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   >
                     <Icon
                       name={IconName.ChevronDown}
-                      className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-gray-400 dark:text-gray-500 ${
+                      className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-muted ${
                         agenticAiSubOpen[category] ? 'rotate-0' : '-rotate-90'
                       }`}
                     />
@@ -1102,9 +1102,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                       rel="noopener noreferrer"
                       className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                     >
-                      <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                      <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                       <span className="truncate">{label}</span>
-                      <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                     </a>
                   ))}
                 </div>
@@ -1120,7 +1120,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
               trainerPage === TrainerPage.VirtualTools
-                ? 'bg-primary/10 text-primary'
+                ? 'nav-item-active'
                 : inactiveClass
             }`}
           >
@@ -1135,12 +1135,12 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                 virtualToolsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.VirtualTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+              } ${trainerPage === TrainerPage.VirtualTools ? 'text-primary' : 'text-muted'}`}
             />}
           </button>
 
           {!collapsed && virtualToolsOpen && (
-            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+            <div className="ml-5 pl-3 border-l border-default space-y-0.5">
               {VIRTUAL_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
@@ -1149,9 +1149,9 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                   rel="noopener noreferrer"
                   className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
                 >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-muted group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>

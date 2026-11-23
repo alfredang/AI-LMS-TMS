@@ -22,7 +22,7 @@ const StarIcon: React.FC<{ className?: string; filled?: boolean }> = ({ classNam
 );
 
 const PreviewField: React.FC<{ field: FeedbackFormField }> = ({ field }) => {
-  const base = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm';
+  const base = 'w-full px-3 py-2 border border-strong rounded-lg dark:bg-gray-700 dark:text-white text-sm';
   const sample: Record<NonNullable<FeedbackFormField['autofill']>, string> = {
     course_title: 'Sample Course Title',
     course_code: 'TGS-XXXXXXX',
@@ -32,20 +32,20 @@ const PreviewField: React.FC<{ field: FeedbackFormField }> = ({ field }) => {
   const placeholder = field.autofill ? sample[field.autofill] : '';
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {field.label}{field.required && <span className="text-red-500"> *</span>}
+      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+        {field.label}{field.required && <span className="text-danger"> *</span>}
       </label>
       {field.type === 'rating1to5' ? (
         <div className="mt-3">
           <div className="flex flex-nowrap items-center justify-between sm:justify-start sm:gap-12">
             {[1, 2, 3, 4, 5].map(n => (
               <div key={n} className="flex flex-col items-center gap-1 flex-shrink-0">
-                <StarIcon className="w-9 h-9 sm:w-11 sm:h-11 text-gray-300" />
-                <span className="text-xs font-medium text-gray-500">{n}</span>
+                <StarIcon className="w-9 h-9 sm:w-11 sm:h-11 text-muted" />
+                <span className="text-xs font-medium text-muted">{n}</span>
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">1 = Poor, 5 = Best</p>
+          <p className="text-xs text-muted mt-2">1 = Poor, 5 = Best</p>
         </div>
       ) : field.type === 'textarea' ? (
         <textarea className={base} rows={3} disabled placeholder={placeholder} />
@@ -54,7 +54,7 @@ const PreviewField: React.FC<{ field: FeedbackFormField }> = ({ field }) => {
       ) : (
         <input
           type={field.type === 'email' ? 'email' : field.type === 'date' ? 'date' : 'text'}
-          className={`${base} ${field.readonly ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
+          className={`${base} ${field.readonly ? 'bg-surface-elevated' : ''}`}
           disabled
           defaultValue={field.type === 'date' && field.autofill ? sample[field.autofill] : ''}
           placeholder={placeholder}
@@ -171,12 +171,12 @@ export const FeedbackFormBuilder: React.FC = () => {
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-2xl font-bold mb-2 dark:text-white">Feedback Form Builder</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted mb-4">
               Customize the in-app learner feedback form. Fields with autofill resolve from the class context.
             </p>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Form Title</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Form Title</label>
             <input
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-strong rounded-lg dark:bg-gray-700 dark:text-white"
               value={template.title}
               onChange={e => setTemplate(prev => prev && { ...prev, title: e.target.value })}
             />
@@ -187,7 +187,7 @@ export const FeedbackFormBuilder: React.FC = () => {
             <Button onClick={() => setShowPreview(p => !p)} variant="outline">{showPreview ? 'Hide Preview' : 'Show Preview'}</Button>
           </div>
         </div>
-        {status && <p className="mt-3 text-sm text-blue-600">{status}</p>}
+        {status && <p className="mt-3 text-sm text-primary">{status}</p>}
       </Card>
 
       {template.sections.map((section, sIdx) => {
@@ -196,32 +196,32 @@ export const FeedbackFormBuilder: React.FC = () => {
           <Card key={section.id} className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <input
-                className="flex-1 text-lg font-semibold px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                className="flex-1 text-lg font-semibold px-3 py-2 border border-strong rounded-lg dark:bg-gray-700 dark:text-white"
                 value={section.title}
                 onChange={e => updateSection(section.id, { title: e.target.value })}
               />
-              <button onClick={() => moveSection(sIdx, -1)} className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600" aria-label="Move section up">↑</button>
-              <button onClick={() => moveSection(sIdx, 1)} className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600" aria-label="Move section down">↓</button>
-              <button onClick={() => removeSection(section.id)} className="p-2 text-gray-500 hover:text-red-600" aria-label="Remove section">
+              <button onClick={() => moveSection(sIdx, -1)} className="px-2 py-1 text-sm text-muted hover:text-blue-600" aria-label="Move section up">↑</button>
+              <button onClick={() => moveSection(sIdx, 1)} className="px-2 py-1 text-sm text-muted hover:text-blue-600" aria-label="Move section down">↓</button>
+              <button onClick={() => removeSection(section.id)} className="p-2 text-muted hover:text-red-600" aria-label="Remove section">
                 <Icon name={IconName.Delete} className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3">
               {section.fields.map((field, fIdx) => (
-                <div key={field.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                <div key={field.id} className="border border-default rounded-lg p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                   <div className="md:col-span-5">
-                    <label className="block text-xs text-gray-500 mb-1">Label</label>
+                    <label className="block text-xs text-muted mb-1">Label</label>
                     <input
-                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
+                      className="w-full px-2 py-1.5 border border-strong rounded dark:bg-gray-700 dark:text-white text-sm"
                       value={field.label}
                       onChange={e => fm.update(field.id, { label: e.target.value })}
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">Type</label>
+                    <label className="block text-xs text-muted mb-1">Type</label>
                     <select
-                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
+                      className="w-full px-2 py-1.5 border border-strong rounded dark:bg-gray-700 dark:text-white text-sm"
                       value={field.type}
                       onChange={e => fm.update(field.id, { type: e.target.value as FeedbackFormField['type'] })}
                     >
@@ -229,9 +229,9 @@ export const FeedbackFormBuilder: React.FC = () => {
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">Autofill</label>
+                    <label className="block text-xs text-muted mb-1">Autofill</label>
                     <select
-                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
+                      className="w-full px-2 py-1.5 border border-strong rounded dark:bg-gray-700 dark:text-white text-sm"
                       value={field.autofill || ''}
                       onChange={e => fm.update(field.id, { autofill: (e.target.value || null) as any })}
                     >
@@ -239,7 +239,7 @@ export const FeedbackFormBuilder: React.FC = () => {
                     </select>
                   </div>
                   <div className="md:col-span-1 flex items-center pt-4">
-                    <label className="flex items-center text-xs text-gray-500 gap-1">
+                    <label className="flex items-center text-xs text-muted gap-1">
                       <input
                         type="checkbox"
                         checked={!!field.required}
@@ -249,17 +249,17 @@ export const FeedbackFormBuilder: React.FC = () => {
                     </label>
                   </div>
                   <div className="md:col-span-2 flex gap-1 justify-end">
-                    <button onClick={() => fm.move(fIdx, -1)} className="px-2 py-0.5 text-sm text-gray-500 hover:text-blue-600" aria-label="Move up">↑</button>
-                    <button onClick={() => fm.move(fIdx, 1)} className="px-2 py-0.5 text-sm text-gray-500 hover:text-blue-600" aria-label="Move down">↓</button>
-                    <button onClick={() => fm.remove(field.id)} className="p-1 text-gray-500 hover:text-red-600" aria-label="Remove">
+                    <button onClick={() => fm.move(fIdx, -1)} className="px-2 py-0.5 text-sm text-muted hover:text-blue-600" aria-label="Move up">↑</button>
+                    <button onClick={() => fm.move(fIdx, 1)} className="px-2 py-0.5 text-sm text-muted hover:text-blue-600" aria-label="Move down">↓</button>
+                    <button onClick={() => fm.remove(field.id)} className="p-1 text-muted hover:text-red-600" aria-label="Remove">
                       <Icon name={IconName.Delete} className="w-4 h-4" />
                     </button>
                   </div>
                   {field.type === 'select' && (
                     <div className="md:col-span-12">
-                      <label className="block text-xs text-gray-500 mb-1">Options (comma separated)</label>
+                      <label className="block text-xs text-muted mb-1">Options (comma separated)</label>
                       <input
-                        className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
+                        className="w-full px-2 py-1.5 border border-strong rounded dark:bg-gray-700 dark:text-white text-sm"
                         value={(field.options || []).join(', ')}
                         onChange={e => fm.update(field.id, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
                       />
@@ -282,15 +282,15 @@ export const FeedbackFormBuilder: React.FC = () => {
           <Card className="p-6">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-lg font-bold dark:text-white">Live Preview</h3>
-              <span className="text-xs text-gray-500">As the learner sees it</span>
+              <span className="text-xs text-muted">As the learner sees it</span>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{template.title}</p>
+            <p className="text-sm text-muted mb-4">{template.title}</p>
             <div className="space-y-5">
               {template.sections.map(section => (
                 <div key={section.id} className="space-y-3">
-                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 border-b pb-1">{section.title}</h4>
+                  <h4 className="text-base font-semibold text-on-surface border-b pb-1">{section.title}</h4>
                   {section.fields.map(f => <PreviewField key={f.id} field={f} />)}
-                  {section.fields.length === 0 && <p className="text-xs text-gray-400">No fields in this section.</p>}
+                  {section.fields.length === 0 && <p className="text-xs text-muted">No fields in this section.</p>}
                 </div>
               ))}
               <button type="button" disabled className="w-full bg-blue-600 text-white font-medium py-2.5 rounded-lg opacity-70">Submit Feedback</button>

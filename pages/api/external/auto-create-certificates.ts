@@ -1,4 +1,6 @@
 import { isServiceRequest } from '@lib/auth/serviceKey';
+import { classMemberSql } from '../../../lib/enrolment/classMembership';
+import { ensureClassMembershipTables } from '../../../lib/enrolment/classMembershipTables';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
@@ -118,6 +120,7 @@ async function _runAutomationInner(targetDate?: string) {
         // 1. Find Course Runs that ended within the last 7 days AND still have
         //    confirmed learners without a certificate.
         //    This self-healing query means already-processed runs are automatically skipped.
+        await ensureClassMembershipTables();
         const query = targetDate
             ? `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
                       TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
@@ -128,7 +131,7 @@ async function _runAutomationInner(targetDate?: string) {
                  AND EXISTS (
                      SELECT 1 FROM enrollment e
                      WHERE e.course_run_id = cr.id
-                       AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+                       AND ${classMemberSql('e')}
                        AND (e.certificate IS NULL OR e.certificate = '')
                  )`
             : `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
@@ -141,7 +144,7 @@ async function _runAutomationInner(targetDate?: string) {
                  AND EXISTS (
                      SELECT 1 FROM enrollment e
                      WHERE e.course_run_id = cr.id
-                       AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+                       AND ${classMemberSql('e')}
                        AND (e.certificate IS NULL OR e.certificate = '')
                  )`;
         
@@ -200,7 +203,7 @@ async function _runAutomationInner(targetDate?: string) {
                               AND EXISTS (SELECT 1 FROM course_attendance ca2 WHERE ca2.session_id = course_session.id)
                         )
                         WHERE e.course_run_id = $1
-                          AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+                          AND ${classMemberSql('e')}
                           AND (e.certificate IS NULL OR e.certificate = '')
                         GROUP BY e.id, e.nric, au.full_name, au.email, e.email
                     `, [run.db_uuid]);

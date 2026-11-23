@@ -112,6 +112,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                s.sponsorship_type,
                r.raw_data #>> '{enrolment,trainee,sponsorshipType}',
                e.course_sponsorship::text, '') ILIKE '%employ%'
+         -- A cancelled enrolment must never become a billable row: promoting
+         -- it would let Generate Invoice bill the employer for a learner SSG
+         -- has already cancelled.
+         AND COALESCE(s.enrolment_status, e.enrolment_status::text, r.status, '') NOT ILIKE 'cancel%'
          AND NOT EXISTS (
            SELECT 1 FROM public.company_application ca
            WHERE ca.enrolment_id IS NOT NULL
@@ -125,7 +129,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const eligibleIds = new Set(eligible.map((r: any) => String(r.id)));
     const skipped = enrolmentIds
       .filter((id) => !eligibleIds.has(String(id)))
-      .map((id) => ({ id, reason: 'Not eligible (not employer-sponsored, or already a Company Application).' }));
+      .map((id) => ({ id, reason: 'Not eligible (not employer-sponsored, cancelled in SSG, or already a Company Application).' }));
 
     const createdIds: string[] = [];
     const details: Array<{ id: string; enrolmentId: string; trainee: string }> = [];

@@ -68,7 +68,7 @@ const HomePageChatbot: React.FC<HomePageChatbotProps> = ({ courses }) => {
         <div className="fixed bottom-6 right-6 z-50">
             {isOpen && (
                 <div className="w-96 h-[60vh] max-h-[700px] bg-surface shadow-2xl rounded-xl flex flex-col transform transition-all duration-300 ease-in-out origin-bottom-right scale-100 opacity-100 dark:bg-gray-800 dark:border dark:border-gray-700">
-                    <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center p-4 border-b border-default">
                         <h3 className="text-xl font-bold text-primary dark:text-blue-400">AI Course Advisor</h3>
                         <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)} className="!p-2 rounded-full dark:text-gray-400 dark:hover:bg-gray-700">
                             <Icon name={IconName.Close} className="w-6 h-6" />
@@ -86,7 +86,7 @@ const HomePageChatbot: React.FC<HomePageChatbotProps> = ({ courses }) => {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="p-4 border-t border-default">
                         <div className="flex items-center space-x-2">
                             <input
                                 type="text"
@@ -94,7 +94,7 @@ const HomePageChatbot: React.FC<HomePageChatbotProps> = ({ courses }) => {
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
                                 placeholder="Ask about courses..."
-                                className="flex-1 px-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-full placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                                className="flex-1 px-4 py-2 text-on-surface bg-surface border border-strong rounded-full placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 disabled={isLoading}
                             />
                             <Button onClick={handleSend} disabled={isLoading} className="rounded-full !p-3">

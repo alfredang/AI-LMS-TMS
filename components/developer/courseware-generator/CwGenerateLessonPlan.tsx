@@ -16,9 +16,9 @@ interface ScheduleData {
 const Expander: React.FC<{ title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({ title, defaultOpen = false, children }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="border border-default rounded-lg overflow-hidden">
       <button type="button" onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface bg-surface-elevated hover:bg-surface-hover transition-colors">
         <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
@@ -100,7 +100,7 @@ const CwGenerateLessonPlan: React.FC = () => {
       )}
 
       {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+        <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           {error}
         </div>
       )}
@@ -121,7 +121,7 @@ const CwGenerateLessonPlan: React.FC = () => {
       {/* Schedule summary + day accordions (matching Streamlit) */}
       {!loading && schedule && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted">
             {schedule.num_days} day(s) | {schedule.per_topic_mins} mins per topic | {schedule.instructional_hours} hrs instruction | {schedule.assessment_hours} hrs assessment
           </p>
 
@@ -130,20 +130,20 @@ const CwGenerateLessonPlan: React.FC = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-800">
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase border-b dark:border-gray-700">Timing</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase border-b dark:border-gray-700">Duration</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase border-b dark:border-gray-700">Description</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase border-b dark:border-gray-700">Methods</th>
+                    <tr className="bg-surface-elevated">
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-muted uppercase border-b dark:border-gray-700">Timing</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-muted uppercase border-b dark:border-gray-700">Duration</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-muted uppercase border-b dark:border-gray-700">Description</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-muted uppercase border-b dark:border-gray-700">Methods</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(slots as ScheduleSlot[]).map((slot, i) => (
-                      <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{slot.timing}</td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{slot.duration}</td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{slot.description}</td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{slot.methods}</td>
+                      <tr key={i} className="border-b border-default">
+                        <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{slot.timing}</td>
+                        <td className="px-3 py-2 text-on-surface-secondary">{slot.duration}</td>
+                        <td className="px-3 py-2 text-on-surface-secondary">{slot.description}</td>
+                        <td className="px-3 py-2 text-on-surface-secondary">{slot.methods}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -26,7 +26,7 @@ interface TabsContentProps {
 
 export const Tabs: React.FC<TabsProps> = ({ value, onValueChange, children, className = '' }) => {
   return (
-    <div className={`tabs ${className}`} data-value={value}>
+    <div className={`tabs-root ${className}`} data-value={value}>
       {React.Children.map(children, child => {
         if (React.isValidElement(child)) {
           return React.cloneElement(child, { currentValue: value, onValueChange });
@@ -44,7 +44,7 @@ export const TabsList: React.FC<TabsListProps & { currentValue?: string; onValue
   onValueChange 
 }) => {
   return (
-    <div className={`flex space-x-1 rounded-lg bg-gray-100 p-1 ${className}`}>
+    <div className={`tabs ${className}`}>
       {React.Children.map(children, child => {
         if (React.isValidElement(child)) {
           return React.cloneElement(child, { currentValue, onValueChange });
@@ -66,11 +66,7 @@ export const TabsTrigger: React.FC<TabsTriggerProps & { currentValue?: string; o
   
   return (
     <button
-      className={`px-3 py-2 text-sm font-medium transition-colors rounded-md ${
-        isActive 
-          ? 'bg-white text-gray-900 shadow-sm' 
-          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-      } ${className}`}
+      className={`tab ${isActive ? 'tab-active' : ''} ${className}`}
       onClick={() => onValueChange?.(value)}
     >
       {children}

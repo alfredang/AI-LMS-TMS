@@ -14,6 +14,8 @@ interface CourseDetailRow {
   assessment_hours: number;
   lesson_plan_url: string;
   activities_url: string;
+  lab_simulator_url: string | null;
+  practice_exam_url: string | null;
   learner_guide_url: string;
   slides_url: string;
   written_assessment_link: string;
@@ -71,10 +73,21 @@ async function handler(
           cr.course_run_id,
           cr.id AS course_run_uuid,
           cr.digital_attendance_id,
+          -- Trainer(s) of this class: the course_run_trainer junction is canonical;
+          -- the legacy scalar name / assigned_trainer_id is the fallback.
+          COALESCE(
+            (SELECT string_agg(crt.trainer_name, ', ' ORDER BY crt.assigned_at, crt.trainer_name)
+               FROM course_run_trainer crt
+              WHERE crt.course_run_id = cr.id AND crt.trainer_name <> ''),
+            NULLIF(cr.assigned_trainer_name, ''),
+            (SELECT au_t.full_name FROM app_user au_t WHERE au_t.id = cr.assigned_trainer_id)
+          ) AS trainer_names,
           c.training_hours,
           c.assessment_hours,
           c.lesson_plan_url,
           c.activities_url,
+          c.lab_simulator_url,
+          c.practice_exam_url,
           c.learner_guide_url,
           c.slides_url,
           c.written_assessment_link,
@@ -118,10 +131,21 @@ async function handler(
           cr.course_run_id,
           cr.id AS course_run_uuid,
           cr.digital_attendance_id,
+          -- Trainer(s) of this class: the course_run_trainer junction is canonical;
+          -- the legacy scalar name / assigned_trainer_id is the fallback.
+          COALESCE(
+            (SELECT string_agg(crt.trainer_name, ', ' ORDER BY crt.assigned_at, crt.trainer_name)
+               FROM course_run_trainer crt
+              WHERE crt.course_run_id = cr.id AND crt.trainer_name <> ''),
+            NULLIF(cr.assigned_trainer_name, ''),
+            (SELECT au_t.full_name FROM app_user au_t WHERE au_t.id = cr.assigned_trainer_id)
+          ) AS trainer_names,
           c.training_hours,
           c.assessment_hours,
           c.lesson_plan_url,
           c.activities_url,
+          c.lab_simulator_url,
+          c.practice_exam_url,
           c.learner_guide_url,
           c.slides_url,
           c.written_assessment_link,
@@ -214,10 +238,13 @@ async function handler(
         courseRunId: courseDetail.course_run_id,
         courseRunUuid: courseDetail.course_run_uuid,
         digitalAttendanceId: courseDetail.digital_attendance_id,
+        trainerNames: (courseDetail as any).trainer_names || '',
         trainingHours: courseDetail.training_hours,
         assessmentHours: courseDetail.assessment_hours,
         lessonPlanUrl: courseDetail.lesson_plan_url,
         activitiesUrl: courseDetail.activities_url,
+        labSimulatorUrl: courseDetail.lab_simulator_url,
+        practiceExamUrl: courseDetail.practice_exam_url,
         learnerGuideUrl: courseDetail.learner_guide_url,
         slidesUrl: courseDetail.slides_url,
         writtenAssessmentLink: courseDetail.written_assessment_link,

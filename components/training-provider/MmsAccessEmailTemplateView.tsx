@@ -137,14 +137,14 @@ const MmsAccessEmailTemplateView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
+      <div className="border-b border-default pb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
               <Icon name={IconName.Mail} className="w-7 h-7" />
               MMS Class Access Email Template
             </h3>
-            <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-2 max-w-4xl text-sm text-muted">
               Sent by TMS to trainers and learners after an approved C-series class is ready in MMS. This does not change the trainer invitation email.
             </p>
           </div>
@@ -164,20 +164,20 @@ const MmsAccessEmailTemplateView: React.FC = () => {
       </div>
 
       {saveMessage && (
-        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
           {saveMessage.text}
         </div>
       )}
 
       <Card>
         <div className="p-4">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Available Variables</h4>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-2">Available Variables</h4>
+          <p className="text-xs text-muted mb-3">
             ACTION and ROLE automatically change between trainer and learner. FEEDBACK_LINE includes a leading line break and its label, and disappears when no feedback link is available.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {VARIABLES.map(variable => (
-              <code key={variable} className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs">
+              <code key={variable} className="px-2 py-1 bg-info-bg text-primary rounded text-xs">
                 {variable}
               </code>
             ))}
@@ -195,23 +195,23 @@ const MmsAccessEmailTemplateView: React.FC = () => {
           ) : (
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Subject</label>
                 <input
                   type="text"
                   value={subject}
                   maxLength={500}
                   onChange={event => setSubject(event.target.value)}
-                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Body</label>
                 <textarea
                   value={body}
                   maxLength={20000}
                   onChange={event => setBody(event.target.value)}
                   rows={18}
-                  className="block w-full px-4 py-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed resize-y"
+                  className="block w-full px-4 py-3 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed resize-y"
                 />
               </div>
             </div>
@@ -222,24 +222,24 @@ const MmsAccessEmailTemplateView: React.FC = () => {
       <Card>
         <div className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Preview and Test</h4>
-            <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+            <h4 className="text-sm font-semibold text-on-surface-secondary">Preview and Test</h4>
+            <div className="inline-flex rounded-lg border border-strong overflow-hidden">
               {(['learner', 'trainer'] as PreviewRole[]).map(role => (
                 <button
                   key={role}
                   type="button"
                   onClick={() => setPreviewRole(role)}
-                  className={`px-4 py-2 text-sm capitalize ${previewRole === role ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300'}`}
+                  className={`px-4 py-2 text-sm capitalize ${previewRole === role ? 'bg-blue-600 text-white' : 'bg-surface text-on-surface-secondary'}`}
                 >
                   {role}
                 </button>
               ))}
             </div>
           </div>
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
-            <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700">
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Subject: </span>
-              <span className="text-sm text-gray-900 dark:text-white font-medium">{preview.subject}</span>
+          <div className="border border-default rounded-lg bg-surface overflow-hidden">
+            <div className="px-6 py-3 bg-surface-elevated border-b border-default">
+              <span className="text-sm font-medium text-muted">Subject: </span>
+              <span className="text-sm text-on-surface font-medium">{preview.subject}</span>
             </div>
             <div className="px-6 py-5 text-sm max-h-96 overflow-y-auto" dangerouslySetInnerHTML={{ __html: preview.html }} />
           </div>
@@ -249,14 +249,14 @@ const MmsAccessEmailTemplateView: React.FC = () => {
               value={testEmail}
               onChange={event => setTestEmail(event.target.value)}
               placeholder="Enter test email address..."
-              className="flex-1 min-w-64 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 min-w-64 px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Button variant="secondary" onClick={handleSendTest} disabled={isSendingTest || !testEmail.trim()}>
               {isSendingTest ? 'Sending...' : `Send ${previewRole} Test`}
             </Button>
           </div>
           {testMessage && (
-            <div className={`p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+            <div className={`p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
               {testMessage.text}
             </div>
           )}

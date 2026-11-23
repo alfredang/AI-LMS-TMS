@@ -1,12 +1,15 @@
 import { withAuth, type AuthedApiRequest } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { runCalendarMeet } from '../../../lib/calendar/meetLink';
+import { checkMeetLinkAgainstCalendar, meetCode } from '../../../lib/calendar/meetLinkRule';
 
 /**
  * Lets a trainer put in the virtual meeting link for their own class when the
  * calendar sync never produced one (ad-hoc Meet/Zoom/Teams links created by
  * hand). Staff roles may set it on any run; a trainer only on runs they are
- * assigned to.
+ * assigned to. A Google Meet link is accepted only when it is the Meet on the
+ * class's Google Calendar event (lib/calendar/meetLinkRule.ts).
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
@@ -63,6 +66,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             );
             if (owns.rows.length === 0) {
                 return res.status(403).json({ success: false, error: 'You are not assigned to this class' });
+            }
+        }
+
+        // A Google Meet link must be the one on the class's own calendar event
+        // (rule 2026-11-21): learners are invited from that event.
+        if (meetCode(trimmed)) {
+            const check = checkMeetLinkAgainstCalendar(trimmed, await runCalendarMeet(courseRunId));
+            if (!check.ok) {
+                return res.status(409).json({ success: false, error: check.message, calendarLink: check.calendarLink });
             }
         }
 

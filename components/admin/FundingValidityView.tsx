@@ -63,14 +63,14 @@ const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 // itself on hover.
 const validityPill = (renewClass: RenewClass, expired: boolean, enhanced: boolean): { text: string; cls: string; title?: string } => {
   if (renewClass === 'Waiting') {
-    return { text: 'Renewal Pending', cls: 'text-blue-600 dark:text-blue-400', title: 'Renewal submitted — waiting on SSG approval' };
+    return { text: 'Renewal Pending', cls: 'text-primary', title: 'Renewal submitted — waiting on SSG approval' };
   }
   if (renewClass === 'Rejected') {
-    return { text: 'Renewal Rejected', cls: 'text-red-600 dark:text-red-400', title: 'The renewal came back rejected' };
+    return { text: 'Renewal Rejected', cls: 'text-danger', title: 'The renewal came back rejected' };
   }
   const base = expired
-    ? { text: 'Expired', cls: 'text-red-600 dark:text-red-400' }
-    : { text: 'Expiring Soon', cls: 'text-amber-600 dark:text-amber-400' };
+    ? { text: 'Expired', cls: 'text-danger' }
+    : { text: 'Expiring Soon', cls: 'text-warning' };
   if (renewClass === 'ToDo') {
     return { ...base, title: 'Marked "To Renew" — the renewal has not gone to SSG yet.' };
   }
@@ -214,10 +214,10 @@ const FundingValidityView: React.FC = () => {
   // Row 2 — cumulative expiry windows: "in 3 months" includes the 2-month,
   // 1-month and 1-week courses, and so on down the row.
   const expiryWindows = [
-    { key: '3m', label: 'Expiring in 3 Months', end: startOfDay(addMonthsTo(today, 3)), color: 'text-amber-500' },
+    { key: '3m', label: 'Expiring in 3 Months', end: startOfDay(addMonthsTo(today, 3)), color: 'text-warning' },
     { key: '2m', label: 'Expiring in 2 Months', end: startOfDay(addMonthsTo(today, 2)), color: 'text-orange-500' },
-    { key: '1m', label: 'Expiring in 1 Month', end: startOfDay(addMonthsTo(today, 1)), color: 'text-red-500' },
-    { key: '1w', label: 'Expiring in 1 Week', end: startOfDay(addDaysTo(today, 7)), color: 'text-purple-600' },
+    { key: '1m', label: 'Expiring in 1 Month', end: startOfDay(addMonthsTo(today, 1)), color: 'text-danger' },
+    { key: '1w', label: 'Expiring in 1 Week', end: startOfDay(addDaysTo(today, 7)), color: 'text-purple-700 dark:text-purple-300' },
   ].map(window => {
     const inWindow = wsqCourses.filter(course => {
       const validityDate = parseValidityDate(course.fundingValidity);
@@ -267,9 +267,9 @@ const FundingValidityView: React.FC = () => {
 
   const expiryStatusLabel = (validityDate: Date) => {
     const days = Math.round((validityDate.getTime() - today.getTime()) / 86400000);
-    if (days < 0) return { text: `Expired ${-days}d ago`, cls: 'text-red-600 dark:text-red-400' };
-    if (days === 0) return { text: 'Expires today', cls: 'text-red-600 dark:text-red-400' };
-    return { text: `${days}d left`, cls: 'text-amber-600 dark:text-amber-400' };
+    if (days < 0) return { text: `Expired ${-days}d ago`, cls: 'text-danger' };
+    if (days === 0) return { text: 'Expires today', cls: 'text-danger' };
+    return { text: `${days}d left`, cls: 'text-warning' };
   };
 
   // Selection is always scoped to what is on screen: filter first, tick what you
@@ -621,18 +621,18 @@ const FundingValidityView: React.FC = () => {
   if (error) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600 mb-4">Error loading WSQ courses: {error}</p>
+        <p className="text-danger mb-4">Error loading WSQ courses: {error}</p>
       </div>
     );
   }
 
   // Keep both grouped header rows visible while the course rows scroll.
   const stickyTh = enhanced
-    ? "sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 align-middle font-semibold whitespace-nowrap"
-    : "sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-3 py-2";
-  const stickySubTh = "sticky top-6 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 font-semibold whitespace-nowrap";
+    ? "sticky top-0 z-10 bg-surface-elevated border-b border-default align-middle font-semibold whitespace-nowrap"
+    : "sticky top-0 z-10 bg-surface-elevated border-b border-default px-3 py-2";
+  const stickySubTh = "sticky top-6 z-10 bg-surface-elevated border-b border-default font-semibold whitespace-nowrap";
 
-  const inputClass = "w-full px-1.5 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
+  const inputClass = "w-full px-1.5 py-1 text-xs rounded border border-strong bg-surface text-on-surface focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
 
   return (
     <div>
@@ -640,21 +640,21 @@ const FundingValidityView: React.FC = () => {
 
       <div className="grid grid-cols-4 gap-6 mb-6">
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-blue-600">{totalFunded}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Total Funded Courses</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">WSQ + CASL + IBF</p>
+          <p className="text-4xl font-bold text-primary">{totalFunded}</p>
+          <p className="text-on-surface-secondary mt-1">Total Funded Courses</p>
+          <p className="text-xs text-muted mt-0.5">WSQ + CASL + IBF</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-emerald-600">{typeTotals.WSQ}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+          <p className="text-4xl font-bold text-success">{typeTotals.WSQ}</p>
+          <p className="text-on-surface-secondary mt-1">WSQ Courses</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-teal-600">{typeTotals.CASL}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">CASL Courses</p>
+          <p className="text-4xl font-bold text-teal-700 dark:text-teal-300">{typeTotals.CASL}</p>
+          <p className="text-on-surface-secondary mt-1">CASL Courses</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-sky-600">{typeTotals.IBF}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">IBF Courses</p>
+          <p className="text-4xl font-bold text-sky-700 dark:text-sky-300">{typeTotals.IBF}</p>
+          <p className="text-on-surface-secondary mt-1">IBF Courses</p>
         </Card>
       </div>
 
@@ -662,8 +662,8 @@ const FundingValidityView: React.FC = () => {
         {expiryWindows.map(window => (
           <Card key={window.key} className="p-6 text-center">
             <p className={`text-4xl font-bold ${window.color}`}>{window.total}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">{window.label}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-on-surface-secondary mt-1">{window.label}</p>
+            <p className="text-xs text-muted mt-0.5">
               {window.renewed} renewed · {window.total - window.renewed} pending
             </p>
           </Card>
@@ -673,10 +673,10 @@ const FundingValidityView: React.FC = () => {
       <Card className="mb-8 p-6 dark:bg-gray-800 dark:border-gray-700">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Funding Expiry — Next 6 Months</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Courses whose funding validity ends each month, split by renewal status.</p>
+            <h4 className="text-lg font-semibold text-on-surface">Funding Expiry — Next 6 Months</h4>
+            <p className="text-sm text-on-surface-secondary">Courses whose funding validity ends each month, split by renewal status.</p>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-300">
+          <div className="flex items-center gap-4 text-xs text-on-surface-secondary">
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: '#059669' }} />
               Renewed
@@ -698,7 +698,7 @@ const FundingValidityView: React.FC = () => {
                 className="flex-1 flex flex-col items-center justify-end min-w-0"
                 title={`${bucket.label}: ${bucket.total} expiring — ${bucket.renewed} renewed, ${bucket.pending} pending`}
               >
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 tabular-nums">{bucket.total}</span>
+                <span className="text-xs font-semibold text-on-surface-secondary mb-1 tabular-nums">{bucket.total}</span>
                 {bucket.total === 0 ? (
                   <div className="w-full max-w-[56px] h-px bg-gray-300 dark:bg-gray-600" />
                 ) : (
@@ -721,7 +721,7 @@ const FundingValidityView: React.FC = () => {
                     )}
                   </div>
                 )}
-                <span className="mt-2 text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap">{bucket.label}</span>
+                <span className="mt-2 text-[11px] text-on-surface-secondary whitespace-nowrap">{bucket.label}</span>
               </div>
             );
           })}
@@ -729,26 +729,26 @@ const FundingValidityView: React.FC = () => {
       </Card>
 
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="px-6 py-4 border-b border-default">
+          <h4 className="text-lg font-semibold text-on-surface">
             Expiring Within 1 Month — Renewal Application No Missing
-            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-danger-bg text-danger">
               {pendingRenewalCourses.length}
             </span>
           </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-on-surface-secondary">
             Courses whose funding validity ends from today through the next month and whose Renewal Application No is blank or NOT Found. Already-expired courses are excluded. This list is emailed daily by the Funding Renewal Reminder task.
           </p>
         </div>
         {pendingRenewalCourses.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="px-6 py-8 text-center text-muted">
             No courses pending renewal within the next month. 🎉
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-gray-900/40">
-                <tr className="text-left text-gray-600 dark:text-gray-300">
+              <thead className="bg-surface-elevated">
+                <tr className="text-left text-on-surface-secondary">
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
@@ -762,12 +762,12 @@ const FundingValidityView: React.FC = () => {
                   const validityDate = parseValidityDate(course.fundingValidity)!;
                   const status = expiryStatusLabel(validityDate);
                   return (
-                    <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
-                      <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{displayCourseType(course.courseType)}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
-                      <td className="px-3 py-1.5 font-semibold text-red-600 dark:text-red-400 whitespace-nowrap">{course.renewalApplicationNo?.trim() || '—'}</td>
+                    <tr key={course.id} className="border-t border-default">
+                      <td className="px-3 py-1.5 font-medium text-on-surface max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{displayCourseType(course.courseType)}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
+                      <td className="px-3 py-1.5 font-semibold text-danger whitespace-nowrap">{course.renewalApplicationNo?.trim() || '—'}</td>
                       <td className={`px-3 py-1.5 font-semibold whitespace-nowrap ${status.cls}`}>{status.text}</td>
                     </tr>
                   );
@@ -779,26 +779,26 @@ const FundingValidityView: React.FC = () => {
       </Card>
 
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="px-6 py-4 border-b border-default">
+          <h4 className="text-lg font-semibold text-on-surface">
             Expiring Within 3 Months — Renewal Application No Missing
-            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-warning-bg text-warning">
               {pendingRenewal3mCourses.length}
             </span>
           </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-on-surface-secondary">
             Courses expiring from today through the next 3 months whose Renewal Application No is blank or NOT Found. Already-expired courses are excluded. Includes the 1-month list above.
           </p>
         </div>
         {pendingRenewal3mCourses.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="px-6 py-8 text-center text-muted">
             No courses pending renewal within the next 3 months. 🎉
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-gray-900/40">
-                <tr className="text-left text-gray-600 dark:text-gray-300">
+              <thead className="bg-surface-elevated">
+                <tr className="text-left text-on-surface-secondary">
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
@@ -812,12 +812,12 @@ const FundingValidityView: React.FC = () => {
                   const validityDate = parseValidityDate(course.fundingValidity)!;
                   const status = expiryStatusLabel(validityDate);
                   return (
-                    <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
-                      <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{displayCourseType(course.courseType)}</td>
-                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
-                      <td className="px-3 py-1.5 font-semibold text-red-600 dark:text-red-400 whitespace-nowrap">{course.renewalApplicationNo?.trim() || '—'}</td>
+                    <tr key={course.id} className="border-t border-default">
+                      <td className="px-3 py-1.5 font-medium text-on-surface max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{displayCourseType(course.courseType)}</td>
+                      <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
+                      <td className="px-3 py-1.5 font-semibold text-danger whitespace-nowrap">{course.renewalApplicationNo?.trim() || '—'}</td>
                       <td className={`px-3 py-1.5 font-semibold whitespace-nowrap ${status.cls}`}>{status.text}</td>
                     </tr>
                   );
@@ -835,13 +835,13 @@ const FundingValidityView: React.FC = () => {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by course title, ref code or type…"
-            className="w-full pl-4 pr-10 py-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            className="w-full pl-4 pr-10 py-2.5 text-sm rounded-lg border border-strong bg-surface text-on-surface placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
           />
           {search && (
             <button
               onClick={() => setSearch('')}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-lg leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-lg leading-none text-muted hover:text-gray-600 dark:hover:text-gray-200"
             >
               ×
             </button>
@@ -849,11 +849,11 @@ const FundingValidityView: React.FC = () => {
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">Type</label>
             <select
               value={typeFilter}
               onChange={e => setTypeFilter(e.target.value as 'All' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ')}
-              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="px-3 py-2 text-sm rounded-lg border border-strong bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
               <option value="All">All Types</option>
               <option value="WSQ">WSQ</option>
@@ -863,44 +863,44 @@ const FundingValidityView: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date From</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">End Date From</label>
             <input
               type="date"
               value={endDateFrom}
               onChange={e => setEndDateFrom(e.target.value)}
-              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="px-3 py-2 text-sm rounded-lg border border-strong bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date To</label>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">End Date To</label>
             <input
               type="date"
               value={endDateTo}
               onChange={e => setEndDateTo(e.target.value)}
-              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="px-3 py-2 text-sm rounded-lg border border-strong bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
           {filtersActive && (
             <button
               onClick={() => { setSearch(''); setTypeFilter('All'); setEndDateFrom(''); setEndDateTo(''); }}
-              className="px-3 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="px-3 py-2 text-sm font-medium rounded-lg text-on-surface-secondary border border-strong hover:bg-surface-hover"
             >
               Reset Filters
             </button>
           )}
         </div>
         {filtersActive && (
-          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-xs text-on-surface-secondary">
             Showing {visibleCourses.length} of {wsqCourses.length} courses. The Excel download still contains the full list.
           </p>
         )}
       </div>
 
       <Card className="dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
+        <div className="px-6 py-4 border-b border-default flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Course Validity List</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
+            <h4 className="text-lg font-semibold text-on-surface">Course Validity List</h4>
+            <p className="text-sm text-on-surface-secondary">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
           </div>
           <div className="shrink-0 flex items-center gap-2">
             <button
@@ -913,7 +913,7 @@ const FundingValidityView: React.FC = () => {
             <button
               onClick={handleDownloadTemplate}
               disabled={downloadingTemplate || wsqCourses.length === 0}
-              className="px-3 py-1.5 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-medium rounded bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50"
               title={enhanced ? 'Pre-filled template — edit the validity and submit dates, submit number, CAS/ES, Whitelist and Renew columns, then upload it back' : 'Pre-filled template — edit the validity dates, CAS/ES, Whitelist and Renew columns, then upload it back'}
             >
               {downloadingTemplate ? 'Preparing…' : 'Download Template'}
@@ -940,16 +940,16 @@ const FundingValidityView: React.FC = () => {
         </div>
 
         {uploadSummary && (
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+          <div className="px-6 py-4 border-b border-default bg-surface-elevated">
             <div className="flex items-start justify-between gap-4">
               <div className="text-sm">
-                <p className="font-semibold text-gray-900 dark:text-white">
+                <p className="font-semibold text-on-surface">
                   Upload complete — {uploadSummary.updated} updated
                   {uploadSummary.unchanged > 0 && <>, {uploadSummary.unchanged} unchanged</>}
-                  {uploadSummary.failed > 0 && <span className="text-red-600 dark:text-red-400">, {uploadSummary.failed} failed</span>}
+                  {uploadSummary.failed > 0 && <span className="text-danger">, {uploadSummary.failed} failed</span>}
                 </p>
                 {uploadSummary.failed > 0 && (
-                  <ul className="mt-2 space-y-1 text-xs text-red-600 dark:text-red-400 list-disc list-inside">
+                  <ul className="mt-2 space-y-1 text-xs text-danger list-disc list-inside">
                     {uploadSummary.results
                       .filter(r => r.action === 'failed')
                       .slice(0, 20)
@@ -968,7 +968,7 @@ const FundingValidityView: React.FC = () => {
               <button
                 onClick={() => setUploadSummary(null)}
                 aria-label="Dismiss upload summary"
-                className="text-lg leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="text-lg leading-none text-muted hover:text-gray-600 dark:hover:text-gray-200"
               >
                 ×
               </button>
@@ -977,16 +977,16 @@ const FundingValidityView: React.FC = () => {
         )}
 
         {selectedVisible.length > 0 && (
-          <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20 flex flex-wrap items-center gap-3">
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+          <div className="px-6 py-3 border-b border-default bg-info-bg flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-on-surface">
               {selectedVisible.length} selected
             </span>
-            <span className="text-sm text-gray-600 dark:text-gray-300">Set Renew Status to</span>
+            <span className="text-sm text-on-surface-secondary">Set Renew Status to</span>
             <select
               value={bulkStatus}
               onChange={e => setBulkStatus(e.target.value)}
               disabled={!!bulkProgress}
-              className="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+              className="px-2 py-1 text-sm rounded border border-strong bg-surface text-on-surface disabled:opacity-50"
             >
               {statusOptions.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -1002,7 +1002,7 @@ const FundingValidityView: React.FC = () => {
             <button
               onClick={() => setSelectedIds({})}
               disabled={!!bulkProgress}
-              className="px-3 py-1.5 text-sm font-medium rounded text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium rounded text-on-surface-secondary border border-strong hover:bg-surface-hover disabled:opacity-50"
             >
               Clear selection
             </button>
@@ -1014,14 +1014,14 @@ const FundingValidityView: React.FC = () => {
         <div className="overflow-auto max-h-[70vh]">
           <table className={enhanced ? "w-max border-separate border-spacing-0 text-xs [&_th]:border-r [&_td]:border-r [&_th]:border-gray-200 [&_td]:border-gray-200 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700 [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1" : "min-w-full text-xs"}>
             <thead>
-              <tr className={enhanced ? "h-6 text-left text-gray-600 dark:text-gray-300" : "text-left text-gray-600 dark:text-gray-300"}>
+              <tr className={enhanced ? "h-6 text-left text-on-surface-secondary" : "text-left text-on-surface-secondary"}>
                 <th rowSpan={enhanced ? 2 : 1} className={`${stickyTh} w-8`}>
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleAllVisible}
                     disabled={visibleCourses.length === 0}
-                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    className="h-3.5 w-3.5 rounded border-strong text-primary focus:ring-blue-500 disabled:opacity-50"
                     aria-label="Select all courses shown"
                   />
                 </th>
@@ -1063,7 +1063,7 @@ const FundingValidityView: React.FC = () => {
                 </>}
               </tr>
               {enhanced && (
-              <tr className="h-6 text-left text-gray-600 dark:text-gray-300">
+              <tr className="h-6 text-left text-on-surface-secondary">
                 <th scope="col" aria-label="Course Ref Code (New)" className={stickySubTh}>New</th>
                 <th scope="col" aria-label="Course Ref Code (Old)" className={stickySubTh}>Old</th>
                 <th scope="col" aria-label="Validity Start Date" className={stickySubTh}>Start</th>
@@ -1095,7 +1095,7 @@ const FundingValidityView: React.FC = () => {
                 return (
                   <tr
                     key={course.id}
-                    className={`border-t border-gray-200 dark:border-gray-700 ${
+                    className={`border-t border-default ${
                       awaitingSsg
                         ? (expired || expiringSoon ? 'bg-blue-50/70 dark:bg-blue-900/10' : '')
                         : expired
@@ -1110,12 +1110,12 @@ const FundingValidityView: React.FC = () => {
                         type="checkbox"
                         checked={!!selectedIds[course.id]}
                         onChange={() => toggleOne(course.id)}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="h-3.5 w-3.5 rounded border-strong text-primary focus:ring-blue-500"
                         aria-label={`Select ${course.title}`}
                       />
                     </td>
-                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    <td className="px-3 py-1.5 font-medium text-on-surface max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                    <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="text"
@@ -1128,8 +1128,8 @@ const FundingValidityView: React.FC = () => {
                         course.newCourseCode || '—'
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">
+                    <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">{course.courseCode || '—'}</td>
+                    <td className="px-3 py-1.5 text-on-surface-secondary">
                       {isEditing ? (
                         <select
                           value={editState.courseType}
@@ -1143,10 +1143,10 @@ const FundingValidityView: React.FC = () => {
                         displayCourseType(course.courseType)
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">
                       {course.fundingValidityStart ? formatValidityDate(course.fundingValidityStart) : '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="date"
@@ -1177,10 +1177,10 @@ const FundingValidityView: React.FC = () => {
                         const earliestRenewalDate = new Date(validityDate);
                         earliestRenewalDate.setMonth(earliestRenewalDate.getMonth() - 3);
                         const isPast = earliestRenewalDate < new Date();
-                        return <span className={isPast ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}>{earliestRenewalDate.toLocaleDateString('en-GB')}</span>;
+                        return <span className={isPast ? 'text-danger font-semibold' : 'text-on-surface-secondary'}>{earliestRenewalDate.toLocaleDateString('en-GB')}</span>;
                       })() : '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="date"
@@ -1192,7 +1192,7 @@ const FundingValidityView: React.FC = () => {
                         course.actualRenewDate ? formatValidityDate(course.actualRenewDate) : '—'
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    <td className="px-3 py-1.5 text-on-surface-secondary whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="text"
@@ -1204,7 +1204,7 @@ const FundingValidityView: React.FC = () => {
                       ) : (
                         <span
                           className={course.renewalApplicationNo === 'NOT Found'
-                            ? 'font-semibold text-red-600 dark:text-red-400'
+                            ? 'font-semibold text-danger'
                             : undefined}
                         >
                           {course.renewalApplicationNo || '—'}
@@ -1217,7 +1217,7 @@ const FundingValidityView: React.FC = () => {
                         value={renewStatus || ''}
                         disabled={!!renewingIds[course.id]}
                         onChange={(e) => handleRenewStatusChange(course.id, e.target.value)}
-                        className={enhanced ? "w-40 min-w-[10rem] px-1.5 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500" : `${inputClass} w-40`}
+                        className={enhanced ? "w-40 min-w-[10rem] px-1.5 py-0.5 text-xs rounded border border-strong bg-surface text-on-surface focus:ring-1 focus:ring-blue-500 focus:border-blue-500" : `${inputClass} w-40`}
                         aria-label={`Renewal status for ${course.title}`}
                       >
                         {enhanced && !renewStatus && <option value="">Not set</option>}
@@ -1229,7 +1229,7 @@ const FundingValidityView: React.FC = () => {
                     </td>
                     {enhanced && <td className="px-3 py-1.5 text-right whitespace-nowrap">{course.traqomResponseRate != null ? course.traqomResponseRate.toFixed(2) : ''}</td>}
                     {enhanced && <td className="px-3 py-1.5 whitespace-nowrap">{course.traqomQualityRating != null ? course.traqomQualityRating.toFixed(2) : ''}</td>}
-                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                    <td className="px-3 py-1.5 text-right text-on-surface-secondary">
                       {isEditing ? (
                         <input
                           type="number"
@@ -1242,7 +1242,7 @@ const FundingValidityView: React.FC = () => {
                         course.casScore != null ? course.casScore.toFixed(2) : '—'
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                    <td className="px-3 py-1.5 text-right text-on-surface-secondary">
                       {isEditing ? (
                         <input
                           type="number"
@@ -1261,7 +1261,7 @@ const FundingValidityView: React.FC = () => {
                         checked={whitelistStateOverrides[course.id] ?? !!course.whitelistStatus}
                         disabled={!!whitelistingIds[course.id]}
                         onChange={(e) => handleWhitelistToggle(course.id, e.target.checked)}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        className="h-3.5 w-3.5 rounded border-strong text-primary focus:ring-blue-500 disabled:opacity-50"
                         aria-label={`Whitelist ${course.title}`}
                       />
                     </td>
@@ -1271,7 +1271,7 @@ const FundingValidityView: React.FC = () => {
                           <button
                             onClick={saveEdit}
                             disabled={saving}
-                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-green-700 text-white hover:bg-green-800 disabled:opacity-50"
                           >
                             {saving ? '...' : 'Save'}
                           </button>
@@ -1300,7 +1300,7 @@ const FundingValidityView: React.FC = () => {
         </div>
 
         {visibleCourses.length === 0 && (
-          <div className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
+          <div className="px-6 py-10 text-center text-muted">
             {search.trim() ? `No courses match “${search.trim()}”.` : 'No courses found.'}
           </div>
         )}

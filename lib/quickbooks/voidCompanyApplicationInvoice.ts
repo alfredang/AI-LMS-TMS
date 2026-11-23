@@ -157,6 +157,23 @@ export async function voidQboInvoice(invoiceId: string): Promise<VoidInvoiceResu
       return { ok: true, status: 'already_void', message: 'Invoice already voided' };
     }
 
+    // Never void money that has been received. QuickBooks allows voiding a paid
+    // invoice and silently leaves the payment unapplied — the employer's account
+    // then shows a credit nobody asked for, and the cancellation hides a refund
+    // question. Leave it for Finance and say so.
+    const linked = invoice.LinkedTxn;
+    const linkedTxns = Array.isArray(linked) ? linked : linked ? [linked] : [];
+    const hasPayment = linkedTxns.some((t: any) => String(t?.TxnType || '') === 'Payment');
+    const total = Number(invoice.TotalAmt) || 0;
+    const balance = Number(invoice.Balance) || 0;
+    if (hasPayment || (total > 0 && balance < total)) {
+      return {
+        ok: false,
+        status: 'error',
+        message: `Invoice ${String(invoice.DocNumber || id)} has a payment applied, so it was not voided. Ask Finance to handle the refund/credit and void it in QuickBooks.`,
+      };
+    }
+
     const syncToken = String(invoice.SyncToken ?? '0');
     await callQbProxy({ action: 'void', entity: 'invoice', body: { Id: id, SyncToken: syncToken } });
     return { ok: true, status: 'voided', message: `Voided invoice ${id}` };

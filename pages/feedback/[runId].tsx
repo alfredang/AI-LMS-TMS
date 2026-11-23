@@ -125,14 +125,14 @@ export default function FeedbackFormPage() {
     }
   };
 
-  if (error && !tmpl) return <div className="max-w-2xl mx-auto p-6 text-red-600">{error}</div>;
+  if (error && !tmpl) return <div className="max-w-2xl mx-auto p-6 text-danger">{error}</div>;
   if (!tmpl) return <div className="max-w-2xl mx-auto p-6">Loading…</div>;
 
   if (done) {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <h1 className="text-2xl font-bold mb-2">Thank you!</h1>
-        <p className="text-gray-600">Your feedback has been recorded.</p>
+        <p className="text-on-surface-secondary">Your feedback has been recorded.</p>
       </div>
     );
   }
@@ -140,12 +140,12 @@ export default function FeedbackFormPage() {
   return (
     <>
       <Head><title>{tmpl.title}</title></Head>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
-        <form onSubmit={submit} className="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow p-6 space-y-6">
+      <div className="min-h-screen bg-surface-elevated py-8">
+        <form onSubmit={submit} className="max-w-2xl mx-auto bg-surface rounded-xl shadow p-6 space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{tmpl.title}</h1>
+            <h1 className="text-2xl font-bold text-on-surface">{tmpl.title}</h1>
             {tmpl.run_context && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-muted mt-1">
                 {tmpl.run_context.course_code} — {tmpl.run_context.course_title}
               </p>
             )}
@@ -153,7 +153,7 @@ export default function FeedbackFormPage() {
 
           {tmpl.sections.map(section => (
             <div key={section.id} className="space-y-4">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 border-b pb-1">{section.title}</h2>
+              <h2 className="text-lg font-semibold text-on-surface border-b pb-1">{section.title}</h2>
               {section.fields.map(field => (
                 <React.Fragment key={field.id}>
                   <FieldInput
@@ -163,14 +163,14 @@ export default function FeedbackFormPage() {
                   />
                   {field.autofill === 'course_code' && tmpl.run_context?.trainer_name && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Trainer Name
                       </label>
                       <input
                         type="text"
                         readOnly
                         value={tmpl.run_context.trainer_name}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white bg-gray-100"
+                        className="w-full px-3 py-2 border border-strong rounded-lg dark:text-white bg-surface-elevated"
                       />
                     </div>
                   )}
@@ -179,7 +179,7 @@ export default function FeedbackFormPage() {
             </div>
           ))}
 
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-danger text-sm">{error}</p>}
 
           <button
             type="submit"
@@ -199,10 +199,10 @@ const FieldInput: React.FC<{
   value: string | number;
   onChange: (v: string | number) => void;
 }> = ({ field, value, onChange }) => {
-  const base = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white';
+  const base = 'w-full px-3 py-2 border border-strong rounded-lg dark:bg-gray-700 dark:text-white';
   const labelEl = (
-    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-      {field.label}{field.required && <span className="text-red-500"> *</span>}
+    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+      {field.label}{field.required && <span className="text-danger"> *</span>}
     </label>
   );
 
@@ -223,13 +223,13 @@ const FieldInput: React.FC<{
                   className="flex flex-col items-center gap-1 group focus:outline-none flex-shrink-0"
                   aria-label={`Rate ${n} out of 5`}
                 >
-                  <StarIcon className={`w-9 h-9 sm:w-11 sm:h-11 transition-colors ${filled ? 'text-yellow-400' : 'text-gray-300 group-hover:text-yellow-300'}`} filled={filled} />
-                  <span className={`text-xs font-medium ${current === n ? 'text-yellow-500' : 'text-gray-500'}`}>{n}</span>
+                  <StarIcon className={`w-9 h-9 sm:w-11 sm:h-11 transition-colors ${filled ? 'text-yellow-400' : 'text-muted group-hover:text-yellow-300'}`} filled={filled} />
+                  <span className={`text-xs font-medium ${current === n ? 'text-yellow-500' : 'text-muted'}`}>{n}</span>
                 </button>
               );
             })}
           </div>
-          <p className="text-xs text-gray-500 mt-2">1 = Poor, 5 = Best</p>
+          <p className="text-xs text-muted mt-2">1 = Poor, 5 = Best</p>
         </div>
       </div>
     );
@@ -274,7 +274,7 @@ const FieldInput: React.FC<{
       {labelEl}
       <input
         type={htmlType}
-        className={`${base} ${field.readonly ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
+        className={`${base} ${field.readonly ? 'bg-surface-elevated' : ''}`}
         value={String(value)}
         required={field.required}
         readOnly={field.readonly}

@@ -155,7 +155,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
 
   if (error) {
     return (
-      <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 px-3 py-2 text-sm">
+      <div className="rounded-md border border-red-300 bg-danger-bg text-danger px-3 py-2 text-sm">
         {error}
       </div>
     );
@@ -167,7 +167,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-default p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-success-bg text-green-700 dark:text-green-300">
             <Icon name={IconName.DollarSign} className="w-5 h-5" />
           </div>
           <div className="min-w-0">
@@ -178,7 +178,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
           </div>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-default p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-info-bg text-blue-700 dark:text-blue-300">
             <Icon name={IconName.ClipboardCheck} className="w-5 h-5" />
           </div>
           <div className="min-w-0">
@@ -199,7 +199,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
               className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
                 yearFilter === 'all'
                   ? 'bg-primary text-white border-primary'
-                  : 'bg-white dark:bg-slate-800 border-default text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                  : 'bg-surface border-default text-on-surface-secondary hover:bg-surface-hover'
               }`}
             >
               All ({rows.length})
@@ -217,7 +217,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
                   className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
                     yearFilter === y
                       ? 'bg-primary text-white border-primary'
-                      : 'bg-white dark:bg-slate-800 border-default text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                      : 'bg-surface border-default text-on-surface-secondary hover:bg-surface-hover'
                   }`}
                 >
                   {y} ({count})
@@ -229,7 +229,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
             <button
               type="button"
               onClick={downloadCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-default rounded-md hover:bg-gray-50 dark:hover:bg-slate-700"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-default rounded-md hover:bg-surface-hover"
               title="Download as CSV"
             >
               <Icon name={IconName.Download} className="w-4 h-4" />
@@ -239,9 +239,9 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-default bg-white dark:bg-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-default bg-surface">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-slate-700/50 text-left text-xs uppercase tracking-wider text-on-surface-secondary">
+          <thead className="bg-surface-elevated text-left text-xs uppercase tracking-wider text-on-surface-secondary">
             <tr>
               <th className="px-3 py-2 whitespace-nowrap">Course Date</th>
               <th className="px-3 py-2 whitespace-nowrap">Course Code</th>
@@ -282,7 +282,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
             )}
             {!loading &&
               filtered.map((r) => (
-                <tr key={r.id} className="border-t border-default hover:bg-gray-50 dark:hover:bg-slate-700/40">
+                <tr key={r.id} className="border-t border-default hover:bg-surface-hover">
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDateRange(r.start_date, r.end_date)}</td>
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.course_code || '-'}</td>
                   <td className="px-3 py-2">
@@ -292,7 +292,7 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
                     {r.source === 'manual' && (
                       <span
                         title="Non-WSQ class, entered manually in Payroll"
-                        className="ml-2 align-middle inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                        className="ml-2 align-middle inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-warning-bg text-warning"
                       >
                         Non-WSQ
                       </span>

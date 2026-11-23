@@ -4,8 +4,11 @@ import { google, type calendar_v3 } from 'googleapis';
 import pool from '@lib/db';
 import { collectRunCalendarEvents, isGoogleMeetLink, meetLinkOfEvent, storeRunMeetLink } from '@lib/calendar/meetLink';
 import { eventDateIso, extractEventRunId } from '@lib/calendar/eventMatch';
+import { ensureMeetAutoRecording, meetAccessToken } from '@lib/calendar/meetRecording';
+import { autoRecordingOk, roomsNeedingAutoRecording, type AutoRecordingResult } from '@lib/calendar/meetRecordingRule';
 import { getGoogleCredentials } from '@lib/google-auth/googleAuth';
 import { getLocalYMD } from '../../../lib/dateHelpers';
+import { emailService } from '../../../lib/services/emailService';
 
 /**
  * POST /api/external/sync-google-calendar
@@ -14,6 +17,7 @@ import { getLocalYMD } from '../../../lib/dateHelpers';
  * For events with [VIRTUAL] or [HYBRID] in the title:
  *   - Sets class_type to Virtual or Hybrid on the matching course_run
  *   - Extracts and stores the Google Meet link
+ *   - Turns auto-recording ON for the class's Meet room (lib/calendar/meetRecordingRule.ts)
  *
  * Matching: event summary is matched to course_run by finding the course title
  * within the event summary, or by matching course_run_id in the event description.
@@ -178,6 +182,49 @@ async function _runSyncGoogleCalendarInner(options?: SyncCalendarOptions) {
   let skipped = 0;
   const results: any[] = [];
 
+  // Rule (lib/calendar/meetRecordingRule.ts): every Virtual/Hybrid class on Google
+  // Meet records automatically. Each room is checked once per sync; once Google says
+  // the token or the API is not set up, the remaining rooms are not asked again.
+  const recording = { roomsChecked: 0, alreadyOn: 0, turnedOn: 0, wouldTurnOn: 0, notOn: 0, blocked: null as string | null };
+  const recordingByRoom = new Map<string, AutoRecordingResult>();
+  let meetToken: string | null | undefined;
+  const todayYmd = getLocalYMD(new Date());
+  const ensureRoomRecording = async (room: string, who: Record<string, unknown>, label: string) => {
+    let r = recordingByRoom.get(room);
+    const first = !r;
+    if (!r) {
+      if (recording.blocked) return;
+      if (meetToken === undefined) meetToken = await meetAccessToken();
+      r = await ensureMeetAutoRecording(room, { dryRun, token: meetToken || undefined });
+      recordingByRoom.set(room, r);
+      recording.roomsChecked++;
+      if (r.status === 'on') recording.alreadyOn++;
+      else if (r.status === 'turned_on') recording.turnedOn++;
+      else if (r.status === 'would_turn_on') recording.wouldTurnOn++;
+      else recording.notOn++;
+      if (r.status === 'scope_missing' || r.status === 'api_disabled') {
+        recording.blocked = r.message || r.status;
+        console.warn(`  ⚠️ [Calendar Sync] Auto-recording cannot be set: ${recording.blocked}`);
+      }
+    }
+    if (!first) return; // one report row per room
+    if (r.status === 'turned_on' || r.status === 'would_turn_on') {
+      console.log(`  🎥 ${label}: auto-recording ${r.status === 'turned_on' ? 'turned on' : 'would be turned on'} for ${room}`);
+    }
+    if (r.status === 'turned_on') {
+      results.push({ ...who, status: 'auto_recording_turned_on', meetLink: room });
+    } else if (!autoRecordingOk(r.status)) {
+      results.push({ ...who, status: r.status === 'would_turn_on' ? 'auto_recording_would_turn_on' : 'auto_recording_not_on', reason: r.status, meetLink: room, message: r.message });
+    }
+  };
+  const ensureRecording = async (run: any, classType: string | null, links: Array<string | null | undefined>) => {
+    const runEnd = getLocalYMD(new Date(run.end_date || run.start_date));
+    if (runEnd < todayYmd) return; // a finished class cannot be recorded any more
+    for (const room of roomsNeedingAutoRecording(classType || run.class_type, links)) {
+      await ensureRoomRecording(room, { courseRunId: run.course_run_id, courseTitle: run.course_title }, String(run.course_run_id));
+    }
+  };
+
   for (const run of courseRuns.rows) {
     const own = await collectRunCalendarEvents(calendar, calendarId, run, events);
     if (own.events.length === 0) { skipped++; continue; }
@@ -215,6 +262,20 @@ async function _runSyncGoogleCalendarInner(options?: SyncCalendarOptions) {
     }
     if (classType && run.class_type !== classType) changes.push(`class_type → ${classType}`);
 
+    // Rule (lib/calendar/meetLinkRule.ts): a Virtual/Hybrid class's Meet link must be
+    // the one on its calendar event. A stored Meet link the event does not carry is
+    // reported, not cleared: it may be the only room learners have right now.
+    const virtualOrHybrid = !!classType || /^(virtual|hybrid)$/i.test(run.class_type || '');
+    if (virtualOrHybrid && !own.meetLink && nextLink === undefined && current && isGoogleMeetLink(current)) {
+      console.warn(`  ⚠️ ${run.course_run_id}: Meet link ${current} is not on the class's calendar event.`);
+      results.push({ courseRunId: run.course_run_id, courseTitle: run.course_title, status: 'meet_link_not_on_calendar', meetLink: current });
+    }
+
+    // The rooms this class will actually use after this sync: the calendar's when it
+    // has any, else the stored link that was left in place.
+    const finalLink = nextLink === undefined ? current : nextLink;
+    await ensureRecording(run, classType, own.meetLinks.length > 0 ? own.meetLinks : [finalLink]);
+
     if (changes.length === 0) { skipped++; results.push({ courseRunId: run.course_run_id, status: 'no_changes' }); continue; }
 
     if (!dryRun && nextLink !== undefined) await storeRunMeetLink(run.id, nextLink);
@@ -224,6 +285,18 @@ async function _runSyncGoogleCalendarInner(options?: SyncCalendarOptions) {
     updated++;
     console.log(`  ${dryRun ? '🔎 Would update' : '✅ Updated'} ${run.course_run_id} (${run.course_title}): ${changes.join(', ')}`);
     results.push({ courseRunId: run.course_run_id, courseTitle: run.course_title, changes, meetLink: nextLink === undefined ? current || null : nextLink });
+  }
+
+  // Every upcoming [VIRTUAL]/[HYBRID] calendar event with a Meet room records
+  // automatically, whether or not the event resolves to a run (a tagged event with
+  // no Course Run ID is still a class learners join).
+  for (const e of events) {
+    if (e.status === 'cancelled') continue;
+    const tag = (e.summary || '').match(/\[(VIRTUAL|HYBRID)\s*\]/i);
+    if (!tag || eventDateIso(e) < todayYmd) continue;
+    for (const room of roomsNeedingAutoRecording(tag[1], [meetLinkOfEvent(e)])) {
+      await ensureRoomRecording(room, { event: e.summary, date: e.start?.dateTime || e.start?.date }, e.summary || room);
+    }
   }
 
   // Tagged events that carry no resolvable run id are reported (not guessed) so
@@ -245,7 +318,30 @@ async function _runSyncGoogleCalendarInner(options?: SyncCalendarOptions) {
     updated,
     skipped,
     calendarId,
+    autoRecording: recording,
   };
+
+  // A class that will not record itself is told to staff before it runs, not found
+  // out afterwards. Recipients: MEET_RECORDING_RECIPIENTS, else FUNDING_REMINDER_RECIPIENTS.
+  const notRecording = results.filter(r => r.status === 'auto_recording_not_on');
+  if (!dryRun && (recording.blocked || notRecording.length > 0)) {
+    const recipients = (process.env.MEET_RECORDING_RECIPIENTS || process.env.FUNDING_REMINDER_RECIPIENTS || '')
+      .split(',').map(e => e.trim()).filter(Boolean);
+    if (recipients.length > 0) {
+      const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const lines = notRecording.map(r => `${r.courseRunId ? `Run ${r.courseRunId} ${r.courseTitle || ''}` : `${r.event || ''} (${String(r.date || '').slice(0, 10)})`} | ${r.meetLink} | ${r.message || r.reason}`);
+      const intro = recording.blocked
+        ? `Auto-recording could not be checked or turned on for the upcoming Virtual/Hybrid classes: ${recording.blocked}`
+        : `${notRecording.length} upcoming Virtual/Hybrid class Meet room(s) are not set to record automatically.`;
+      const sent = await emailService.sendEmail({
+        to: recipients.join(', '),
+        subject: '[LMS] Google Meet auto-recording is not on for upcoming classes',
+        text: [intro, '', ...lines].join('\n'),
+        html: `<p>${esc(intro)}</p>${lines.length ? `<ul>${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}`,
+      }).catch((err: any) => ({ success: false, error: err?.message || String(err) }));
+      if (!sent.success) console.error('[Calendar Sync] auto-recording email failed:', (sent as any).error);
+    }
+  }
 
   console.log(`📅 [Calendar Sync] Done:`, JSON.stringify(summary));
 

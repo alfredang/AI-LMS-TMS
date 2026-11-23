@@ -187,7 +187,7 @@ const CourseImageGeneratorView: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Course Image Generator</h1>
+        <h1 className="text-3xl font-bold text-on-surface">Course Image Generator</h1>
         <Button variant="ghost" onClick={fetchCourses} disabled={loading || busy !== 'idle'}>
           <Icon name={IconName.Sync} className="w-4 h-4 mr-1" />
           Refresh
@@ -222,7 +222,7 @@ const CourseImageGeneratorView: React.FC = () => {
             <option value="has_local">Has local PNG ({counts.has_local})</option>
             <option value="has_r2">Synced to R2 ({counts.has_r2})</option>
           </select>
-          <span className="text-sm text-gray-600 dark:text-gray-300 ml-2">
+          <span className="text-sm text-on-surface-secondary ml-2">
             {selected.size} selected
           </span>
           <div className="flex-1" />
@@ -237,7 +237,7 @@ const CourseImageGeneratorView: React.FC = () => {
             variant="ghost"
             onClick={handleSync}
             disabled={selected.size === 0 || busy !== 'idle'}
-            className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20"
+            className="border border-blue-500 text-primary hover:bg-blue-50 dark:border-blue-400 dark:hover:bg-blue-900/20"
           >
             {busy === 'syncing' ? 'Syncing...' : `Sync to R2 (${selected.size})`}
           </Button>
@@ -245,7 +245,7 @@ const CourseImageGeneratorView: React.FC = () => {
 
         {busy !== 'idle' && (
           <div className="space-y-1">
-            <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex justify-between text-xs text-on-surface-secondary">
               <span>{busy === 'generating' ? 'Generating' : 'Syncing'}: {progressCur} / {progressTotal}</span>
               <span>{progressPct}%</span>
             </div>
@@ -260,7 +260,7 @@ const CourseImageGeneratorView: React.FC = () => {
       </Card>
 
       {error && (
-        <Card className="p-4 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700 text-red-800 dark:text-red-300">
+        <Card className="p-4 border-red-300 bg-danger-bg dark:border-red-700 text-danger">
           {error}
         </Card>
       )}
@@ -268,7 +268,7 @@ const CourseImageGeneratorView: React.FC = () => {
       <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
         <div className="overflow-x-auto max-h-[60vh]">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
+            <thead className="bg-surface-elevated sticky top-0 z-10">
               <tr>
                 <th className="px-3 py-2 text-left w-10">
                   <input
@@ -285,15 +285,15 @@ const CourseImageGeneratorView: React.FC = () => {
                 <th className="px-3 py-2 text-left w-24">Preview</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-default">
               {loading && (
-                <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-500">Loading...</td></tr>
+                <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">Loading...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-500">No courses match the filter.</td></tr>
+                <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">No courses match the filter.</td></tr>
               )}
               {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                <tr key={c.id} className="hover:bg-surface-hover">
                   <td className="px-3 py-2">
                     <input
                       type="checkbox"
@@ -301,21 +301,21 @@ const CourseImageGeneratorView: React.FC = () => {
                       onChange={() => toggleOne(c.id)}
                     />
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">{c.course_code || '—'}</td>
-                  <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{c.title}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-on-surface-secondary whitespace-nowrap">{c.course_code || '—'}</td>
+                  <td className="px-3 py-2 text-on-surface">{c.title}</td>
                   <td className="px-3 py-2">{c.has_local ? '✅' : '—'}</td>
                   <td className="px-3 py-2">{c.image_url ? '✅' : '—'}</td>
                   <td className="px-3 py-2">
                     {c.local_url || c.image_url ? (
                       <button
                         type="button"
-                        className="text-blue-600 hover:underline text-xs"
+                        className="text-primary hover:underline text-xs"
                         onClick={() => setPreviewUrl(c.local_url || c.image_url)}
                       >
                         View
                       </button>
                     ) : (
-                      <span className="text-gray-400 text-xs">—</span>
+                      <span className="text-muted text-xs">—</span>
                     )}
                   </td>
                 </tr>
@@ -327,8 +327,8 @@ const CourseImageGeneratorView: React.FC = () => {
 
       {logLines.length > 0 && (
         <Card className="p-4 dark:bg-gray-900 dark:border-gray-700">
-          <h3 className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Activity Log</h3>
-          <pre className="text-xs font-mono text-gray-700 dark:text-gray-300 max-h-64 overflow-auto whitespace-pre-wrap">
+          <h3 className="text-sm font-semibold mb-2 text-on-surface-secondary">Activity Log</h3>
+          <pre className="text-xs font-mono text-on-surface-secondary max-h-64 overflow-auto whitespace-pre-wrap">
             {logLines.join('\n')}
           </pre>
         </Card>
@@ -353,8 +353,8 @@ const CourseImageGeneratorView: React.FC = () => {
 
 const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
   <div>
-    <div className="text-2xl font-bold text-gray-900 dark:text-white">{value.toLocaleString()}</div>
-    <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</div>
+    <div className="text-2xl font-bold text-on-surface">{value.toLocaleString()}</div>
+    <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
   </div>
 );
 

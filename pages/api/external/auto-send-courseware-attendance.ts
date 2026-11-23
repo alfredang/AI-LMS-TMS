@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { autoShareLearnerMaterials } from '../../../lib/google-drive/drive-helpers';
 import { learnerMail } from '../../../lib/mmsSync/legacyRouting';
+import { coursewareDates, coursewareScenario, renderCoursewareEmail, type CoursewareValues } from '../../../lib/learner/coursewareEmailTemplate';
 
 // Fail closed: accept server-side secrets only. NEXT_PUBLIC_* values are baked
 // into the public JS bundle and must never act as an API key; with no key
@@ -123,27 +124,24 @@ async function sendCoursewareAttendanceEmail(opts: {
     oauth2Client.setCredentials({ refresh_token: tpRow.google_refresh_token });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const replacePlaceholders = (text: string) => text
-        .replace(/\{STUDENT_NAME\}/g, studentName)
-        .replace(/\{COURSE_NAME\}/g, courseName)
-        .replace(/\{COURSE_CODE\}/g, courseCode)
-        .replace(/\{COURSE_DATES\}/g, courseDates)
-        .replace(/\{COURSE_START_DATE\}/g, courseStartDate)
-        .replace(/\{COURSE_START_TIME\}/g, courseStartTime)
-        .replace(/\{COURSE_VENUE\}/g, courseVenue)
-        .replace(/\{DIGITAL_ATTENDANCE_ID\}/g, digitalAttendanceId)
-        .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
-        .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
-        .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
-        .replace(/\{COMPANY_EMAIL\}/g, tp.companyEmail || '')
-        .replace(/\{COMPANY_PHONE\}/g, tpRow.company_phone || '');
-
-    const routed = await learnerMail({ courseCode, runUuid: opts.runUuid }, { name: studentName, email: studentEmail, title: courseName, dates: courseDates, venue: courseVenue, support: tp.companyEmail || tpRow.company_email || tpRow.support_email || tpRow.company_phone || 'Training support' });
-    const subject = routed?.subject || replacePlaceholders(emailSubject || 'Courseware and Attendance Taking for {COURSE_NAME}');
-    const bodyText = replacePlaceholders(emailBody || `Dear {STUDENT_NAME},\n\nPlease access the courseware platform and complete e-attendance for {COURSE_NAME}.\n\nBest regards,\n{COMPANY_SHORT_NAME}`);
-
-    const isHtml = /<[a-z][\s\S]*>/i.test(bodyText);
-    const htmlBody = routed?.html || `<div style="font-family: Arial, sans-serif; color: #333;">${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n')}</div>`;
+    const values: CoursewareValues = {
+        studentName, courseName, courseCode, courseDates, courseStartDate, courseStartTime, courseVenue,
+        courseRunCode: digitalAttendanceId, attendanceId: digitalAttendanceId,
+        attendanceVerified: coursewareScenario(courseCode) === 'funded',
+        companyName: tp.name, companyShortName: tp.companyShortname, companyWebsite: tp.companyWebsite,
+        companyEmail: tp.supportEmail || tp.companyEmail, companyPhone: tp.contactTel || tpRow.company_phone || '',
+        siteUrl: tp.siteUrl,
+    };
+    const templateSubject = emailSubject || 'Courseware and Attendance Taking for {COURSE_NAME}';
+    const templateBody = emailBody || `Dear {STUDENT_NAME},\n\nPlease access the courseware platform and complete e-attendance for {COURSE_NAME}.\n\nBest regards,\n{COMPANY_SHORT_NAME}`;
+    const rendered = renderCoursewareEmail(templateSubject, templateBody, values);
+    const routed = await learnerMail({ courseCode, runUuid: opts.runUuid }, {
+        name: studentName, email: studentEmail, title: courseName, dates: courseDates, venue: courseVenue,
+        support: tp.companyEmail || tpRow.company_email || tpRow.support_email || tpRow.company_phone || 'Training support',
+        courseware: { subject: templateSubject, body: templateBody, values },
+    });
+    const subject = routed?.subject || rendered.subject;
+    const htmlBody = routed?.html || rendered.html;
 
     const senderName = tpRow.contact_person_name || '';
     const emailUser = tpRow.email_user;
@@ -152,7 +150,7 @@ async function sendCoursewareAttendanceEmail(opts: {
         `From: ${senderName ? `${senderName} <${emailUser}>` : emailUser}`,
         `To: ${studentEmail}`,
         ...(emailCc ? [`Cc: ${emailCc}`] : []),
-        `Subject: ${subject}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`,
         `MIME-Version: 1.0`,
         `Content-Type: text/html; charset="UTF-8"`,
         '',
@@ -311,7 +309,7 @@ async function _runAutomationInner() {
                             studentEmail: learner.learner_email,
                             courseName: run.course_title,
                             courseCode: run.course_code,
-                            courseDates: run.course_dates || '',
+                            courseDates: coursewareDates(run.start_date_display || '', run.end_date_display || ''),
                             courseStartDate: run.start_date_display || '',
                             courseStartTime,
                             courseVenue,

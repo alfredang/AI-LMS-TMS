@@ -1,6 +1,8 @@
 import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
 import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import { resolveSubmissionFolders, driveFolderUrl } from '@lib/google-drive/submissionFolder';
+import { classMemberSql } from '@lib/enrolment/classMembership';
+import { ensureClassMembershipTables } from '@lib/enrolment/classMembershipTables';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 
@@ -115,7 +117,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, courseRunId))) return;
 
     try {
-        // Fetch all enrolments from the unified `enrollment` table
+        // Fetch the run's class members from the unified `enrollment` table: everyone who
+        // self-registered, took digital attendance or holds an SWDA enrolment. Only learners
+        // taken off the class (Admin Removed / Withdrawn, or cancelled and never came) are
+        // left off, so they are not graded or sent a certificate. Rule: lib/enrolment/classMembership.
+        await ensureClassMembershipTables();
         const query = `
             SELECT
                 e.id as enrolment_id,
@@ -130,6 +136,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             FROM enrollment e
             LEFT JOIN app_user u ON e.user_id = u.id
             WHERE e.course_run_id = $1
+              AND (
+                    ${classMemberSql('e')}
+                    -- Keep a removed row that already holds a grade or certificate, so
+                    -- past records (and merged duplicate rows) do not lose them.
+                    OR e.certificate IS NOT NULL
+                    OR e.assessment_status IN ('Competent', 'Passed')
+              )
         `;
         const [resData, subsData, methodsData] = await Promise.all([
             pool.query(query, [courseRunId]),

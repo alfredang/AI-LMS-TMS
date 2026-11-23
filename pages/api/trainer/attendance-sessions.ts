@@ -54,7 +54,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const result = await client.query(
         `SELECT id, session_number, ssg_session_id, title,
                 start_date, end_date, start_time, end_time,
-                mode_of_training, attendance_taken, deleted, venue
+                mode_of_training, attendance_taken, deleted, venue,
+                (SELECT COUNT(*)::int FROM course_attendance ca
+                  WHERE ca.session_id = course_session.id AND ca.is_present) AS present_count
          FROM course_session
          WHERE course_run_id = $1
          ORDER BY CAST(NULLIF(regexp_replace(session_number, '[^0-9]', '', 'g'), '') AS integer) ASC NULLS LAST, start_date ASC NULLS LAST`,

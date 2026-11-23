@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { isStaff } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -11,6 +12,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   if (!userId || typeof userId !== 'string') {
     return res.status(400).json({ success: false, error: 'Missing required parameter: userId' });
+  }
+
+  // A learner reads only their own certificates; staff and machine callers may name anyone.
+  const auth = (req as AuthedApiRequest).authUser!;
+  if (!auth.isService && !isStaff(auth) && userId !== auth.id) {
+    return res.status(403).json({ success: false, error: 'You can only view your own certificates' });
   }
 
   try {

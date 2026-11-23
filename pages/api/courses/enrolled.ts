@@ -1,6 +1,8 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { classMemberSql } from '../../../lib/enrolment/classMembership';
+import { ensureClassMembershipTables } from '../../../lib/enrolment/classMembershipTables';
 import { getLocalYMD } from '../../../lib/dateHelpers';
 
 interface CourseRow {
@@ -57,6 +59,7 @@ async function handler(
       return res.status(400).json({ message: 'User ID is required' });
     }
 
+    await ensureClassMembershipTables();
     // SQL query to get enrolled courses for a learner
     const enrolledCoursesQuery = `
       SELECT 
@@ -102,7 +105,9 @@ async function handler(
         GROUP BY course_id
       ) assessment_count ON c.id = assessment_count.course_id
       WHERE u.id = $1
-        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+        -- Class membership rule (self-registration, digital attendance, SWDA enrolment):
+        -- lib/enrolment/classMembership.
+        AND ${classMemberSql('e')}
       ORDER BY cr.start_date DESC
     `;
 

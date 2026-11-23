@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { isStaff } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getDeleteFileUrl } from '../../../lib/urlHelpers';
@@ -69,6 +70,12 @@ async function handler(
         success: false, 
         message: 'User ID and profile data are required' 
       });
+    }
+
+    // A trainer edits only their own profile; staff (admin pages) and machine keys may edit any.
+    const authUser = (req as AuthedApiRequest).authUser!;
+    if (!authUser.isService && !isStaff(authUser) && userId !== authUser.id) {
+      return res.status(403).json({ success: false, message: 'You can only update your own profile' });
     }
 
     const client = await pool.connect();

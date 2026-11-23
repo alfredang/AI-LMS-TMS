@@ -108,20 +108,20 @@ export default function UploadDocumentView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Upload Supporting Document</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-on-surface">Upload Supporting Document</h1>
+        <p className="mt-1 text-sm text-muted">
           POST /skillsFutureCredits/claims/&#123;claimId&#125;/supportingdocuments (v2)
         </p>
       </div>
 
       <div>
-        <label className="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider mb-2">
+        <label className="block text-xs font-semibold uppercase text-muted tracking-wider mb-2">
           Certificate / OAuth
         </label>
         <select
           value={selectedApp}
           onChange={(e) => setSelectedApp(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-primary"
+          className="w-full max-w-xs rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-primary"
         >
           {APP_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -131,34 +131,34 @@ export default function UploadDocumentView() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Claim ID</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">Claim ID</label>
           <input
             value={claimId}
             onChange={(e) => setClaimId(e.target.value)}
             placeholder="e.g. 200123456789"
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+            className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">NRIC</label>
           <input
             value={nric}
             onChange={(e) => setNric(e.target.value)}
             placeholder="e.g. S1234567A"
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+            className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
           />
         </div>
       </div>
 
       {/* File picker */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Attachments</label>
+        <label className="block text-sm font-medium text-on-surface-secondary mb-2">Attachments</label>
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="max-w-xl border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-primary hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+          className="max-w-xl border-2 border-dashed border-strong rounded-lg p-6 text-center cursor-pointer hover:border-primary hover:bg-surface-hover transition-colors"
         >
-          <p className="text-sm text-gray-500 dark:text-gray-400">Click to select files or drag and drop</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">PDF, JPG, PNG supported</p>
+          <p className="text-sm text-muted">Click to select files or drag and drop</p>
+          <p className="text-xs text-muted mt-1">PDF, JPG, PNG supported</p>
         </div>
         <input
           ref={fileInputRef}
@@ -172,10 +172,10 @@ export default function UploadDocumentView() {
         {files.length > 0 && (
           <div className="mt-3 space-y-2 max-w-xl">
             {files.map((f, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
+              <div key={i} className="flex items-center justify-between bg-surface-elevated rounded-lg px-3 py-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{f.fileName}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(f.fileSize)} · {f.fileType}</p>
+                  <p className="text-sm font-medium text-on-surface truncate">{f.fileName}</p>
+                  <p className="text-xs text-muted">{formatFileSize(f.fileSize)} · {f.fileType}</p>
                 </div>
                 <button onClick={() => removeFile(i)} className="ml-3 text-red-500 hover:text-red-700 text-sm font-medium flex-shrink-0">
                   Remove
@@ -195,27 +195,27 @@ export default function UploadDocumentView() {
       </button>
 
       {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+        <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-danger text-sm">
           {error}
         </div>
       )}
 
       {result && (
         <div className="space-y-4">
-          <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm font-medium">
+          <div className="p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-success text-sm font-medium">
             Documents uploaded successfully.
           </div>
 
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <div className="border border-default rounded-lg overflow-hidden">
             <button
               onClick={() => setShowJson(!showJson)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors"
             >
               <span>▶ JSON Response</span>
               <span className="text-xs text-gray-400">{showJson ? 'collapse' : 'expand'}</span>
             </button>
             {showJson && (
-              <pre className="px-4 py-3 bg-gray-50 dark:bg-slate-900 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto max-h-96 border-t border-gray-200 dark:border-gray-700">
+              <pre className="px-4 py-3 bg-surface-elevated text-xs font-mono text-on-surface overflow-x-auto max-h-96 border-t border-default">
                 {JSON.stringify(result, null, 2)}
               </pre>
             )}

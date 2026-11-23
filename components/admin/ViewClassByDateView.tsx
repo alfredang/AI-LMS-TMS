@@ -89,11 +89,11 @@ const statusDotTooltip = (status: string): string => {
 
 const statusPillClass = (status: string): string => {
   switch (status) {
-    case 'Confirmed':   return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
-    case 'Pending':     return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
-    case 'Cancelled':   return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    case 'Confirmed':   return 'bg-success-bg text-success';
+    case 'Pending':     return 'bg-warning-bg text-warning';
+    case 'Cancelled':   return 'bg-danger-bg text-danger';
     case 'Unconfirmed': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-    default:            return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    default:            return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
   }
 };
 
@@ -132,21 +132,21 @@ const MonthPicker: React.FC<MonthPickerProps> = ({
       <div className="flex items-center justify-between mb-3">
         <button
           onClick={onPrev}
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+          className="p-1 rounded hover:bg-surface-hover text-on-surface-secondary"
           aria-label="Previous month"
         >
           ‹
         </button>
-        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{monthLabel}</div>
+        <div className="text-sm font-semibold text-on-surface">{monthLabel}</div>
         <button
           onClick={onNext}
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+          className="p-1 rounded hover:bg-surface-hover text-on-surface-secondary"
           aria-label="Next month"
         >
           ›
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+      <div className="grid grid-cols-7 gap-1 text-[10px] font-medium text-muted mb-1">
         {['M','T','W','T','F','S','S'].map((w, i) => (
           <div key={i} className="text-center">{w}</div>
         ))}
@@ -162,11 +162,11 @@ const MonthPicker: React.FC<MonthPickerProps> = ({
           if (isSelected) {
             cls += 'bg-blue-600 text-white font-semibold ';
           } else if (isToday) {
-            cls += 'ring-2 ring-blue-500 text-blue-700 dark:text-blue-300 font-semibold ';
+            cls += 'ring-2 ring-blue-500 text-primary font-semibold ';
           } else if (inMonth) {
-            cls += 'text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 ';
+            cls += 'text-on-surface hover:bg-surface-hover ';
           } else {
-            cls += 'text-gray-300 dark:text-gray-600 ';
+            cls += 'text-muted ';
           }
           return (
             <button
@@ -210,9 +210,9 @@ interface EventRowProps {
 
 const DetailCell: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div className="min-w-0">
-    <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</div>
-    <div className="text-sm text-gray-900 dark:text-gray-100 truncate" title={typeof value === 'string' ? value : undefined}>
-      {value || <span className="text-gray-400 dark:text-gray-600">—</span>}
+    <div className="text-[11px] uppercase tracking-wide text-muted">{label}</div>
+    <div className="text-sm text-on-surface truncate" title={typeof value === 'string' ? value : undefined}>
+      {value || <span className="text-muted">—</span>}
     </div>
   </div>
 );
@@ -290,11 +290,11 @@ const EventRow: React.FC<EventRowProps> = ({
   }, [expanded]);
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
+    <div className="border border-default rounded-lg bg-surface overflow-hidden">
       {/* Collapsed row — click anywhere toggles expand. Ctrl+click title opens editor in new tab. */}
       <div
         onClick={onToggle}
-        className="group/row flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        className="group/row flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-surface-hover transition-colors"
         aria-label={expanded ? 'Collapse row' : 'Expand row'}
       >
         <span
@@ -302,12 +302,12 @@ const EventRow: React.FC<EventRowProps> = ({
           title={statusDotTooltip(derivedStatus)}
           aria-label={statusDotTooltip(derivedStatus)}
         />
-        <div className="text-xs font-mono text-gray-600 dark:text-gray-400 w-28 flex-shrink-0 tabular-nums">
+        <div className="text-xs font-mono text-on-surface-secondary w-28 flex-shrink-0 tabular-nums">
           {event.startTime} – {event.endTime}
         </div>
         <div className="flex-1 min-w-0">
           <span
-            className="text-left text-sm text-gray-900 dark:text-gray-100 rounded px-1 max-w-full flex items-center gap-1.5 min-w-0"
+            className="text-left text-sm text-on-surface rounded px-1 max-w-full flex items-center gap-1.5 min-w-0"
             title="Click to expand (Ctrl+click for editor)"
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) {
@@ -317,18 +317,18 @@ const EventRow: React.FC<EventRowProps> = ({
             }}
           >
             <span className="truncate">Day {event.dayNumber} - {event.courseTitle}</span>
-            <span className="flex-shrink-0 font-mono text-xs text-gray-500 dark:text-gray-400">[{event.courseRunId}]</span>
+            <span className="flex-shrink-0 font-mono text-xs text-muted">[{event.courseRunId}]</span>
             <span className={`flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none ${
               event.classType === 'Virtual' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' :
-              event.classType === 'Hybrid' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
+              event.classType === 'Hybrid' ? 'bg-warning-bg text-warning' :
               event.classType === 'External' ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300' :
-              'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+              'bg-success-bg text-success'
             }`}>{event.classType || 'Physical'}</span>
           </span>
         </div>
         {sessionLabel && (
           <span
-            className="hidden sm:inline-flex flex-shrink-0 items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+            className="hidden sm:inline-flex flex-shrink-0 items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded bg-info-bg text-primary"
             title={`${event.sessionNumbers.length} ${event.sessionNumbers.length === 1 ? 'session' : 'sessions'} on this day`}
           >
             {sessionLabel}
@@ -336,12 +336,12 @@ const EventRow: React.FC<EventRowProps> = ({
         )}
         <div className="hidden md:flex flex-col w-56 flex-shrink-0 text-[11px] leading-tight">
           <div className="flex items-baseline gap-1.5 min-w-0" title={event.tpgTrainerName}>
-            <span className="inline-block w-10 flex-shrink-0 text-gray-400 dark:text-gray-500">TPG:</span>
-            <span className="truncate text-gray-700 dark:text-gray-200">{event.tpgTrainerName || '—'}</span>
+            <span className="inline-block w-10 flex-shrink-0 text-muted">TPG:</span>
+            <span className="truncate text-on-surface-secondary">{event.tpgTrainerName || '—'}</span>
           </div>
           <div className="flex items-baseline gap-1.5 min-w-0" title={event.localTrainers?.length > 1 ? event.localTrainers.map(t => t.name).filter(Boolean).join(', ') : event.localTrainerName}>
-            <span className="inline-block w-10 flex-shrink-0 text-gray-400 dark:text-gray-500">Local:</span>
-            <span className="truncate text-gray-700 dark:text-gray-200">
+            <span className="inline-block w-10 flex-shrink-0 text-muted">Local:</span>
+            <span className="truncate text-on-surface-secondary">
               {event.localTrainers?.length > 1
                 ? event.localTrainers.map(t => t.name).filter(Boolean).join(', ')
                 : (event.localTrainerName || '—')}
@@ -354,7 +354,7 @@ const EventRow: React.FC<EventRowProps> = ({
           aria-label={TRAINER_STATE_STYLES[matchState].label}
         />
         <span
-          className="p-1 text-gray-500 dark:text-gray-400 flex-shrink-0 select-none"
+          className="p-1 text-muted flex-shrink-0 select-none"
           aria-hidden="true"
         >
           {expanded ? '▴' : '▾'}
@@ -363,7 +363,7 @@ const EventRow: React.FC<EventRowProps> = ({
 
       {/* Expanded detail — 13 columns + actions */}
       {expanded && (
-        <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+        <div className="border-t border-default bg-surface-elevated px-4 py-3">
           <MmsSyncControl runUuid={event.courseRunUuid} courseCode={event.courseCode}/>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
             <DetailCell label="Course Run ID" value={event.courseRunId} />
@@ -387,23 +387,23 @@ const EventRow: React.FC<EventRowProps> = ({
                 >
                   {derivedStatus === 'Cancelled' ? (
                     <>
-                      <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Cancelled</option>
-                      <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Confirmed/Pending</option>
-                      <option value="Unconfirmed" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Unconfirmed</option>
+                      <option value="Cancelled" className="bg-surface text-on-surface">Cancelled</option>
+                      <option value="auto" className="bg-surface text-on-surface">Confirmed/Pending</option>
+                      <option value="Unconfirmed" className="bg-surface text-on-surface">Unconfirmed</option>
                     </>
                   ) : derivedStatus === 'Unconfirmed' ? (
                     <>
-                      <option value="Unconfirmed" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Unconfirmed</option>
-                      <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Confirmed/Pending</option>
-                      <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Cancelled</option>
+                      <option value="Unconfirmed" className="bg-surface text-on-surface">Unconfirmed</option>
+                      <option value="auto" className="bg-surface text-on-surface">Confirmed/Pending</option>
+                      <option value="Cancelled" className="bg-surface text-on-surface">Cancelled</option>
                     </>
                   ) : (
                     <>
-                      <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
+                      <option value="auto" className="bg-surface text-on-surface">
                         {(event.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}
                       </option>
-                      <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Cancelled</option>
-                      <option value="Unconfirmed" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Unconfirmed</option>
+                      <option value="Cancelled" className="bg-surface text-on-surface">Cancelled</option>
+                      <option value="Unconfirmed" className="bg-surface text-on-surface">Unconfirmed</option>
                     </>
                   )}
                 </select>
@@ -416,12 +416,12 @@ const EventRow: React.FC<EventRowProps> = ({
                   value={event.classType || 'Physical'}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onChangeClassType(e.target.value as 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
-                  className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                  className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                 >
-                  <option value="Physical" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Physical</option>
-                  <option value="Virtual" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Virtual</option>
-                  <option value="Hybrid" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Hybrid</option>
-                  <option value="External" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">External</option>
+                  <option value="Physical" className="bg-surface text-on-surface">Physical</option>
+                  <option value="Virtual" className="bg-surface text-on-surface">Virtual</option>
+                  <option value="Hybrid" className="bg-surface text-on-surface">Hybrid</option>
+                  <option value="External" className="bg-surface text-on-surface">External</option>
                 </select>
               }
             />
@@ -438,7 +438,7 @@ const EventRow: React.FC<EventRowProps> = ({
                           className={
                             isCurrent
                               ? 'px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-600 text-white'
-                              : 'px-1.5 py-0.5 rounded text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800'
+                              : 'px-1.5 py-0.5 rounded text-xs text-on-surface-secondary bg-surface-elevated'
                           }
                           title={isCurrent ? 'This row' : undefined}
                         >
@@ -471,7 +471,7 @@ const EventRow: React.FC<EventRowProps> = ({
                   <select
                     value={effectiveNextTrainer}
                     onChange={(e) => onChangeNextTrainer(e.target.value)}
-                    className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full text-sm bg-surface border border-strong rounded px-2 py-1 text-on-surface focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">— Select —</option>
                     {event.approvedTrainers.map((name) => (
@@ -479,7 +479,7 @@ const EventRow: React.FC<EventRowProps> = ({
                     ))}
                   </select>
                 ) : (
-                  <span className="text-gray-400 dark:text-gray-600">No approved trainers</span>
+                  <span className="text-muted">No approved trainers</span>
                 )
               }
             />
@@ -507,7 +507,7 @@ const EventRow: React.FC<EventRowProps> = ({
                 }
                 onViewAttendance();
               }}
-              className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="px-3 py-1.5 text-xs font-medium rounded border border-strong text-on-surface-secondary hover:bg-surface-hover"
             >
               View Attendance
             </button>
@@ -519,12 +519,12 @@ const EventRow: React.FC<EventRowProps> = ({
                 }
                 onViewEnrolment();
               }}
-              className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="px-3 py-1.5 text-xs font-medium rounded border border-strong text-on-surface-secondary hover:bg-surface-hover"
             >
               View Enrolment
             </button>
             {event.latestInvitationStatus && (
-              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+              <span className="text-[11px] text-muted">
                 Latest invitation: <span className="font-semibold">{event.latestInvitationStatus}</span>
               </span>
             )}
@@ -537,8 +537,8 @@ const EventRow: React.FC<EventRowProps> = ({
                 }}
                 className={`px-2 py-1 text-[10px] font-medium rounded border ${
                   event.invitationPaused
-                    ? 'border-orange-400 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-600'
-                    : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'
+                    ? 'border-orange-400 bg-warning-bg text-warning dark:border-orange-600'
+                    : 'border-strong text-muted hover:bg-surface-hover'
                 }`}
                 title={event.invitationPaused ? 'Invitations paused — click to unpause' : 'Click to pause invitations for this CR'}
               >
@@ -551,8 +551,8 @@ const EventRow: React.FC<EventRowProps> = ({
                 }}
                 className={`px-2 py-1 text-[10px] font-medium rounded border ${
                   event.invitationRepliesBlocked
-                    ? 'border-red-400 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600'
-                    : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'
+                    ? 'border-red-400 bg-danger-bg text-danger dark:border-red-600'
+                    : 'border-strong text-muted hover:bg-surface-hover'
                 }`}
                 title={event.invitationRepliesBlocked ? 'Replies blocked — click to unblock' : 'Click to block trainer replies for this CR'}
               >
@@ -574,9 +574,9 @@ const EventRow: React.FC<EventRowProps> = ({
           </div>
 
           {/* Full run schedule, grouped by day */}
-          <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+          <div className="mt-4 border-t border-default pt-3">
             {runSessionsLoading ? (
-              <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+              <div className="text-sm text-muted">Loading sessions…</div>
             ) : (
               <ClassSessionsCard sessions={runSessions?.sessions || []} calendarChecked={runSessions?.calendarChecked} ssgError={runSessions?.ssgError} />
             )}
@@ -959,7 +959,7 @@ const ViewClassByDateView: React.FC = () => {
       {/* Sticky page header — stays pinned below the 64px site nav.
           z-20 keeps it below the site Header's z-30 stacking context so
           role-switcher dropdowns from the site header render on top. */}
-      <div className="sticky top-16 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-700">
+      <div className="sticky top-16 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-default">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold dark:text-white">View Class By Date</h2>
           <div className="flex items-center gap-2">
@@ -967,27 +967,27 @@ const ViewClassByDateView: React.FC = () => {
               href="https://www.tpgateway.gov.sg/"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm font-medium rounded border border-emerald-600 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 bg-white dark:bg-gray-800"
+              className="px-3 py-1.5 text-sm font-medium rounded border border-emerald-600 text-success hover:bg-emerald-50 dark:hover:bg-emerald-900/30 bg-surface"
             >
               TPG
             </a>
             <button
               onClick={() => setSyncCalendarOpen(true)}
-              className="px-3 py-1.5 text-sm font-medium rounded border border-orange-600 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30 bg-white dark:bg-gray-800"
+              className="px-3 py-1.5 text-sm font-medium rounded border border-orange-600 text-warning hover:bg-orange-50 dark:hover:bg-orange-900/30 bg-surface"
               title="Sync Google Calendar events to local DB for the selected date"
             >
               Sync Calendar
             </button>
             <button
               onClick={() => setUpsertModalOpen(true)}
-              className="px-3 py-1.5 text-sm font-medium rounded border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 bg-white dark:bg-gray-800"
+              className="px-3 py-1.5 text-sm font-medium rounded border border-blue-600 text-primary hover:bg-blue-50 dark:hover:bg-blue-900/30 bg-surface"
               title="Bulk-hydrate local DB from SSG for one or more Course Run IDs"
             >
               Upsert from SSG
             </button>
             <button
               onClick={handleToday}
-              className="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 bg-white dark:bg-gray-800"
+              className="px-3 py-1.5 text-sm font-medium rounded border border-strong text-on-surface-secondary hover:bg-surface-hover bg-surface"
             >
               Today
             </button>
@@ -1004,27 +1004,27 @@ const ViewClassByDateView: React.FC = () => {
       {/* Sync from Calendar modal */}
       {isSyncCalendarOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col mx-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-default">
               <div>
                 <h3 className="text-lg font-bold dark:text-white">Sync from Google Calendar</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted">
                   Date: {selectedDate}
                   {syncCalendarMeta && ` • ${syncCalendarMeta.total} calendar events, ${syncCalendarMeta.wsq} WSQ/IBF`}
                 </p>
               </div>
-              <button onClick={() => { setSyncCalendarOpen(false); setSyncCalendarResults(null); setSyncCalendarMeta(null); setSyncNotInCalendar(null); setConfirmCancelUuids(new Set()); setOverrideMismatchedTrainers(false); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
+              <button onClick={() => { setSyncCalendarOpen(false); setSyncCalendarResults(null); setSyncCalendarMeta(null); setSyncNotInCalendar(null); setConfirmCancelUuids(new Set()); setOverrideMismatchedTrainers(false); }} className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {!syncCalendarResults && !syncCalendarLoading && (
                 <div className="text-center py-8">
-                  <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  <p className="text-muted mb-4">
                     Fetch Google Calendar events for <strong>{selectedDate}</strong>, match to SSG course runs, and preview trainer sync.
                   </p>
                   <button
                     onClick={handleSyncCalendarPreview}
-                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
+                    className="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 font-medium"
                   >
                     Preview
                   </button>
@@ -1034,8 +1034,8 @@ const ViewClassByDateView: React.FC = () => {
               {syncCalendarLoading && (
                 <div className="text-center py-8">
                   <div className="inline-block w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-2" />
-                  <p className="text-gray-500 dark:text-gray-400">Fetching calendar events and searching SSG...</p>
-                  <p className="text-xs text-gray-400 mt-1">This may take a minute (SSG rate limits)</p>
+                  <p className="text-muted">Fetching calendar events and searching SSG...</p>
+                  <p className="text-xs text-muted mt-1">This may take a minute (SSG rate limits)</p>
                 </div>
               )}
 
@@ -1043,15 +1043,15 @@ const ViewClassByDateView: React.FC = () => {
                 <div className="space-y-2">
                   {syncCalendarResults.map((item: any, i: number) => {
                     const statusColors: Record<string, string> = {
-                      new_cr: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-                      trainer_mismatch: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-                      already_synced: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-                      ambiguous: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-                      no_course_match: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-                      no_cr_match: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-                      upserted: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-                      trainer_synced: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-                      cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+                      new_cr: 'bg-info-bg text-info',
+                      trainer_mismatch: 'bg-danger-bg text-danger',
+                      already_synced: 'bg-success-bg text-success',
+                      ambiguous: 'bg-warning-bg text-warning',
+                      no_course_match: 'bg-surface-elevated text-on-surface-secondary',
+                      no_cr_match: 'bg-surface-elevated text-on-surface-secondary',
+                      upserted: 'bg-success-bg text-success',
+                      trainer_synced: 'bg-success-bg text-success',
+                      cancelled: 'bg-danger-bg text-danger',
                     };
                     const statusLabels: Record<string, string> = {
                       new_cr: 'New / No Trainer',
@@ -1066,12 +1066,12 @@ const ViewClassByDateView: React.FC = () => {
                     };
                     const classTypeColors: Record<string, string> = {
                       Virtual: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-                      Hybrid: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                      Hybrid: 'bg-warning-bg text-warning',
                       External: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
-                      Physical: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+                      Physical: 'bg-success-bg text-success',
                     };
                     return (
-                      <div key={i} className={`rounded-lg border px-4 py-3 ${item.status === 'trainer_mismatch' ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                      <div key={i} className={`rounded-lg border px-4 py-3 ${item.status === 'trainer_mismatch' ? 'border-red-300 dark:border-red-700' : 'border-default'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
@@ -1085,30 +1085,30 @@ const ViewClassByDateView: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted">
                               {item.courseCode && <span>Course: {item.courseCode}</span>}
                               {item.courseRunId && <span>CR: {item.courseRunId}</span>}
                               {item.ssgStartDate && <span>{item.ssgStartDate} → {item.ssgEndDate}</span>}
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs">
                               {item.calendarTrainers?.length > 0 ? (
-                                <span className="text-blue-600 dark:text-blue-400">
+                                <span className="text-primary">
                                   Calendar: {item.calendarTrainers.map((t: any) => t.name).join(', ')}
                                 </span>
                               ) : (
-                                <span className="text-yellow-600 dark:text-yellow-400">No trainer in calendar</span>
+                                <span className="text-warning">No trainer in calendar</span>
                               )}
                               {item.localTrainer && (
-                                <span className="text-gray-600 dark:text-gray-300">
+                                <span className="text-on-surface-secondary">
                                   Local: {item.localTrainer.name}
                                 </span>
                               )}
                             </div>
                             {item.alert && (
-                              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{item.alert}</p>
+                              <p className="mt-1 text-xs text-danger">{item.alert}</p>
                             )}
                           </div>
-                          <span className={`flex-shrink-0 px-2 py-0.5 text-[11px] font-semibold rounded-full ${statusColors[item.status] || 'bg-gray-100 text-gray-600'}`}>
+                          <span className={`flex-shrink-0 px-2 py-0.5 text-[11px] font-semibold rounded-full ${statusColors[item.status] || 'bg-gray-100 text-on-surface-secondary'}`}>
                             {statusLabels[item.status] || item.status}
                           </span>
                         </div>
@@ -1149,7 +1149,7 @@ const ViewClassByDateView: React.FC = () => {
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium dark:text-white truncate">{item.courseTitle}</p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted">
                               <span>CR: {item.courseRunId}</span>
                               <span>Current status: {item.classStatus}</span>
                               {typeof item.enrollmentCount === 'number' && (
@@ -1157,7 +1157,7 @@ const ViewClassByDateView: React.FC = () => {
                               )}
                             </div>
                             {blocked && (
-                              <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-400">
+                              <p className="text-[11px] mt-1 text-warning">
                                 Has enrollments — cannot auto-cancel. Cancel manually if needed.
                               </p>
                             )}
@@ -1171,13 +1171,13 @@ const ViewClassByDateView: React.FC = () => {
             </div>
 
             {syncCalendarResults && !syncCalendarLoading && (
-              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 gap-4 flex-wrap">
+              <div className="flex items-center justify-between px-6 py-3 border-t border-default gap-4 flex-wrap">
                 <div className="flex flex-col gap-1">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-muted">
                     {syncCalendarResults.filter((r: any) => r.status === 'new_cr' || r.status === 'trainer_mismatch').length} sync action(s)
                     {confirmCancelUuids.size > 0 && ` • ${confirmCancelUuids.size} to cancel`}
                   </p>
-                  <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                  <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
                     <input
                       type="checkbox"
                       checked={overrideMismatchedTrainers}
@@ -1189,13 +1189,13 @@ const ViewClassByDateView: React.FC = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={handleSyncCalendarPreview}
-                    className="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="px-3 py-1.5 text-sm font-medium rounded border border-strong text-on-surface-secondary hover:bg-surface-hover"
                   >
                     Refresh
                   </button>
                   <button
                     onClick={handleSyncCalendarApply}
-                    className="px-3 py-1.5 text-sm font-medium rounded bg-orange-600 text-white hover:bg-orange-700"
+                    className="px-3 py-1.5 text-sm font-medium rounded bg-orange-700 text-white hover:bg-orange-800"
                   >
                     Apply Sync
                   </button>
@@ -1211,7 +1211,7 @@ const ViewClassByDateView: React.FC = () => {
             No max-height / overflow so no scrollbars appear; if content is taller than the
             viewport the bottom legend items simply require scrolling the page back up. */}
         <aside className="lg:w-60 flex-shrink-0 lg:sticky lg:top-32 lg:self-start">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+          <div className="bg-surface border border-default rounded-lg p-3">
             <MonthPicker
               currentMonth={currentMonth}
               selectedDate={selectedDate}
@@ -1221,9 +1221,9 @@ const ViewClassByDateView: React.FC = () => {
               onSelectDate={handleSelectDate}
             />
           </div>
-          <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-[11px] text-gray-600 dark:text-gray-300 space-y-2">
+          <div className="mt-3 bg-surface border border-default rounded-lg p-3 text-[11px] text-on-surface-secondary space-y-2">
             <div>
-              <div className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Class Status</div>
+              <div className="font-semibold text-on-surface mb-1">Class Status</div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" /> Confirmed</div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" /> Pending trainer</div>
@@ -1232,7 +1232,7 @@ const ViewClassByDateView: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Trainer State</div>
+              <div className="font-semibold text-on-surface mb-1">Trainer State</div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" /> SSG &amp; Local match</div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" /> SSG &amp; Local differ</div>
@@ -1247,15 +1247,15 @@ const ViewClassByDateView: React.FC = () => {
         {/* Main pane */}
         <main className="flex-1 min-w-0">
           {loading && (
-            <div className="text-sm text-gray-500 dark:text-gray-400 py-6">Loading events…</div>
+            <div className="text-sm text-muted py-6">Loading events…</div>
           )}
           {error && (
-            <div className="mb-4 p-3 rounded border border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300 text-sm">
+            <div className="mb-4 p-3 rounded border border-red-300 bg-danger-bg text-danger dark:border-red-800 text-sm">
               {error}
             </div>
           )}
           {!loading && !error && grouped.length === 0 && (
-            <div className="text-sm text-gray-500 dark:text-gray-400 py-6">
+            <div className="text-sm text-muted py-6">
               No classes found for {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}.
             </div>
           )}
@@ -1272,14 +1272,14 @@ const ViewClassByDateView: React.FC = () => {
               >
                 {/* Sticky day header — pins below the sticky page header (top: 64 + page header ~= 128px → top-32).
                     z-10 keeps it below the page header and site header dropdowns. */}
-                <div className={`sticky top-32 z-10 flex items-baseline gap-3 px-3 py-2 mb-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur rounded-t ${
-                  dateIso === selectedDate ? 'text-blue-700 dark:text-blue-300' : 'text-gray-800 dark:text-gray-100'
+                <div className={`sticky top-32 z-10 flex items-baseline gap-3 px-3 py-2 mb-2 border-b border-default bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur rounded-t ${
+                  dateIso === selectedDate ? 'text-primary' : 'text-on-surface'
                 }`}>
                   <div className="text-2xl font-bold tabular-nums">{Number(dateIso.slice(8, 10))}</div>
                   <div className="text-sm font-semibold tracking-wide">
                     {SHORT_MONTH_NAMES[Number(dateIso.slice(5, 7)) - 1]}, {SHORT_WEEKDAYS[(new Date(dateIso + 'T00:00:00').getDay() + 6) % 7]}
                   </div>
-                  <div className="ml-auto text-xs font-normal text-gray-500 dark:text-gray-400">
+                  <div className="ml-auto text-xs font-normal text-muted">
                     {dayEvents.length} {dayEvents.length === 1 ? 'class' : 'classes'}
                   </div>
                 </div>
@@ -1322,9 +1322,9 @@ const ViewClassByDateView: React.FC = () => {
                   return (
                     <div className="mt-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Not in Calendar</span>
-                      <div className="flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
+                      <div className="flex-1 border-t border-dashed border-strong" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">Not in Calendar</span>
+                      <div className="flex-1 border-t border-dashed border-strong" />
                     </div>
                     {cancelledForDay.length > 0 && (
                       <details className="mb-2 border border-dashed border-red-300 dark:border-red-700 rounded-lg">
@@ -1360,7 +1360,7 @@ const ViewClassByDateView: React.FC = () => {
                     )}
                     {noSessionsInCalendar.length > 0 && (
                     <details className="mb-2 border border-dashed border-orange-300 dark:border-orange-700 rounded-lg">
-                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg select-none">
+                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-warning hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg select-none">
                         In Calendar, no sessions imported
                         <span className="ml-1 text-orange-400">({noSessionsInCalendar.length})</span>
                       </summary>
@@ -1371,7 +1371,7 @@ const ViewClassByDateView: React.FC = () => {
                           return (
                             <div key={oe.courseRunUuid}>
                               <div
-                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-800/50 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-elevated text-xs cursor-pointer hover:bg-surface-hover"
                                 onClick={() => toggleExpanded(oeKey)}
                               >
                                 {(() => {
@@ -1380,27 +1380,27 @@ const ViewClassByDateView: React.FC = () => {
                                     : ((oe.localTrainerName || oe.tpgTrainerName || '').trim() ? 'Confirmed' : 'Pending');
                                   return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(oeStatus)}`} title={statusDotTooltip(oeStatus)} />;
                                 })()}
-                                <span className="truncate flex-1 text-gray-600 dark:text-gray-300">
+                                <span className="truncate flex-1 text-on-surface-secondary">
                                   {oe.courseTitle}
-                                  <span className="ml-1 text-gray-400 font-mono">[{oe.courseRunId}]</span>
+                                  <span className="ml-1 text-muted font-mono">[{oe.courseRunId}]</span>
                                 </span>
-                                <span className="text-gray-400 flex-shrink-0">
+                                <span className="text-muted flex-shrink-0">
                                   {oe.startDate?.slice(0, 10)} → {oe.endDate?.slice(0, 10)}
                                 </span>
-                                <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                                <span className="text-muted flex-shrink-0">
                                   {oe.localTrainerName || oe.tpgTrainerName || '—'}
                                 </span>
                                 {oe.totalSessions === 0 && (
-                                  <span className="px-1 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 flex-shrink-0 text-[10px]" title="No sessions imported — may need upsert from SSG">
+                                  <span className="px-1 py-0.5 rounded bg-danger-bg text-danger flex-shrink-0 text-[10px]" title="No sessions imported — may need upsert from SSG">
                                     0 sessions
                                   </span>
                                 )}
-                                <span className="text-gray-400 flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
+                                <span className="text-muted flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
                               </div>
                               {oeExpanded && (
-                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-default bg-surface grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
                                   <div>
-                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Status</p>
+                                    <p className="text-muted mb-1">Class Status</p>
                                     <select
                                       value={oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed' ? oe.classStatus : 'auto'}
                                       onClick={(e) => e.stopPropagation()}
@@ -1411,7 +1411,7 @@ const ViewClassByDateView: React.FC = () => {
                                           : val;
                                         handleChangeClassStatus(oe.courseRunUuid, newStatus as any);
                                       }}
-                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                                     >
                                       {(oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed') ? (
                                         <>
@@ -1428,12 +1428,12 @@ const ViewClassByDateView: React.FC = () => {
                                     </select>
                                   </div>
                                   <div>
-                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Type</p>
+                                    <p className="text-muted mb-1">Class Type</p>
                                     <select
                                       value={oe.classType || 'Physical'}
                                       onClick={(e) => e.stopPropagation()}
                                       onChange={(e) => handleChangeClassType(oe.courseRunUuid, e.target.value as any)}
-                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                                     >
                                       <option value="Physical">Physical</option>
                                       <option value="Virtual">Virtual</option>
@@ -1442,27 +1442,27 @@ const ViewClassByDateView: React.FC = () => {
                                     </select>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Start Date</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.startDate?.slice(0, 10) || '—'}</p>
+                                    <span className="text-muted">Start Date</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.startDate?.slice(0, 10) || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">End Date</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.endDate?.slice(0, 10) || '—'}</p>
+                                    <span className="text-muted">End Date</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.endDate?.slice(0, 10) || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">TPG Trainer</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.tpgTrainerName || '—'}</p>
+                                    <span className="text-muted">TPG Trainer</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.tpgTrainerName || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Local Trainer</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.localTrainerName || '—'}</p>
+                                    <span className="text-muted">Local Trainer</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.localTrainerName || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Learners</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.numLearners}</p>
+                                    <span className="text-muted">Learners</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.numLearners}</p>
                                   </div>
                                   <div className="col-span-2 md:col-span-4">
-                                    <span className="text-gray-400 dark:text-gray-500">Sessions ({oe.totalSessions})</span>
+                                    <span className="text-muted">Sessions ({oe.totalSessions})</span>
                                     {oe.sessionDates && oe.sessionDates.length > 0 ? (
                                       <div className="flex flex-wrap gap-1 mt-1">
                                         {oe.sessionDates.map((d: string) => (
@@ -1471,13 +1471,13 @@ const ViewClassByDateView: React.FC = () => {
                                             className={`px-1.5 py-0.5 rounded text-[10px] ${
                                               d === dateIso
                                                 ? 'font-semibold bg-blue-600 text-white'
-                                                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800'
+                                                : 'text-on-surface-secondary bg-surface-elevated'
                                             }`}
                                           >{d}</span>
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="font-semibold text-red-600 dark:text-red-400">No sessions imported</p>
+                                      <p className="font-semibold text-danger">No sessions imported</p>
                                     )}
                                   </div>
                                 </div>
@@ -1501,7 +1501,7 @@ const ViewClassByDateView: React.FC = () => {
                           return (
                             <div key={oe.courseRunUuid}>
                               <div
-                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-800/50 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-elevated text-xs cursor-pointer hover:bg-surface-hover"
                                 onClick={() => toggleExpanded(oeKey)}
                               >
                                 {(() => {
@@ -1510,25 +1510,25 @@ const ViewClassByDateView: React.FC = () => {
                                     : ((oe.localTrainerName || oe.tpgTrainerName || '').trim() ? 'Confirmed' : 'Pending');
                                   return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(oeStatus)}`} title={statusDotTooltip(oeStatus)} />;
                                 })()}
-                                <span className="truncate flex-1 text-gray-600 dark:text-gray-300">
+                                <span className="truncate flex-1 text-on-surface-secondary">
                                   {oe.courseTitle}
-                                  <span className="ml-1 text-gray-400 font-mono">[{oe.courseRunId}]</span>
+                                  <span className="ml-1 text-muted font-mono">[{oe.courseRunId}]</span>
                                 </span>
-                                <span className="text-gray-400 flex-shrink-0">
+                                <span className="text-muted flex-shrink-0">
                                   {oe.startDate?.slice(0, 10)} → {oe.endDate?.slice(0, 10)}
                                 </span>
-                                <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                                <span className="text-muted flex-shrink-0">
                                   {oe.localTrainerName || oe.tpgTrainerName || '—'}
                                 </span>
-                                <span className="px-1 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 flex-shrink-0 text-[10px]">
+                                <span className="px-1 py-0.5 rounded bg-danger-bg text-danger flex-shrink-0 text-[10px]">
                                   0 sessions
                                 </span>
-                                <span className="text-gray-400 flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
+                                <span className="text-muted flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
                               </div>
                               {oeExpanded && (
-                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-default bg-surface grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
                                   <div>
-                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Status</p>
+                                    <p className="text-muted mb-1">Class Status</p>
                                     <select
                                       value={oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed' ? oe.classStatus : 'auto'}
                                       onClick={(e) => e.stopPropagation()}
@@ -1539,7 +1539,7 @@ const ViewClassByDateView: React.FC = () => {
                                           : val;
                                         handleChangeClassStatus(oe.courseRunUuid, newStatus as any);
                                       }}
-                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                                     >
                                       {(oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed') ? (
                                         <>
@@ -1556,12 +1556,12 @@ const ViewClassByDateView: React.FC = () => {
                                     </select>
                                   </div>
                                   <div>
-                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Type</p>
+                                    <p className="text-muted mb-1">Class Type</p>
                                     <select
                                       value={oe.classType || 'Physical'}
                                       onClick={(e) => e.stopPropagation()}
                                       onChange={(e) => handleChangeClassType(oe.courseRunUuid, e.target.value as any)}
-                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                                     >
                                       <option value="Physical">Physical</option>
                                       <option value="Virtual">Virtual</option>
@@ -1570,24 +1570,24 @@ const ViewClassByDateView: React.FC = () => {
                                     </select>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Start Date</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.startDate?.slice(0, 10) || '—'}</p>
+                                    <span className="text-muted">Start Date</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.startDate?.slice(0, 10) || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">End Date</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.endDate?.slice(0, 10) || '—'}</p>
+                                    <span className="text-muted">End Date</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.endDate?.slice(0, 10) || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">TPG Trainer</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.tpgTrainerName || '—'}</p>
+                                    <span className="text-muted">TPG Trainer</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.tpgTrainerName || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Local Trainer</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.localTrainerName || '—'}</p>
+                                    <span className="text-muted">Local Trainer</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.localTrainerName || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Learners</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.numLearners}</p>
+                                    <span className="text-muted">Learners</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.numLearners}</p>
                                   </div>
                                 </div>
                               )}
@@ -1598,10 +1598,10 @@ const ViewClassByDateView: React.FC = () => {
                     </details>
                     )}
                     {ongoingWithSessions.length > 0 && (
-                    <details className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg select-none">
+                    <details className="border border-dashed border-strong rounded-lg">
+                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover rounded-lg select-none">
                         Ongoing course runs, no session today
-                        <span className="ml-1 text-gray-400">({ongoingWithSessions.length})</span>
+                        <span className="ml-1 text-muted">({ongoingWithSessions.length})</span>
                       </summary>
                       <div className="px-3 pb-2 space-y-1">
                         {ongoingWithSessions.map((oe: any) => {
@@ -1610,7 +1610,7 @@ const ViewClassByDateView: React.FC = () => {
                           return (
                             <div key={oe.courseRunUuid}>
                               <div
-                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-800/50 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-elevated text-xs cursor-pointer hover:bg-surface-hover"
                                 onClick={() => toggleExpanded(oeKey)}
                               >
                                 {(() => {
@@ -1619,22 +1619,22 @@ const ViewClassByDateView: React.FC = () => {
                                     : ((oe.localTrainerName || oe.tpgTrainerName || '').trim() ? 'Confirmed' : 'Pending');
                                   return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(oeStatus)}`} title={statusDotTooltip(oeStatus)} />;
                                 })()}
-                                <span className="truncate flex-1 text-gray-600 dark:text-gray-300">
+                                <span className="truncate flex-1 text-on-surface-secondary">
                                   {oe.courseTitle}
-                                  <span className="ml-1 text-gray-400 font-mono">[{oe.courseRunId}]</span>
+                                  <span className="ml-1 text-muted font-mono">[{oe.courseRunId}]</span>
                                 </span>
-                                <span className="text-gray-400 flex-shrink-0">
+                                <span className="text-muted flex-shrink-0">
                                   {oe.startDate?.slice(0, 10)} → {oe.endDate?.slice(0, 10)}
                                 </span>
-                                <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                                <span className="text-muted flex-shrink-0">
                                   {oe.localTrainerName || oe.tpgTrainerName || '—'}
                                 </span>
-                                <span className="text-gray-400 flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
+                                <span className="text-muted flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
                               </div>
                               {oeExpanded && (
-                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-default bg-surface grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
                                   <div>
-                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Status</p>
+                                    <p className="text-muted mb-1">Class Status</p>
                                     <select
                                       value={oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed' ? oe.classStatus : 'auto'}
                                       onClick={(e) => e.stopPropagation()}
@@ -1645,7 +1645,7 @@ const ViewClassByDateView: React.FC = () => {
                                           : val;
                                         handleChangeClassStatus(oe.courseRunUuid, newStatus as any);
                                       }}
-                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                                     >
                                       {(oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed') ? (
                                         <>
@@ -1662,12 +1662,12 @@ const ViewClassByDateView: React.FC = () => {
                                     </select>
                                   </div>
                                   <div>
-                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Type</p>
+                                    <p className="text-muted mb-1">Class Type</p>
                                     <select
                                       value={oe.classType || 'Physical'}
                                       onClick={(e) => e.stopPropagation()}
                                       onChange={(e) => handleChangeClassType(oe.courseRunUuid, e.target.value as any)}
-                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-surface-elevated text-gray-800 dark:text-gray-300"
                                     >
                                       <option value="Physical">Physical</option>
                                       <option value="Virtual">Virtual</option>
@@ -1676,27 +1676,27 @@ const ViewClassByDateView: React.FC = () => {
                                     </select>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Start Date</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.startDate?.slice(0, 10) || '—'}</p>
+                                    <span className="text-muted">Start Date</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.startDate?.slice(0, 10) || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">End Date</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.endDate?.slice(0, 10) || '—'}</p>
+                                    <span className="text-muted">End Date</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.endDate?.slice(0, 10) || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">TPG Trainer</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.tpgTrainerName || '—'}</p>
+                                    <span className="text-muted">TPG Trainer</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.tpgTrainerName || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Local Trainer</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.localTrainerName || '—'}</p>
+                                    <span className="text-muted">Local Trainer</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.localTrainerName || '—'}</p>
                                   </div>
                                   <div>
-                                    <span className="text-gray-400 dark:text-gray-500">Learners</span>
-                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.numLearners}</p>
+                                    <span className="text-muted">Learners</span>
+                                    <p className="font-semibold text-on-surface-secondary">{oe.numLearners}</p>
                                   </div>
                                   <div className="col-span-2 md:col-span-4">
-                                    <span className="text-gray-400 dark:text-gray-500">Sessions ({oe.totalSessions})</span>
+                                    <span className="text-muted">Sessions ({oe.totalSessions})</span>
                                     <div className="flex flex-wrap gap-1 mt-1">
                                       {oe.sessionDates.map((d: string) => (
                                         <span
@@ -1704,7 +1704,7 @@ const ViewClassByDateView: React.FC = () => {
                                           className={`px-1.5 py-0.5 rounded text-[10px] ${
                                             d === dateIso
                                               ? 'font-semibold bg-blue-600 text-white'
-                                              : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800'
+                                              : 'text-on-surface-secondary bg-surface-elevated'
                                           }`}
                                         >{d}</span>
                                       ))}

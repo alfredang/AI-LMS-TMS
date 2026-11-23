@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import AppStoreBadges from './common/AppStoreBadges';
+import Router from 'next/router';
 import { UserRole } from '@app-types';
 import { Button } from './ui/Button';
 import { authService, LoginCredentials, User } from '@lib/services/authService';
@@ -121,6 +123,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   console.log('🔍 LoginScreen: securitySettings.defaultOtp:', securitySettings.defaultOtp);
+
+  const signinHandoffDone = useRef(false);
+  // Arriving from the SWDA Enrolment form (/?signin=<email>): fill in that email and send the code,
+  // so the learner signs in to the account that holds their class and not a mistyped one.
+  useEffect(() => {
+    const handoff = new URLSearchParams(window.location.search).get('signin')?.trim().toLowerCase();
+    if (!handoff || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(handoff) || signinHandoffDone.current) return;
+    signinHandoffDone.current = true;
+    // Drop the parameter so a reload does not send another code.
+    Router.replace(window.location.pathname, undefined, { shallow: true }).catch(() => {});
+    setEmail(handoff);
+    requestOtp(handoff);
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1102,6 +1119,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   {trainingProviderProfile.companyWebsite}
                 </a>
               </p>
+            )}
+            {/* Store badges for this tenant's mobile app; shown only for the stores configured (lib/mobileAppLinks.ts). */}
+            {showSignInHeading && (trainingProviderData?.mobileAppIosUrl || trainingProviderData?.mobileAppAndroidUrl) && (
+              <div className="mb-4 text-center" aria-label="Get the mobile app">
+                <p className="mb-3 text-sm text-muted">Get the mobile app</p>
+                <AppStoreBadges
+                  iosUrl={trainingProviderData?.mobileAppIosUrl}
+                  androidUrl={trainingProviderData?.mobileAppAndroidUrl}
+                  className="justify-center"
+                />
+              </div>
             )}
             <div className="flex justify-center space-x-4">
               <button onClick={() => setShowPrivacyPolicy(true)} className="hover:underline cursor-pointer">Privacy Policy</button>

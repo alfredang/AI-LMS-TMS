@@ -56,7 +56,7 @@ const ViewCourseRun: React.FC<ViewCourseRunProps> = ({ config, updateConfig }) =
             type="text"
             value={runId}
             onChange={(e) => setRunId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter Course Run ID"
           />
         </div>
@@ -67,7 +67,7 @@ const ViewCourseRun: React.FC<ViewCourseRunProps> = ({ config, updateConfig }) =
             id="includeExpired"
             checked={includeExpired}
             onChange={(e) => setIncludeExpired(e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-strong text-primary focus:ring-blue-500"
           />
           <label htmlFor="includeExpired" className="text-sm font-medium">
             Include expired courses

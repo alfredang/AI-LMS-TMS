@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureCourseDefaultTrainerSchema } from '../../../lib/trainers/courseDefaultTrainer';
 
 /** Ensure the course_run_trainer junction table exists */
 async function ensureJunctionTable() {
@@ -30,11 +31,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Ensure the junction table exists before querying it
     await ensureJunctionTable();
+    await ensureCourseDefaultTrainerSchema();
 
     let query = `
       SELECT
         cr.id,
         cr.course_run_id,
+        c.id AS course_id,
+        c.default_trainer_id,
         c.title AS course_title,
         public.course_code_at(c.id, COALESCE(cr.created_at, cr.start_date::timestamptz, now())) AS course_code,
         cr.start_date,
@@ -98,6 +102,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       data: result.rows.map(row => ({
         id: row.id,
         courseRunId: row.course_run_id,
+        courseId: row.course_id,
+        defaultTrainerId: row.default_trainer_id || null,
         courseTitle: row.course_title,
         courseCode: row.course_code,
         startDate: row.start_date,

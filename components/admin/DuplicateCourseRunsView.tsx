@@ -68,11 +68,11 @@ const CLASS_LABEL: Record<DuplicateGroup['classification'], string> = {
 };
 
 const CLASS_STYLE: Record<DuplicateGroup['classification'], string> = {
-  both_have_enrolments: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
-  one_has_enrolments: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200',
-  no_enrolments: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  both_have_enrolments: 'bg-danger-bg text-danger',
+  one_has_enrolments: 'bg-success-bg text-success',
+  no_enrolments: 'bg-warning-bg text-warning',
   mixed_unknown: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200',
-  not_duplicate: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200',
+  not_duplicate: 'bg-surface-elevated text-on-surface-secondary',
 };
 
 function splitRunIds(value: string): string[] {
@@ -290,7 +290,7 @@ const DuplicateCourseRunsView: React.FC = () => {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-200">
+        <div className="rounded-md border border-red-200 bg-danger-bg px-4 py-3 text-sm text-danger dark:border-red-900">
           {error}
         </div>
       )}
@@ -334,7 +334,7 @@ const DuplicateCourseRunsView: React.FC = () => {
           </div>
 
           {!data.visibility_update_available && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            <div className="rounded-md border border-amber-200 bg-warning-bg px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:text-amber-100">
               {data.visibility_update_blocker}
             </div>
           )}
@@ -396,7 +396,7 @@ const DuplicateCourseRunsView: React.FC = () => {
                               <td className="px-4 py-2">{run.in_lms ? 'Yes' : 'No'}</td>
                               <td className="px-4 py-2 font-semibold text-on-surface">
                                 {run.ssg_enrolment_error ? (
-                                  <span className="text-red-600 dark:text-red-300" title={run.ssg_enrolment_error}>
+                                  <span className="text-danger" title={run.ssg_enrolment_error}>
                                     Error
                                     <span className="block max-w-[260px] truncate text-[11px] font-normal">{run.ssg_enrolment_error}</span>
                                   </span>
@@ -405,8 +405,8 @@ const DuplicateCourseRunsView: React.FC = () => {
                               <td className="px-4 py-2">{run.ssg_enrolment_count}</td>
                               <td className="px-4 py-2">{run.local_enrolment_count}</td>
                               <td className="px-4 py-2">
-                                {isKeep && <span className="text-green-700 dark:text-green-300 font-medium">Keep visible</span>}
-                                {isHide && <span className="text-amber-700 dark:text-amber-300 font-medium">Hide</span>}
+                                {isKeep && <span className="text-success font-medium">Keep visible</span>}
+                                {isHide && <span className="text-warning font-medium">Hide</span>}
                                 {isAlreadyHidden && <span className="text-sky-700 dark:text-sky-300 font-medium">Already hidden</span>}
                                 {needsManualReview && <span className="text-on-surface-secondary">Review manually</span>}
                               </td>

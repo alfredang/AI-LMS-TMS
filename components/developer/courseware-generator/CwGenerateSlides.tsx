@@ -118,7 +118,7 @@ const CwGenerateSlides: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">Generate Slides</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-muted mt-1">
           Run the 5-phase multi-agent pipeline (Research &rarr; Content &rarr; Editor &rarr; Infographic &rarr; Assembly)
           to produce a WSQ training PPTX deck with AntV infographics.
         </p>
@@ -134,20 +134,20 @@ const CwGenerateSlides: React.FC = () => {
           || '';
         const hoursDisplay = hoursRaw ? `${hoursRaw}` : '(no duration extracted)';
         return (
-          <Card className="p-4 bg-gray-50 dark:bg-gray-800/50">
-            <p className="text-xs text-gray-400 uppercase tracking-wider">Course Context</p>
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">{title}</p>
-            <p className="text-xs text-gray-500">{hoursDisplay}</p>
+          <Card className="p-4 bg-surface-elevated">
+            <p className="text-xs text-muted uppercase tracking-wider">Course Context</p>
+            <p className="text-sm font-semibold text-on-surface">{title}</p>
+            <p className="text-xs text-muted">{hoursDisplay}</p>
           </Card>
         );
       })()}
 
       <Card className="p-5 space-y-4">
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+        <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">
           Slide Generation
         </h3>
 
-        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300">
+        <div className="p-3 rounded-lg bg-info-bg border border-blue-200 dark:border-blue-800 text-sm text-primary">
           <p className="font-medium mb-1">Slide Targets by Duration:</p>
           <ul className="list-disc pl-4 space-y-0.5 text-xs">
             <li>1-day (8 hrs): ~100 slides</li>
@@ -160,7 +160,7 @@ const CwGenerateSlides: React.FC = () => {
         </div>
 
         {error && (
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
+          <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger whitespace-pre-wrap">
             {error}
           </div>
         )}
@@ -175,10 +175,10 @@ const CwGenerateSlides: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
+              <p className="text-sm font-medium text-on-surface">
                 {progress.message || 'Running pipeline...'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 {progress.percent}% — Research &rarr; Content &rarr; Editor &rarr; Infographic &rarr; Assembly
               </p>
             </div>
@@ -189,7 +189,7 @@ const CwGenerateSlides: React.FC = () => {
               style={{ width: `${Math.max(2, progress.percent || 0)}%` }}
             />
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted">
             Safe to keep this tab open &mdash; generation continues on the server even if your connection blips.
           </p>
         </Card>
@@ -199,8 +199,8 @@ const CwGenerateSlides: React.FC = () => {
         <Card className="p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-gray-900 dark:text-white">Slide Deck Ready</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <h4 className="text-sm font-bold text-on-surface">Slide Deck Ready</h4>
+              <p className="text-xs text-muted mt-0.5">
                 {result.message}
                 {result.slideCount ? ` · ${result.slideCount} slides` : ''}
               </p>
@@ -213,8 +213,8 @@ const CwGenerateSlides: React.FC = () => {
       {!loading && !result?.fileName && (
         <Card className="p-8 text-center">
           <div className="text-4xl mb-3">🖥️</div>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Slide Deck Generator</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          <h3 className="text-lg font-bold text-on-surface mb-1">Slide Deck Generator</h3>
+          <p className="text-sm text-muted max-w-md mx-auto">
             Run <strong>Extract Course Info</strong> first, then click <strong>Generate Slide Deck</strong>.
             Output is a WSQ-standard PPTX with infographic content slides, fixed intro (10) and closing (7) slides.
           </p>

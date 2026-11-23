@@ -146,14 +146,14 @@ const AcceptableUsePolicyView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
+      <div className="border-b border-default pb-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
               <Icon name={IconName.ClipboardCheck} className="w-7 h-7" />
               Acceptable Use Policy
             </h3>
-            <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-2 max-w-4xl text-sm text-muted">
               Edit the acceptable use policy displayed on the login page. This policy is shown when users click &quot;Acceptable Use Policy&quot;.
             </p>
           </div>
@@ -176,7 +176,7 @@ const AcceptableUsePolicyView: React.FC = () => {
       </div>
 
       {saveMessage && (
-        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
           {saveMessage.text}
         </div>
       )}
@@ -186,26 +186,26 @@ const AcceptableUsePolicyView: React.FC = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-500">Loading acceptable use policy...</span>
+              <span className="ml-3 text-muted">Loading acceptable use policy...</span>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-sm font-medium text-on-surface-secondary">
                   Acceptable Use Policy Content
                 </label>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-muted">
                   {hasChanges ? 'Unsaved changes' : 'Up to date'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 Use {'{COMPANY_NAME}'} as a placeholder — it will be automatically replaced with your company name when displayed to users.
               </p>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={30}
-                className="block w-full px-4 py-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
+                className="block w-full px-4 py-3 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
                 placeholder="Enter your acceptable use policy here..."
               />
             </div>
@@ -215,19 +215,19 @@ const AcceptableUsePolicyView: React.FC = () => {
 
       <Card>
         <div className="p-6">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview</h4>
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-gray-50 dark:bg-slate-900 max-h-96 overflow-y-auto">
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Preview</h4>
+          <div className="border border-default rounded-lg p-6 bg-surface-elevated max-h-96 overflow-y-auto">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               {content.split('\n').map((line, i) => {
                 const trimmed = line.trim();
                 if (!trimmed) return <br key={i} />;
                 if (/^\d+\.\s+/.test(trimmed)) {
-                  return <h4 key={i} className="font-semibold text-gray-900 dark:text-white mt-4 mb-2">{trimmed}</h4>;
+                  return <h4 key={i} className="font-semibold text-on-surface mt-4 mb-2">{trimmed}</h4>;
                 }
                 if (trimmed.startsWith('- ')) {
-                  return <li key={i} className="ml-4 text-gray-700 dark:text-gray-300">{trimmed.substring(2)}</li>;
+                  return <li key={i} className="ml-4 text-on-surface-secondary">{trimmed.substring(2)}</li>;
                 }
-                return <p key={i} className="text-gray-700 dark:text-gray-300 mb-1">{trimmed}</p>;
+                return <p key={i} className="text-on-surface-secondary mb-1">{trimmed}</p>;
               })}
             </div>
           </div>

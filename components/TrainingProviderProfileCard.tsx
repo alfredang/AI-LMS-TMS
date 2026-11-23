@@ -5,12 +5,13 @@ import { Icon, IconName } from './ui/Icon';
 import { Spinner } from './ui';
 import { TrainingProviderProfile } from '@app-types/profile';
 import { useLms } from '@contexts/LmsContext';
-import { applyPrimaryColor, useColorScheme, ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
+import { applyPrimaryColor, useColorScheme } from '@utils/colorUtils';
+import ThemePreferencePicker from './common/ThemePreferencePicker';
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
 import PayrollSettingsView from './payroll/PayrollSettingsView';
 
 // Constants for styling consistency
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 // API Key configurations with their available models
 const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; label: string }[]; defaultModel: string }> = {
@@ -207,7 +208,7 @@ const ToggleSwitch: React.FC<{
         return (
             <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                 <span className="text-sm font-bold text-on-surface">{label}</span>
-                <span className={`text-sm font-medium ${checked ? 'text-green-500' : 'text-gray-400'}`}>
+                <span className={`text-sm font-medium ${checked ? 'text-green-500' : 'text-muted'}`}>
                     {checked ? 'Enabled' : 'Disabled'}
                 </span>
             </div>
@@ -299,6 +300,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isTertiaryCoursesSgIntegrationOpen, setIsTertiaryCoursesSgIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
     const [isMailerliteIntegrationOpen, setIsMailerliteIntegrationOpen] = useState(false);
+    const [isAiExamIntegrationOpen, setIsAiExamIntegrationOpen] = useState(false);
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isSmtpIntegrationOpen, setIsSmtpIntegrationOpen] = useState(false);
     const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
@@ -313,7 +315,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
-    const [isGamificationOpen, setIsGamificationOpen] = useState(false);
     const [isSsgFundingOpen, setIsSsgFundingOpen] = useState(false);
     const [isGstOpen, setIsGstOpen] = useState(false);
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
@@ -327,7 +328,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isApp4ClientSecretVisible, setIsApp4ClientSecretVisible] = useState(false);
     const [isVisibleGoogleSecret, setIsVisibleGoogleSecret] = useState(false);
     const [isVisibleGoogleRefreshToken, setIsVisibleGoogleRefreshToken] = useState(false);
-    const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     // Get the updateTrainingProviderProfile function from the LMS context
     const { updateTrainingProviderProfile, updateCurrentUserProfile } = useLms();
@@ -443,7 +443,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 return (
                     <div
                         key={keyName}
-                        className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
+                        className="p-4 rounded-lg border border-strong bg-surface"
                     >
                         <div className="flex items-center justify-between mb-3">
                             <span className="font-semibold text-on-surface">
@@ -473,7 +473,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     )
                                 )}
                                 {keyValue && (
-                                    <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                                    <span className="text-sm text-success flex items-center gap-1.5">
                                         <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                                         Configured
                                     </span>
@@ -502,12 +502,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 }));
                                             }}
                                             placeholder={inputLabel ? `Enter ${inputLabel.toLowerCase()}...` : 'Enter API key...'}
-                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted hover:text-gray-600 dark:hover:text-gray-300 p-1"
                                         >
                                             <Icon
                                                 name={isVisible ? IconName.EyeOff : IconName.Eye}
@@ -516,19 +516,19 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-strong rounded-md">
                                         <span className="flex-grow text-on-surface font-mono text-sm truncate">
                                             {keyValue ? (
                                                 isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
                                             ) : (
-                                                <span className="text-gray-500 italic">Not set</span>
+                                                <span className="text-muted italic">Not set</span>
                                             )}
                                         </span>
                                         {keyValue && (
                                             <button
                                                 type="button"
                                                 onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
+                                                className="text-muted hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
                                             >
                                                 <Icon
                                                     name={isVisible ? IconName.EyeOff : IconName.Eye}
@@ -555,7 +555,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                     }
                                                 }));
                                             }}
-                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                                             disabled={!keyValue}
                                         >
                                             <option value="">None</option>
@@ -566,12 +566,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             ))}
                                         </select>
                                     ) : (
-                                        <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                        <div className="px-3 py-2 bg-surface border border-strong rounded-md">
                                             <span className="text-on-surface text-sm">
                                                 {keyValue ? (
                                                     selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
                                                 ) : (
-                                                    <span className="text-gray-500 italic">-</span>
+                                                    <span className="text-muted italic">-</span>
                                                 )}
                                             </span>
                                         </div>
@@ -603,7 +603,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         feedbackFormEnabled: 'feedback_form_enabled',
     };
 
-    const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
+    const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'fundingSettings', key: string) => {
         setFormData(prev => {
             const currentSection = prev[section];
             const newValue = !(currentSection as any)[key];
@@ -691,13 +691,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             applyPrimaryColor(newColor);
             console.log(`🎨 Real-time color preview applied: ${newColor}`);
         }
-    };
-
-    const handleThemeToggle = () => {
-        const newTheme: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
-        setThemeMode(newTheme);
-        applyTheme(newTheme);
-        console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
     const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'invoiceTemplateUrl' | 'receiptTemplateUrl' | 'certificateTemplateUrl' | 'proFormaInvoiceTemplateUrl' | 'ssgCertFile' | 'ssgPrivateKeyFile' | 'ssgApp1CertFile' | 'ssgApp1PrivateKeyFile' | 'ssgApp3CertFile' | 'ssgApp3PrivateKeyFile' | 'serviceAccountKeyFile') => {
@@ -1072,7 +1065,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <h3 className={`text-lg font-bold ${isDefault ? 'text-green-400' : 'text-on-surface'}`}>{title}</h3>
                     <Icon
                         name={IconName.ChevronDown}
-                        className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                        className={`w-5 h-5 flex-shrink-0 text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                     />
                 </div>
             </button>
@@ -1107,7 +1100,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button type="button" onClick={toggle} className="group flex flex-1 items-center justify-between text-left">
                 <h2 className={titleClassName}>{title}</h2>
-                <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isOpen ? 'rotate-180' : ''}`} />
+                <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-muted group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             {renderSectionActions()}
         </div>
@@ -1127,7 +1120,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <h3 className="text-lg font-bold text-on-surface">{title}</h3>
                 <Icon
                     name={IconName.ChevronDown}
-                    className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 flex-shrink-0 text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 />
             </div>
         </button>
@@ -1150,7 +1143,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <h3 className="text-base font-bold text-on-surface">{title}</h3>
                 <Icon
                     name={IconName.ChevronDown}
-                    className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-4 h-4 flex-shrink-0 text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 />
             </div>
         </button>
@@ -1628,7 +1621,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                         <button
                                                             type="button"
                                                             onClick={() => setVisible(!visible)}
-                                                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            className="text-muted hover:text-gray-600 dark:hover:text-gray-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                                         >
                                                             <Icon
                                                                 name={visible ? IconName.EyeOff : IconName.Eye}
@@ -1674,10 +1667,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </p>
                                         </div>
                                         {googleRenewStatus.kind === 'opened' && (
-                                            <p className="text-xs text-green-600 mt-2">{googleRenewStatus.message}</p>
+                                            <p className="text-xs text-success mt-2">{googleRenewStatus.message}</p>
                                         )}
                                         {googleRenewStatus.kind === 'error' && (
-                                            <p className="text-xs text-red-600 mt-2">{googleRenewStatus.message}</p>
+                                            <p className="text-xs text-danger mt-2">{googleRenewStatus.message}</p>
                                         )}
                                     </div>
 
@@ -1732,10 +1725,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </button>
                                         </div>
                                         {gmailTestStatus.kind === 'ok' && (
-                                            <p className="text-xs text-green-600 mt-2">{gmailTestStatus.message}</p>
+                                            <p className="text-xs text-success mt-2">{gmailTestStatus.message}</p>
                                         )}
                                         {gmailTestStatus.kind === 'error' && (
-                                            <p className="text-xs text-red-600 mt-2">{gmailTestStatus.message}</p>
+                                            <p className="text-xs text-danger mt-2">{gmailTestStatus.message}</p>
                                         )}
                                         <p className="text-xs text-on-surface-secondary mt-2">
                                             {isEditing
@@ -2169,7 +2162,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-success-bg text-success' : 'bg-surface-elevated text-on-surface-secondary'}`}>
                                         {zoomStatus.connected ? `Connected${zoomStatus.userEmail ? `: ${zoomStatus.userEmail}` : ''}` : 'Not connected'}
                                     </span>
                                     <Button size="sm" variant="secondary" onClick={handleConnectZoom} disabled={isEditing || zoomBusy || !hasZoomCredentialsInForm}>
@@ -2183,7 +2176,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </Button>
                                 </div>
                                 {isEditing ? (
-                                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-200">
+                                    <div className="rounded-md border border-amber-300 bg-warning-bg px-3 py-2 text-xs font-medium text-warning dark:border-amber-700/70">
                                         Save the Zoom OAuth App Client ID and Secret before connecting. The Connect Zoom button will unlock after the credentials are saved.
                                     </div>
                                 ) : (
@@ -2817,10 +2810,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </button>
                                         </div>
                                         {smtpTestStatus.kind === 'ok' && (
-                                            <p className="text-xs text-green-600 mt-2">{smtpTestStatus.message}</p>
+                                            <p className="text-xs text-success mt-2">{smtpTestStatus.message}</p>
                                         )}
                                         {smtpTestStatus.kind === 'error' && (
-                                            <p className="text-xs text-red-600 mt-2">{smtpTestStatus.message}</p>
+                                            <p className="text-xs text-danger mt-2">{smtpTestStatus.message}</p>
                                         )}
                                         <p className="text-xs text-on-surface-secondary mt-2">
                                             {isEditing
@@ -2866,6 +2859,52 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 ) : (
                                                     <p className="text-sm text-on-surface truncate">
                                                         {(formData.integrations as any)[key] || 'Not Set'}
+                                                    </p>
+                                                )}
+                                                {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                    )}
+                    </div>
+
+                            {/* AI Exam (Tertiary Exams) Configuration */}
+                    <div>
+                    {renderIntegrationPanelHeader('AI Exam', isAiExamIntegrationOpen, () => setIsAiExamIntegrationOpen(prev => !prev))}
+                    {isAiExamIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'examsApiUrl' as const, label: 'Exams Site URL', placeholder: 'https://exams.tertiaryinfotech.com', secret: false, helpText: 'The AI Exam site the practice exams live on. Leave blank for the default.' },
+                                            { key: 'examsApiToken' as const, label: 'API Token', placeholder: 'Exams API token', secret: true, helpText: 'Create it on the Exams site under Admin → API Tokens with the scope assign:practice-exams. It turns on the Practice Exam section on the class page, where trainers register the class on the course\'s practice exam. Replaces the EXAMS_API_TOKEN env var.' },
+                                        ].map(({ key, label, placeholder, secret, helpText }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type={secret ? 'password' : 'text'}
+                                                        autoComplete="off"
+                                                        value={(formData.integrations as any)[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={placeholder}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {(formData.integrations as any)[key]
+                                                            ? (secret ? '••••••••' + String((formData.integrations as any)[key]).slice(-4) : (formData.integrations as any)[key])
+                                                            : 'Not Set'}
                                                     </p>
                                                 )}
                                                 {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}
@@ -3303,7 +3342,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 </button>
                             ) : (
                                 <span
-                                    className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
+                                    className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-success' : 'text-muted'
                                         }`}
                                 >
                                     {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
@@ -3329,7 +3368,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             securitySettings: { ...prev.securitySettings, sanitiseAfterMonths: v },
                                         }));
                                     }}
-                                    className="w-20 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-20 rounded-md border border-strong bg-surface px-2 py-1 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             ) : (
                                 <span className="text-sm font-semibold text-on-surface tabular-nums">
@@ -3363,7 +3402,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </button>
                         ) : (
                             <span
-                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-green-600' : 'text-gray-400'
+                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-success' : 'text-muted'
                                     }`}
                             >
                                 {formData.securitySettings.enableOtpLogin ? 'Enabled' : 'Disabled'}
@@ -3390,7 +3429,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </button>
                                 ) : (
                                     <span
-                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-green-600' : 'text-gray-400'
+                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-success' : 'text-muted'
                                             }`}
                                     >
                                         {formData.securitySettings.enableDefaultOtp ? 'Enabled' : 'Disabled'}
@@ -3447,7 +3486,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </button>
                         ) : (
                             <span
-                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-green-600' : 'text-gray-400'
+                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-success' : 'text-muted'
                                     }`}
                             >
                                 {formData.securitySettings.forceFirstPasswordChange ? 'Enabled' : 'Disabled'}
@@ -3779,7 +3818,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                         }}
                                                         disabled={!isEditing}
                                                         placeholder={config?.label || keyName}
-                                                        className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                        className="flex-1 rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                     />
                                                     <button
                                                         type="button"
@@ -3811,7 +3850,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     return (
                                         <div
                                             key={appKey}
-                                            className={`rounded-lg border-2 p-4 transition-colors ${isDefault ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                                            className={`rounded-lg border-2 p-4 transition-colors ${isDefault ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-default'}`}
                                         >
                                             <div className="flex items-center gap-3 mb-3">
                                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -3826,12 +3865,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                                 apiKeys: { ...prev.apiKeys, QUICKBOOKS_DEFAULT_APP: appKey }
                                                             }));
                                                         }}
-                                                        className="w-4 h-4 text-green-600 accent-green-600"
+                                                        className="w-4 h-4 text-success accent-green-600"
                                                     />
                                                     <span className="font-semibold text-on-surface">{appLabel}</span>
                                                 </label>
                                                 {isDefault && (
-                                                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-800/30 dark:text-green-400">
+                                                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-success-bg text-success">
                                                         Default
                                                     </span>
                                                 )}
@@ -3856,7 +3895,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                                     }}
                                                                     disabled={!isEditing}
                                                                     placeholder={config?.label || keyName}
-                                                                    className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                                    className="flex-1 rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -3878,7 +3917,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 })}
 
                                 {/* Shared Quickbooks fields */}
-                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                <div className="mt-4 pt-4 border-t border-default">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {(['QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_REALM_ID'] as const).map((keyName) => {
                                             const keyValue = (formData.apiKeys || {})[keyName] || '';
@@ -3899,7 +3938,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                             }}
                                                             disabled={!isEditing}
                                                             placeholder={config?.label || keyName}
-                                                            className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                            className="flex-1 rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                         />
                                                         <button
                                                             type="button"
@@ -3919,7 +3958,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     {/* Redirect URI (override) — replaces the legacy QBO_REDIRECT_URI
                                         env var. Leave blank to use the computed default. Must match an
                                         entry in the Intuit Developer app's Redirect URIs allow list. */}
-                                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                    <div className="mt-4 pt-4 border-t border-default">
                                         {(() => {
                                             const savedOverride = (formData.integrations as any).qboRedirectUri || '';
                                             const computedDefault = typeof window !== 'undefined'
@@ -3942,7 +3981,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                                     } as any,
                                                                 }))
                                                             }
-                                                            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                            className="w-full rounded-md border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                                             placeholder={`leave blank to use ${computedDefault}`}
                                                         />
                                                     ) : (
@@ -3979,7 +4018,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 const defaultApp = (formData.apiKeys || {} as any)['QUICKBOOKS_DEFAULT_APP'] || 'app1';
                                                 window.open(`/api/quickbooks/oauth/connect?app=${defaultApp}`, '_blank', 'width=600,height=700');
                                             }}
-                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-800 transition-colors"
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -3996,59 +4035,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </>}
 
                 <div className="border-t my-6"></div>
-                {renderSectionHeader('Gamification Setting', isGamificationOpen, () => setIsGamificationOpen(prev => !prev), 'text-xl font-bold')}
-                {isGamificationOpen && <div className="space-y-4 font-semibold mt-4">
-                    <ToggleSwitch
-                        checked={formData.gamingSettings.enableLeaderboard}
-                        onChange={(checked) => handleToggleChange('gamingSettings', 'enableLeaderboard')}
-                        label="Enable Leaderboard"
-                        isEditing={isEditing}
-                    />
-                    <ToggleSwitch
-                        checked={formData.gamingSettings.enablePoints}
-                        onChange={(checked) => handleToggleChange('gamingSettings', 'enablePoints')}
-                        label="Enable Points System"
-                        isEditing={isEditing}
-                    />
-                </div>}
-
-                <div className="border-t my-6"></div>
                 {renderSectionHeader('Appearance', isAppearanceOpen, () => setIsAppearanceOpen(prev => !prev), 'text-xl font-bold')}
 
                 {isAppearanceOpen && <>{/* Theme Mode Toggle */}
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center p-4 bg-surface-elevated rounded-lg border border-default">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-700' : 'bg-blue-100'}`}>
-                                {themeMode === 'dark' ? (
-                                    <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                                    </svg>
-                                ) : (
-                                    <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                                    </svg>
-                                )}
-                            </div>
-                            <div>
-                                <p className="font-semibold text-on-surface">Theme Mode</p>
-                                <p className="text-sm text-on-surface-secondary">
-                                    {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleThemeToggle}
-                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-primary' : 'bg-gray-300'
-                                }`}
-                        >
-                            <span
-                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
-                                    }`}
-                            />
-                        </button>
-                    </div>
+                    <ThemePreferencePicker />
 
                     {/* Primary Color */}
                     <div className="flex justify-between items-center p-4 bg-surface-elevated rounded-lg border border-default">
@@ -4072,7 +4063,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         name="primary"
                                         value={formData.colorScheme || '#3B82F6'}
                                         onChange={handleColorChange}
-                                        className="w-10 h-10 rounded-md border-2 border-gray-300 cursor-pointer hover:border-primary transition-colors"
+                                        className="w-10 h-10 rounded-md border-2 border-strong cursor-pointer hover:border-primary transition-colors"
                                     />
                                     <span className="font-mono text-sm text-on-surface-secondary">{formData.colorScheme || '#3B82F6'}</span>
                                 </>

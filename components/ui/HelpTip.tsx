@@ -72,7 +72,7 @@ export const HelpTip: React.FC<HelpTipProps> = ({ children, label = 'More info',
         aria-label={label}
         aria-expanded={open}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 dark:border-gray-500 text-[10px] font-semibold leading-none text-gray-500 dark:text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 dark:border-gray-500 text-[10px] font-semibold leading-none text-muted hover:bg-surface-hover hover:text-on-surface"
       >
         ?
       </button>
@@ -87,7 +87,7 @@ export const HelpTip: React.FC<HelpTipProps> = ({ children, label = 'More info',
             width: WIDTH,
             visibility: pos ? 'visible' : 'hidden',
           }}
-          className="z-[60] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2.5 text-left text-xs font-normal leading-relaxed text-gray-600 dark:text-gray-300 shadow-lg"
+          className="z-[60] rounded-md border border-default bg-surface p-2.5 text-left text-xs font-normal leading-relaxed text-on-surface-secondary shadow-lg"
         >
           {children}
         </div>,

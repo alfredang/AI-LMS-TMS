@@ -62,7 +62,7 @@ const AgenticAIToolsPage: React.FC = () => {
         {AGENTIC_AI_CATEGORIES.map(cat => (
           <Card key={cat.title} className="p-6 flex flex-col dark:bg-gray-800 dark:border-gray-700">
             <h3 className="text-xl font-bold mb-2 dark:text-white">{cat.title}</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{cat.description}</p>
+            <p className="text-on-surface-secondary text-sm mb-4">{cat.description}</p>
             <div className="flex flex-wrap gap-2 mt-auto">
               {cat.items.map(item => (
                 <a

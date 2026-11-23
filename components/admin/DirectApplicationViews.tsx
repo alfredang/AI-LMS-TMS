@@ -22,7 +22,7 @@ const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
  */
 
 
-const inputClasses ="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+const inputClasses ="block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
 const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -33,7 +33,7 @@ const getStatusColor = (status: string) => {
         case 'rejected': case 'failed': case 'cancelled':
             return 'bg-red-100 text-red-800 border-red-200';
         default:
-            return 'bg-gray-100 text-gray-800 border-gray-200';
+            return 'bg-gray-100 text-on-surface border-default';
     }
 };
 
@@ -148,7 +148,7 @@ function computeDaBilling(app: any): { payable: number; creditApplied: number; d
  */
 export const InvoiceGeneratedOnCell: React.FC<{ docNumber?: string | null; renewedOn?: string | null }> = ({ docNumber, renewedOn }) => {
     const m = String(docNumber || '').trim().match(/^TC(\d{2})-(\d{2})(\d{2})-/i);
-    if (!m) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+    if (!m) return <span className="text-muted">-</span>;
 
     const iso = `20${m[1]}-${m[2]}-${m[3]}`;
     const shown = `${m[3]}/${m[2]}/20${m[1]}`;
@@ -157,7 +157,7 @@ export const InvoiceGeneratedOnCell: React.FC<{ docNumber?: string | null; renew
 
     return (
         <span
-            className={afterRenewal ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}
+            className={afterRenewal ? 'text-warning font-semibold' : 'text-on-surface-secondary'}
             title={afterRenewal
                 ? `Raised on ${shown}, after this course was renewed (${renewal.split('-').reverse().join('/')}). If this invoice reads WSQ it should read CASL.`
                 : renewal
@@ -171,16 +171,16 @@ export const InvoiceGeneratedOnCell: React.FC<{ docNumber?: string | null; renew
 
 export const RenewedOnCell: React.FC<{ renewedOn?: string | null; exact?: boolean }> = ({ renewedOn, exact }) => {
     const raw = String(renewedOn || '').trim();
-    if (!raw) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+    if (!raw) return <span className="text-muted">-</span>;
     const shown = raw.slice(0, 10).split('-').reverse().join('/');
     return (
         <span
-            className="text-gray-600 dark:text-gray-300"
+            className="text-on-surface-secondary"
             title={exact
                 ? `WSQ funding for this course ran to ${shown}. An invoice raised after that should read CASL.`
                 : `Approximate: no funding-validity change was logged, so this is when the new SSG reference was first recorded (${shown}).`}
         >
-            {shown}{!exact && <span className="ml-0.5 text-amber-500" aria-hidden>~</span>}
+            {shown}{!exact && <span className="ml-0.5 text-warning" aria-hidden>~</span>}
         </span>
     );
 };
@@ -192,7 +192,7 @@ export const FundingTypeBadge: React.FC<{
     hasInvoice?: boolean;
 }> = ({ courseType, currentCode, rowCode, hasInvoice }) => {
     const current = String(courseType || '').trim().toUpperCase();
-    if (!current) return <span className="text-gray-400 dark:text-gray-500" title="No course record matches this SSG reference">-</span>;
+    if (!current) return <span className="text-muted" title="No course record matches this SSG reference">-</span>;
 
     const rowRef = String(rowCode || '').trim().toUpperCase();
     const currentRef = String(currentCode || '').trim().toUpperCase();
@@ -207,9 +207,9 @@ export const FundingTypeBadge: React.FC<{
 
     const tone =
         asBilled === 'CASL' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300'
-        : asBilled === 'WSQ' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+        : asBilled === 'WSQ' ? 'bg-info-bg text-primary'
         : asBilled === 'IBF' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-        : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-200';
+        : 'bg-gray-100 text-on-surface-secondary dark:bg-gray-600';
 
     const title = !behind
         ? `Course is typed ${current}`
@@ -243,10 +243,10 @@ const formatClassDate = (iso: unknown) => {
 };
 
 const pillClasses = {
-    green: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    red: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    gray: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    green: 'bg-success-bg text-success',
+    amber: 'bg-warning-bg text-warning',
+    red: 'bg-danger-bg text-danger',
+    gray: 'bg-surface-elevated text-on-surface-secondary',
 };
 
 const DirectApplicationAutomationReport: React.FC = () => {
@@ -298,8 +298,8 @@ const DirectApplicationAutomationReport: React.FC = () => {
         <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">Automatic fetch &amp; enrol</h3>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Classes starting tomorrow onward. Recent updates daily at 9 AM · 12 PM · 3 PM · 6 PM SGT. Weekly 180-day recovery after the evening pull. Syncs updates and cancellations; auto-enrols confirmed applications.</p>
+                    <h3 className="text-base font-semibold text-on-surface">Automatic fetch &amp; enrol</h3>
+                    <p className="mt-1 text-xs text-muted">Classes starting tomorrow onward. Recent updates daily at 9 AM · 12 PM · 3 PM · 6 PM SGT. Weekly 180-day recovery after the evening pull. Syncs updates and cancellations; auto-enrols confirmed applications.</p>
                 </div>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${report?.enabled ? pillClasses.green : pillClasses.amber}`}>
                     {error ? 'Report unavailable' : !report ? 'Loading…' : report.enabled ? 'Schedule enabled' : 'Schedule disabled'}
@@ -313,14 +313,14 @@ const DirectApplicationAutomationReport: React.FC = () => {
                     {triggering === 'recovery' ? 'Starting…' : 'Run 180-day recovery'}
                 </Button>
             </div>
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">These actions sync applications, enrol eligible learners and reconcile TPG cancellations.</p>
-            {triggerMessage && <p role="status" className="mt-2 text-sm text-gray-600 dark:text-gray-300">{triggerMessage}</p>}
-            {error && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+            <p className="mt-2 text-xs text-muted">These actions sync applications, enrol eligible learners and reconcile TPG cancellations.</p>
+            {triggerMessage && <p role="status" className="mt-2 text-sm text-on-surface-secondary">{triggerMessage}</p>}
+            {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
             {!error && report && (
                 <div aria-live="polite">
-                    <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+                    <p className="mt-4 text-sm text-on-surface-secondary">
                         {latest ? <>Last sync run: <span className="font-medium">{formatTime(latest.started_at)}</span> · {latest.status.replace(/_/g, ' ')}
-                            {latest.completed_at && <span className="text-xs text-gray-500 dark:text-gray-400"> · finished {formatTime(latest.completed_at)}</span>}</>
+                            {latest.completed_at && <span className="text-xs text-muted"> · finished {formatTime(latest.completed_at)}</span>}</>
                             : 'No automatic run recorded yet. Manual fetch and enrol remain available below.'}
                     </p>
                     {latest && <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -328,21 +328,21 @@ const DirectApplicationAutomationReport: React.FC = () => {
                             ['Fetched', latest.fetched], ['Updated / imported', latest.imported],
                             ['Unchanged', latest.unchanged ?? 0], ['Newly enrolled', latest.enrolled],
                             ['Already enrolled', latest.already_enrolled], ['Cancelled', latest.cancelled ?? 0], ['Errors', latest.error_count],
-                        ].map(([label, value]) => <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
-                            <dt className="text-xs text-gray-500 dark:text-gray-400">{label}</dt>
-                            <dd className={`mt-1 text-xl font-semibold tabular-nums ${label === 'Errors' && Number(value) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{value}</dd>
+                        ].map(([label, value]) => <div key={label} className="rounded-lg border border-default bg-surface-elevated px-3 py-2">
+                            <dt className="text-xs text-muted">{label}</dt>
+                            <dd className={`mt-1 text-xl font-semibold tabular-nums ${label === 'Errors' && Number(value) > 0 ? 'text-danger' : 'text-on-surface'}`}>{value}</dd>
                         </div>)}
                     </dl>}
-                    {latest?.last_update_date && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    {latest?.last_update_date && <p className="mt-3 text-xs text-muted">
                         {latest.recovery ? '180-day recovery scan' : 'Recent updates'} · since {String(latest.last_update_date).slice(0, 10)}.
                     </p>}
-                    {report.latestRecovery && report.latestRecovery.id !== latest?.id && <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    {report.latestRecovery && report.latestRecovery.id !== latest?.id && <div className="mt-3 text-xs text-muted">
                         <p>Last 180-day recovery: {formatTime(report.latestRecovery.started_at)} · {report.latestRecovery.status.replace(/_/g, ' ')}.</p>
                         {report.latestRecovery.errors?.filter(issue => issue.step === 'fetch').map((issue, i) =>
-                            <p key={i} className="mt-1 text-amber-700 dark:text-amber-300">{issue.message}</p>)}
+                            <p key={i} className="mt-1 text-warning">{issue.message}</p>)}
                     </div>}
-                    {latest && latest.deferred > 0 && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{latest.deferred} application(s) already processing in another run; not triggered twice.</p>}
-                    {hasIssues && <details className="mt-3 text-sm text-amber-800 dark:text-amber-300">
+                    {latest && latest.deferred > 0 && <p className="mt-3 text-xs text-muted">{latest.deferred} application(s) already processing in another run; not triggered twice.</p>}
+                    {hasIssues && <details className="mt-3 text-sm text-warning">
                         <summary className="cursor-pointer">Review issues · {latest?.error_count || 0} in last run · {report.attentionCount} application(s) need attention</summary>
                         <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
                             {(latest?.errors || []).map((issue, i) => <li key={`run-${i}`}>{issue.applicationId ? `${issue.applicationId}: ` : ''}{issue.step} — {issue.message}</li>)}
@@ -630,8 +630,8 @@ export const RetrieveDirectApplicationView: React.FC = () => {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Retrieve Direct Application</h2>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <h2 className="text-2xl font-bold text-on-surface">Retrieve Direct Application</h2>
+                <p className="mt-1 text-sm text-muted">
                     Pull Instant Confirm applications from TPGateway and send them through the LMS enrolment flow.
                 </p>
             </div>
@@ -641,12 +641,12 @@ export const RetrieveDirectApplicationView: React.FC = () => {
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center">
-                            <Icon name={IconName.Download} className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                        <div className="w-10 h-10 flex-shrink-0 rounded-full bg-info-bg flex items-center justify-center">
+                            <Icon name={IconName.Download} className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retrieve from TPGateway</h3>
-                            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+                            <h3 className="text-base font-semibold text-on-surface">Retrieve from TPGateway</h3>
+                            <p className="mt-0.5 text-sm text-muted">
                                 Upcoming classes only · learners already enrolled are hidden
                             </p>
                         </div>
@@ -661,13 +661,13 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                 <li key={text} className="flex items-center gap-2">
                                     {idx > 0 && <span className={`h-px w-6 ${done || current ? 'bg-blue-400' : 'bg-gray-300 dark:bg-gray-600'}`} />}
                                     <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${done
-                                        ? 'bg-green-500 text-white'
+                                        ? 'bg-green-700 text-white'
                                         : current
                                             ? 'bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/50'
-                                            : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                                            : 'bg-gray-200 text-on-surface-secondary dark:bg-gray-700'}`}>
                                         {done ? <Icon name={IconName.Check} className="w-3.5 h-3.5" /> : idx + 1}
                                     </span>
-                                    <span className={`whitespace-nowrap ${current ? 'font-medium text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{text}</span>
+                                    <span className={`whitespace-nowrap ${current ? 'font-medium text-on-surface' : 'text-muted'}`}>{text}</span>
                                 </li>
                             );
                         })}
@@ -675,7 +675,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                 </div>
 
                 <div className="mt-6">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Application status</div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Application status</div>
                     <div role="radiogroup" aria-label="Application status" className="grid gap-3 sm:grid-cols-3">
                         {([
                             {
@@ -706,14 +706,14 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                     }}
                                     className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${active
                                         ? 'border-blue-500 bg-blue-50/60 ring-1 ring-blue-500 dark:border-blue-400 dark:bg-blue-900/20 dark:ring-blue-400'
-                                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-700/30'}`}
+                                        : 'border-default hover:border-gray-300 hover:bg-surface-hover dark:hover:border-gray-600'}`}
                                 >
-                                    <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${active ? 'border-blue-600 dark:border-blue-400' : 'border-gray-300 dark:border-gray-500'}`}>
+                                    <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${active ? 'border-blue-600 dark:border-blue-400' : 'border-strong'}`}>
                                         {active && <span className="h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" />}
                                     </span>
                                     <span className="min-w-0">
-                                        <span className={`block text-sm font-semibold ${active ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-200'}`}>{opt.title}</span>
-                                        <span className="mt-1.5 block text-xs text-gray-500 dark:text-gray-400">{opt.hint}</span>
+                                        <span className={`block text-sm font-semibold ${active ? 'text-on-surface' : 'text-on-surface-secondary'}`}>{opt.title}</span>
+                                        <span className="mt-1.5 block text-xs text-muted">{opt.hint}</span>
                                     </span>
                                 </button>
                             );
@@ -721,9 +721,9 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-700 pt-5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Manual fetch is a preview. Click <span className="font-medium text-gray-700 dark:text-gray-300">Enrol selected</span> to process checked rows. Scheduled runs enrol ready applications automatically.
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-default pt-5">
+                    <p className="text-xs text-muted">
+                        Manual fetch is a preview. Click <span className="font-medium text-on-surface-secondary">Enrol selected</span> to process checked rows. Scheduled runs enrol ready applications automatically.
                     </p>
                     <Button variant={hasPreview ? 'outline' : undefined} onClick={fetchApplications} disabled={loading} className="h-10 inline-flex items-center gap-2">
                         <Icon name={IconName.Sync} className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -733,8 +733,8 @@ export const RetrieveDirectApplicationView: React.FC = () => {
 
                 {message && (
                     <div className={`mt-5 rounded-lg border p-3 text-sm ${isError
-                        ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200'
-                        : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'}`}>
+                        ? 'border-red-200 bg-danger-bg text-danger dark:border-red-800'
+                        : 'border-blue-200 bg-info-bg text-info dark:border-blue-800'}`}>
                         {message}
                     </div>
                 )}
@@ -749,9 +749,9 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                             ['Failed', summary.failed],
                             ['Queued', summary.queued],
                         ].map(([label, value]) => (
-                            <div key={label} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                                <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
-                                <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{value}</div>
+                            <div key={label} className="rounded-lg border border-default p-3">
+                                <div className="text-xs text-muted">{label}</div>
+                                <div className="mt-1 text-lg font-semibold text-on-surface">{value}</div>
                             </div>
                         ))}
                     </div>
@@ -760,18 +760,18 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                 {sentRows.length > 0 && (
                     <div className="mt-5">
                         <div className="flex items-center justify-between gap-3 mb-2">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                            <h4 className="text-sm font-semibold text-on-surface">
                                 Enrolment results
-                                {sentPolling && <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">updating…</span>}
+                                {sentPolling && <span className="ml-2 text-xs font-normal text-muted">updating…</span>}
                             </h4>
                             <Button variant="outline" onClick={refreshSentStatus} disabled={sentPolling} className="h-8 text-xs">
                                 <Icon name={IconName.Sync} className={`w-4 h-4 mr-1 ${sentPolling ? 'animate-spin' : ''}`} />
                                 Refresh status
                             </Button>
                         </div>
-                        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="overflow-x-auto rounded-lg border border-default">
                             <table className="min-w-full text-sm">
-                                <thead className="bg-gray-50 dark:bg-gray-900/40 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                <thead className="bg-surface-elevated text-left text-xs uppercase text-muted">
                                     <tr>
                                         <th className="px-3 py-2">Learner</th>
                                         <th className="px-3 py-2">Course</th>
@@ -784,7 +784,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                         <th className="px-3 py-2">Calendar</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-gray-100">
+                                <tbody className="divide-y divide-default text-on-surface">
                                     {sentRows.map(row => {
                                         const st = sentStatus[row['Application ID']];
                                         const code: string = st?.auto_enrol_status || 'pending';
@@ -797,32 +797,32 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                             pending_identity: 'Needs NRIC / identity',
                                         };
                                         const tone = code === 'failed'
-                                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                            ? 'bg-danger-bg text-danger'
                                             : code === 'pending' || code === 'pending_identity'
-                                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                                                : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                                                ? 'bg-warning-bg text-warning'
+                                                : 'bg-success-bg text-success';
                                         return (
                                             <tr key={row['Application ID']}>
                                                 <td className="px-3 py-2">
                                                     <div className="font-medium">{row['Trainee Name']}</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{row['Trainee Email']}</div>
+                                                    <div className="text-xs text-muted">{row['Trainee Email']}</div>
                                                 </td>
                                                 <td className="px-3 py-2">
                                                     <div>{row['Course Title']}</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
+                                                    <div className="text-xs text-muted">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
                                                 </td>
                                                 <td className="px-3 py-2 whitespace-nowrap">{row['Course Start Date']}</td>
                                                 <td className="px-3 py-2 whitespace-nowrap text-xs">{row['Application ID']}</td>
                                                 <td className="px-3 py-2">
                                                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${tone}`}>{labels[code] || code}</span>
-                                                    {st?.auto_enrol_error && <div className="mt-1 max-w-xs text-xs text-red-600 dark:text-red-400">{st.auto_enrol_error}</div>}
+                                                    {st?.auto_enrol_error && <div className="mt-1 max-w-xs text-xs text-danger">{st.auto_enrol_error}</div>}
                                                 </td>
                                                 <td className="px-3 py-2 whitespace-nowrap text-xs font-mono">{st?.enrolment_id || '—'}</td>
                                                 <td className="px-3 py-2 whitespace-nowrap text-xs font-mono">{st?.grant_id || '—'}</td>
                                                 <td className="px-3 py-2 whitespace-nowrap text-xs">{st?.invoice_doc_number || st?.invoice_id || '—'}</td>
                                                 <td className="px-3 py-2">
                                                     {st?.calendar_added
-                                                        ? <Icon name={IconName.Check} className="w-5 h-5 text-green-600 dark:text-green-400" aria-label="Added to calendar" />
+                                                        ? <Icon name={IconName.Check} className="w-5 h-5 text-success" aria-label="Added to calendar" />
                                                         : <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" aria-label="Not on calendar" />}
                                                 </td>
                                             </tr>
@@ -837,27 +837,27 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                 {fetchStats && hasPreview && (
                     <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {([
-                            ['To review', fetchStats.toReview, 'text-gray-900 dark:text-white', null],
-                            ['Selected', selectedIds.size, 'text-blue-600 dark:text-blue-400', null],
-                            ['Pending payment', fetchStats.pendingPayment, 'text-amber-600 dark:text-amber-400', null],
-                            ['Already enrolled', fetchStats.enrolled, 'text-gray-500 dark:text-gray-400', fetchStats.past > 0 ? `${fetchStats.past} past classes left out` : null],
+                            ['To review', fetchStats.toReview, 'text-on-surface', null],
+                            ['Selected', selectedIds.size, 'text-primary', null],
+                            ['Pending payment', fetchStats.pendingPayment, 'text-warning', null],
+                            ['Already enrolled', fetchStats.enrolled, 'text-muted', fetchStats.past > 0 ? `${fetchStats.past} past classes left out` : null],
                         ] as const).map(([label, value, tone, note]) => (
-                            <div key={label} className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
-                                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
+                            <div key={label} className="rounded-lg border border-default px-4 py-3">
+                                <div className="text-xs font-medium text-muted">{label}</div>
                                 <div className={`mt-1 text-2xl font-semibold ${tone}`}>{value}</div>
-                                {note && <div className="text-[11px] text-gray-400 dark:text-gray-500">{note}</div>}
+                                {note && <div className="text-[11px] text-muted">{note}</div>}
                             </div>
                         ))}
                     </div>
                 )}
 
                 {hasPreview && (
-                    <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-2.5">
-                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <div className="mt-4 rounded-lg border border-default overflow-hidden">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-default bg-surface-elevated px-4 py-2.5">
+                            <span className="text-sm text-on-surface-secondary">
                                 <span className="font-semibold">{selectedIds.size}</span> of {selectableRows.length} selected for enrolment
                                 {fetchStats && fetchStats.stuck > 0 && (
-                                    <span className="ml-2 text-xs text-amber-700 dark:text-amber-400">· {fetchStats.stuck} stuck — retry in View Direct Application</span>
+                                    <span className="ml-2 text-xs text-warning">· {fetchStats.stuck} stuck — retry in View Direct Application</span>
                                 )}
                             </span>
                             <Button onClick={enrolSelected} disabled={loading || selectedIds.size === 0} className="h-8 text-sm">
@@ -866,7 +866,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                         </div>
                         <div className="max-h-[65vh] overflow-auto">
                             <table className="min-w-full text-sm">
-                                <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                <thead className="sticky top-0 z-10 bg-surface-elevated text-left text-xs uppercase tracking-wide text-muted">
                                     <tr>
                                         <th className="px-4 py-2.5 w-10">
                                             <input
@@ -875,7 +875,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                                 checked={allSelected}
                                                 disabled={loading || selectableRows.length === 0}
                                                 onChange={toggleAll}
-                                                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                                                className="h-4 w-4 rounded border-strong"
                                             />
                                         </th>
                                         <th className="px-3 py-2.5">Learner</th>
@@ -886,7 +886,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                         <th className="px-3 py-2.5">Action</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-gray-100">
+                                <tbody className="divide-y divide-default text-on-surface">
                                     {preview!.map(({ row, lms }, i) => {
                                         const appId = row['Application ID'];
                                         const selected = selectedIds.has(appId);
@@ -901,7 +901,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                                     ? 'bg-amber-50/40 dark:bg-amber-900/10'
                                                     : selected
                                                         ? 'bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                                                        : 'opacity-60 hover:opacity-100 hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}
+                                                        : 'opacity-60 hover:opacity-100 hover:bg-surface-hover'}`}
                                             >
                                                 <td className="px-4 py-3 align-top">
                                                     {!lms && (
@@ -911,26 +911,26 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                                             checked={selected}
                                                             disabled={loading}
                                                             onChange={() => toggleSelected(appId)}
-                                                            className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                                                            className="mt-0.5 h-4 w-4 rounded border-strong"
                                                         />
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-3 align-top">
                                                     <div className="font-medium">{row['Trainee Name']}</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{row['Trainee Email']}</div>
+                                                    <div className="text-xs text-muted">{row['Trainee Email']}</div>
                                                 </td>
                                                 <td className="px-3 py-3 align-top max-w-sm">
                                                     <div className="leading-snug">{row['Course Title']}</div>
-                                                    <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
+                                                    <div className="mt-0.5 text-xs text-muted">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
                                                 </td>
                                                 <td className="px-3 py-3 align-top whitespace-nowrap">{formatClassDate(row['Course Start Date'])}</td>
                                                 <td className="px-3 py-3 align-top">
                                                     <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${pending ? pillClasses.amber : confirmed ? pillClasses.green : pillClasses.gray}`}>
                                                         {pending ? 'Confirmed (Pending Payment)' : appStatus}
                                                     </span>
-                                                    {paid && <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Paid</div>}
+                                                    {paid && <div className="mt-1 text-[11px] text-muted">Paid</div>}
                                                 </td>
-                                                <td className="px-3 py-3 align-top whitespace-nowrap font-mono text-xs text-gray-600 dark:text-gray-300">{appId}</td>
+                                                <td className="px-3 py-3 align-top whitespace-nowrap font-mono text-xs text-on-surface-secondary">{appId}</td>
                                                 <td className="px-3 py-3 align-top">
                                                     {lms ? (
                                                         <span
@@ -964,20 +964,20 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                         role="alertdialog"
                         aria-modal="true"
                         aria-labelledby="da-status-warning-title"
-                        className="relative w-full max-w-lg overflow-hidden rounded-xl bg-white dark:bg-gray-900 shadow-2xl ring-1 ring-amber-200/60 dark:ring-amber-900/40"
+                        className="relative w-full max-w-lg overflow-hidden rounded-xl bg-surface shadow-2xl ring-1 ring-amber-200/60 dark:ring-amber-900/40"
                         onClick={e => e.stopPropagation()}
                     >
                         <span className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
                         <div className="px-6 py-5 bg-gradient-to-br from-amber-50 via-white to-white dark:from-amber-950/30 dark:via-gray-900 dark:to-gray-900">
                             <div className="flex items-start gap-4">
-                                <div className="w-11 h-11 flex-shrink-0 rounded-xl bg-amber-100 dark:bg-amber-900/40 ring-1 ring-amber-200 dark:ring-amber-800/60 flex items-center justify-center">
-                                    <Icon name={IconName.Warning} className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                                <div className="w-11 h-11 flex-shrink-0 rounded-xl bg-warning-bg ring-1 ring-amber-200 dark:ring-amber-800/60 flex items-center justify-center">
+                                    <Icon name={IconName.Warning} className="w-6 h-6 text-warning" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 id="da-status-warning-title" className="text-lg font-bold text-gray-900 dark:text-white">
+                                    <h3 id="da-status-warning-title" className="text-lg font-bold text-on-surface">
                                         Switch to {pendingStatus === 'Cancelled' ? 'Cancelled' : 'All Statuses'}?
                                     </h3>
-                                    <p className="mt-1.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                                    <p className="mt-1.5 text-sm leading-relaxed text-on-surface-secondary">
                                         {pendingStatus === 'Cancelled'
                                             ? 'This lists applications that were cancelled or withdrawn on TPGateway. These learners should not be enrolled.'
                                             : 'This lists every application for upcoming classes — including ones that are cancelled or not confirmed yet.'}
@@ -985,24 +985,24 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="px-6 py-4 space-y-2 text-sm text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800">
-                            <p className="flex gap-2"><span className="text-amber-500">•</span>Rows are still ticked by default — check every row before clicking Enrol selected.</p>
-                            <p className="flex gap-2"><span className="text-amber-500">•</span>Sending a cancelled application updates the LMS record to Cancelled.</p>
-                            <p className="flex gap-2"><span className="text-amber-500">•</span>To enrol new learners, use <span className="font-semibold">Ready to Enrol</span> instead.</p>
+                        <div className="px-6 py-4 space-y-2 text-sm text-on-surface-secondary border-t border-default">
+                            <p className="flex gap-2"><span className="text-warning">•</span>Rows are still ticked by default — check every row before clicking Enrol selected.</p>
+                            <p className="flex gap-2"><span className="text-warning">•</span>Sending a cancelled application updates the LMS record to Cancelled.</p>
+                            <p className="flex gap-2"><span className="text-warning">•</span>To enrol new learners, use <span className="font-semibold">Ready to Enrol</span> instead.</p>
                         </div>
-                        <div className="px-6 py-4 flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/40">
+                        <div className="px-6 py-4 flex items-center justify-end gap-2 border-t border-default bg-gray-50/60 dark:bg-gray-950/40">
                             <button
                                 type="button"
                                 autoFocus
                                 onClick={() => setPendingStatus(null)}
-                                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                className="px-4 py-2 text-sm font-medium rounded-lg border border-strong text-on-surface-secondary bg-surface hover:bg-surface-hover transition-colors"
                             >
                                 Keep current
                             </button>
                             <button
                                 type="button"
                                 onClick={() => { applyStatus(pendingStatus); setPendingStatus(null); }}
-                                className="px-4 py-2 text-sm font-semibold rounded-lg text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-900/20 transition-colors"
+                                className="px-4 py-2 text-sm font-semibold rounded-lg text-white bg-amber-700 hover:bg-amber-800 shadow-md shadow-amber-900/20 transition-colors"
                             >
                                 Yes, switch
                             </button>
@@ -1708,8 +1708,8 @@ export const UploadDirectApplicationView: React.FC = () => {
     // each filter its own tinted panel, so four saturated blocks competed at the
     // top of the page and the numbers — the actual content — came second.
     const categoryCards: { key: DaFilterCategory; label: string; count: number; accent: string; text: string }[] = [
-        { key: 'all', label: 'All', count: allResults.length, accent: 'bg-gray-400 dark:bg-gray-500', text: 'text-gray-800 dark:text-gray-100' },
-        { key: 'inserted', label: 'Inserted', count: summary.inserted, accent: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
+        { key: 'all', label: 'All', count: allResults.length, accent: 'bg-gray-400 dark:bg-gray-500', text: 'text-on-surface' },
+        { key: 'inserted', label: 'Inserted', count: summary.inserted, accent: 'bg-emerald-500', text: 'text-success' },
         { key: 'updated', label: 'Updated', count: summary.updated, accent: 'bg-sky-500', text: 'text-sky-700 dark:text-sky-400' },
         { key: 'failed', label: 'Failed', count: summary.failed, accent: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' },
     ];
@@ -1718,10 +1718,10 @@ export const UploadDirectApplicationView: React.FC = () => {
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
                 {viewState === 'results' && (<Button variant="ghost" onClick={resetView}><Icon name={IconName.Back} className="w-4 h-4 mr-1" />Back</Button>)}
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Upload Direct Applications</h1>
+                <h1 className="text-3xl font-bold text-on-surface">Upload Direct Applications</h1>
             </div>
             {viewState === 'results' && (
-                <Button variant="ghost" onClick={resetView} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+                <Button variant="ghost" onClick={resetView} className="border border-blue-500 text-primary hover:bg-blue-50 dark:border-blue-400 dark:hover:bg-blue-900/20">
                     <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />New Upload
                 </Button>
             )}
@@ -1768,17 +1768,17 @@ export const UploadDirectApplicationView: React.FC = () => {
                     <div className="w-full max-w-md text-center space-y-6">
                         <div className="animate-spin rounded-full h-14 w-14 border-4 border-blue-200 border-t-blue-600 mx-auto" />
                         <div>
-                            <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading Applications...</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Please do not close this page.</p>
+                            <p className="text-lg font-semibold text-on-surface">Uploading Applications...</p>
+                            <p className="text-sm text-muted mt-1">Please do not close this page.</p>
                         </div>
                         <div className="space-y-2">
-                            <div className="flex justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <div className="flex justify-between text-sm font-medium text-on-surface-secondary">
                                 <span>Progress</span><span>{Math.min(progressCurrent, progressTotal)} / {progressTotal}</span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                                 <div className="h-3 bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 text-right">{progressPct}%</p>
+                            <p className="text-xs text-muted text-right">{progressPct}%</p>
                         </div>
                     </div>
                 </Card>
@@ -1813,13 +1813,13 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 {autoEnrolPolling ? (
                                     <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                                 ) : outcome === 'ok' ? (
-                                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                                 ) : (
-                                    <svg className={`w-5 h-5 ${outcome === 'bad' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                                    <svg className={`w-5 h-5 ${outcome === 'bad' ? 'text-danger' : 'text-warning'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
                                 )}
                             </span>
                             <div>
-                                <h2 className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">
+                                <h2 className="text-lg font-semibold text-on-surface leading-tight">
                                     {autoEnrolPolling
                                         ? `${enrolStage}…`
                                         : outcome === 'ok'
@@ -1828,13 +1828,13 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                 ? 'Nothing went through'
                                                 : 'Finished with problems'}
                                 </h2>
-                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                <p className="text-sm text-on-surface-secondary mt-1">
                                     {autoEnrolPolling
                                         ? `${enrolCounts.done} of ${autoEnrolQueued} enrolled${enrolCounts.granted > 0 ? `, ${enrolCounts.granted} with grant` : ''}${enrolCounts.invoiced > 0 ? `, ${enrolCounts.invoiced} invoiced` : ''} · ${fmtElapsed(autoEnrolElapsed)}`
                                         : `${okCount} application${okCount === 1 ? '' : 's'} processed${failedCount > 0 ? `, ${failedCount} failed` : ''}${autoEnrolElapsed > 0 ? ` · ${fmtElapsed(autoEnrolElapsed)}` : ''}`}
                                 </p>
                                 {autoEnrolPolling ? (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                                    <p className="text-xs text-muted mt-1.5">
                                         Each learner goes to SSG, then their grant is looked up, then the invoice is raised.
                                     </p>
                                 ) : (
@@ -1846,8 +1846,8 @@ export const UploadDirectApplicationView: React.FC = () => {
                                             { label: 'with grant', n: enrolCounts.granted },
                                             { label: 'invoiced', n: enrolCounts.invoiced },
                                         ].filter(x => x.n > 0).map(x => (
-                                            <span key={x.label} className="inline-flex items-baseline gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-                                                <span className="font-semibold tabular-nums text-gray-900 dark:text-white">{x.n}</span>
+                                            <span key={x.label} className="inline-flex items-baseline gap-1.5 text-xs text-on-surface-secondary">
+                                                <span className="font-semibold tabular-nums text-on-surface">{x.n}</span>
                                                 {x.label}
                                             </span>
                                         ))}
@@ -1866,7 +1866,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 disabled={refreshingStatuses}
                                 title="Re-read enrolment status from SSG"
                                 aria-label="Refresh status"
-                                className="flex-shrink-0 w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                className="flex-shrink-0 w-10 h-10 rounded-lg border border-strong text-muted hover:text-on-surface hover:bg-white/60 dark:hover:bg-gray-700/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
                                 <Icon name={IconName.Sync} className={`w-4 h-4 ${refreshingStatuses ? 'animate-spin' : ''}`} />
                             </button>
                             {/* When it all worked, the next thing anyone wants is to go and
@@ -1902,7 +1902,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     className={`inline-flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                                         active
                                             ? 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-gray-900 dark:border-white'
-                                            : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                                            : 'bg-transparent text-on-surface-secondary border-strong hover:border-gray-400 dark:hover:border-gray-500'
                                     }`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${accent}`} />
                                     {label}
@@ -1917,7 +1917,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                     seven-column table for three rows buries the two things anyone
                     actually looks for: who it was, and how far they got. */}
                 {filteredResults.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 py-14 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <div className="rounded-xl border border-dashed border-strong py-14 text-center text-sm text-muted">
                         Nothing in this filter.
                     </div>
                 ) : (
@@ -1937,32 +1937,32 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 { label: 'Invoice', done: !!r.invoiceId || st === 'invoiced', detail: r.invoiceId || null },
                             ];
                             return (
-                                <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-800/50 px-5 py-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all">
+                                <div key={i} className="rounded-xl border border-default bg-surface px-5 py-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all">
                                     <div className="flex items-start justify-between gap-4 flex-wrap">
                                         <div className="flex items-start gap-3 min-w-0">
                                             {/* An initial gives the row a fixed anchor point; a list of
                                                 names all starting at different widths reads as a wall. */}
-                                            <span className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-200">
+                                            <span className="flex-shrink-0 w-9 h-9 rounded-full bg-surface-elevated flex items-center justify-center text-sm font-semibold text-on-surface-secondary">
                                                 {(r.trainee_name || '?').trim().charAt(0).toUpperCase()}
                                             </span>
                                             <div className="min-w-0">
                                             <div className="flex items-center gap-2.5 flex-wrap">
-                                                <span className="text-base font-semibold text-gray-900 dark:text-white">{r.trainee_name || '—'}</span>
+                                                <span className="text-base font-semibold text-on-surface">{r.trainee_name || '—'}</span>
                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
-                                                    r.action === 'inserted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                                    r.action === 'inserted' ? 'bg-success-bg text-success'
                                                         : r.action === 'updated' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
-                                                            : r.action === 'skipped' ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300'
-                                                                : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                                            : r.action === 'skipped' ? 'bg-surface-elevated text-muted'
+                                                                : 'bg-danger-bg text-rose-700 dark:text-rose-300'}`}>
                                                     {r.action}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                                <span className="font-mono text-gray-600 dark:text-gray-300">{r.application_id || '—'}</span>
-                                                <span className="text-gray-300 dark:text-gray-600">·</span>
+                                            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
+                                                <span className="font-mono text-on-surface-secondary">{r.application_id || '—'}</span>
+                                                <span className="text-muted">·</span>
                                                 <span className="flex items-center gap-1">
-                                                    <span className="font-mono text-gray-400 dark:text-gray-500">{maskTraineeId(r.trainee_id || null)}</span>
+                                                    <span className="font-mono text-muted">{maskTraineeId(r.trainee_id || null)}</span>
                                                     {r.trainee_id && (
-                                                        <button onClick={() => setShowTraineeId(v => !v)} className="p-0.5 text-gray-400 hover:text-blue-500 rounded">
+                                                        <button onClick={() => setShowTraineeId(v => !v)} className="p-0.5 text-muted hover:text-blue-500 rounded">
                                                             <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
                                                         </button>
                                                     )}
@@ -1974,13 +1974,13 @@ export const UploadDirectApplicationView: React.FC = () => {
                                         {/* How far this learner got, as a trail rather than one word. */}
                                         <div className="flex items-center gap-1.5 flex-shrink-0">
                                             {st === 'failed' ? (
-                                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" title={r.enrolError || undefined}>failed</span>
+                                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-danger-bg text-rose-700 dark:text-rose-300" title={r.enrolError || undefined}>failed</span>
                                             ) : st === 'pending_identity' ? (
-                                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" title={r.enrolError || undefined}>needs ID</span>
+                                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-warning-bg text-warning" title={r.enrolError || undefined}>needs ID</span>
                                             ) : !st || st === 'pending' ? (
                                                 autoEnrolPolling
-                                                    ? <span className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400"><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />working…</span>
-                                                    : <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300">not checked</span>
+                                                    ? <span className="flex items-center gap-1.5 text-[11px] text-muted"><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />working…</span>
+                                                    : <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-elevated text-muted">not checked</span>
                                             ) : (
                                                 <div className="flex items-start pt-0.5">
                                                     {stages.map((stage, si) => (
@@ -1995,8 +1995,8 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                                     title={stage.detail || undefined}
                                                                     className={`w-[19px] h-[19px] rounded-full flex items-center justify-center transition-colors ${
                                                                         stage.done
-                                                                            ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
-                                                                            : 'border-[1.5px] border-dashed border-gray-300 dark:border-gray-600'
+                                                                            ? 'bg-emerald-700 text-white shadow-sm shadow-emerald-500/30'
+                                                                            : 'border-[1.5px] border-dashed border-strong'
                                                                     }`}>
                                                                     {stage.done && (
                                                                         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
@@ -2006,8 +2006,8 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                                 </span>
                                                                 <span className={`text-[10px] font-medium tracking-wide whitespace-nowrap ${
                                                                     stage.done
-                                                                        ? 'text-gray-700 dark:text-gray-200'
-                                                                        : 'text-gray-400 dark:text-gray-500'
+                                                                        ? 'text-on-surface-secondary'
+                                                                        : 'text-muted'
                                                                 }`}>
                                                                     {stage.label}
                                                                 </span>
@@ -2020,9 +2020,9 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     </div>
 
                                     {(r.enrolmentId || r.grantId) && (
-                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
-                                            {r.enrolmentId && <span className="text-gray-500 dark:text-gray-400">Enrolment <span className="font-mono text-gray-700 dark:text-gray-200">{r.enrolmentId}</span></span>}
-                                            {r.grantId && <span className="text-gray-500 dark:text-gray-400">Grant <span className="font-mono text-gray-700 dark:text-gray-200">{r.grantId}</span></span>}
+                                        <div className="mt-3 pt-3 border-t border-default flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
+                                            {r.enrolmentId && <span className="text-muted">Enrolment <span className="font-mono text-on-surface-secondary">{r.enrolmentId}</span></span>}
+                                            {r.grantId && <span className="text-muted">Grant <span className="font-mono text-on-surface-secondary">{r.grantId}</span></span>}
                                         </div>
                                     )}
 
@@ -2030,11 +2030,11 @@ export const UploadDirectApplicationView: React.FC = () => {
                                         item on a row of reference numbers — it is the one thing here
                                         that might need acting on. */}
                                     {r.enrolError && !stages.every(x => x.done) && (
-                                        <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/50 px-3 py-2">
-                                            <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-warning-bg border border-amber-200/70 dark:border-amber-800/50 px-3 py-2">
+                                            <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                                             </svg>
-                                            <span className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300 min-w-0">{r.enrolError}</span>
+                                            <span className="text-[11px] leading-relaxed text-warning min-w-0">{r.enrolError}</span>
                                         </div>
                                     )}
                                 </div>
@@ -2044,7 +2044,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                         {totalResultPages > 1 && (
                             <div className="flex justify-between items-center pt-1">
                                 <Button variant="ghost" onClick={() => setResultsPage(p => Math.max(1, p - 1))} disabled={resultsPage === 1}>Previous</Button>
-                                <span className="text-sm text-gray-500 dark:text-gray-400">Page {resultsPage} of {totalResultPages}</span>
+                                <span className="text-sm text-muted">Page {resultsPage} of {totalResultPages}</span>
                                 <Button variant="ghost" onClick={() => setResultsPage(p => Math.min(totalResultPages, p + 1))} disabled={resultsPage === totalResultPages}>Next</Button>
                             </div>
                         )}
@@ -2056,17 +2056,17 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const UploadStep = () => (
         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-            <div className={`mb-4 p-4 rounded-lg border-2 ${emailToggleOn ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700' : 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700'}`}>
+            <div className={`mb-4 p-4 rounded-lg border-2 ${emailToggleOn ? 'border-emerald-300 bg-success-bg dark:border-emerald-700' : 'border-amber-300 bg-warning-bg dark:border-amber-700'}`}>
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3">
-                        <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-amber-100 dark:bg-amber-800/40'}`}>
-                            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`} />
+                        <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-warning-bg'}`}>
+                            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-success' : 'text-warning'}`} />
                         </div>
                         <div>
-                            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-warning'}`}>
                                 Send Tax Invoice Email to Learner: {emailToggleOn ? 'ON' : 'OFF (test mode)'}
                             </p>
-                            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-success' : 'text-warning'}`}>
                                 {emailToggleOn
                                     ? 'After invoice generation, the main tax invoice will be emailed to the learner.'
                                     : 'Invoices will still be generated and saved to Drive — emails are NOT sent. Safe for testing.'}
@@ -2084,7 +2084,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
                     <label className="block">
-                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">CC recipients</span>
+                        <span className="block text-xs font-medium text-on-surface-secondary mb-1">CC recipients</span>
                         <input
                             type="text"
                             value={invoiceEmailCc}
@@ -2094,7 +2094,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                         />
                     </label>
                     <label className="block">
-                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">BCC recipients</span>
+                        <span className="block text-xs font-medium text-on-surface-secondary mb-1">BCC recipients</span>
                         <input
                             type="text"
                             value={invoiceEmailBcc}
@@ -2121,21 +2121,21 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 <p className="text-sm text-amber-700 mt-2"><strong>Reason:</strong> The Excel file downloaded from TPG opens in Protected View.</p>
             </div>
             <div className="text-center mb-4">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Upload Direct Application</h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">Submit DA application data in bulk by uploading an Excel file.</p>
+                <h3 className="text-xl font-bold text-on-surface">Upload Direct Application</h3>
+                <p className="text-muted mt-1">Submit DA application data in bulk by uploading an Excel file.</p>
             </div>
             <div onDragOver={(e) => handleDragEvents(e, true)} onDragLeave={(e) => handleDragEvents(e, false)} onDrop={handleDrop}
-                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'}`}>
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-strong hover:border-blue-500'}`}>
                 <input type="file" id="file-upload-da" className="hidden" accept=".xlsx, .xls" onChange={(e) => handleFileChange(e.target.files?.[0])} />
                 <label htmlFor="file-upload-da" className="cursor-pointer">
-                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">{file ? file.name : 'Drag & drop your file here, or click to browse'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">XLSX or XLS file format</p>
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+                    <p className="mt-2 font-semibold text-on-surface">{file ? file.name : 'Drag & drop your file here, or click to browse'}</p>
+                    <p className="text-xs text-muted mt-1">XLSX or XLS file format</p>
                 </label>
             </div>
             {error && (
-                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-                    <div className="flex-shrink-0 w-10 h-10 bg-white border border-red-200 rounded-full flex items-center justify-center"><Icon name={IconName.Close} className="w-5 h-5 text-red-500" /></div>
+                <div className="mt-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-white border border-red-200 rounded-full flex items-center justify-center"><Icon name={IconName.Close} className="w-5 h-5 text-danger" /></div>
                     <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-gray-900 dark:text-red-100">Something went wrong!</h4>
                         <p className="text-sm text-gray-600 dark:text-red-200/90 mt-1 whitespace-pre-line">{error}</p>
@@ -2178,8 +2178,8 @@ export const UploadDirectApplicationView: React.FC = () => {
             : s === 'would-confirm' ? 'bg-yellow-100 text-yellow-700'
                 : s === 'confirming' ? 'bg-blue-100 text-blue-700'
                     : s === 'failed' ? 'bg-red-100 text-red-700'
-                        : s === 'skipped' ? 'bg-gray-100 text-gray-600'
-                            : 'bg-gray-100 text-gray-500';
+                        : s === 'skipped' ? 'bg-gray-100 text-on-surface-secondary'
+                            : 'bg-gray-100 text-muted';
 
     // A finished run that found nothing. `found` is the count BEFORE Limit is
     // applied, so this stays true whatever Limit was typed — a Limit of 1 over an
@@ -2218,17 +2218,17 @@ export const UploadDirectApplicationView: React.FC = () => {
                         </div>
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Confirm &amp; fetch from TPGateway</h3>
+                                <h3 className="text-sm font-semibold text-on-surface">Confirm &amp; fetch from TPGateway</h3>
                                 {/* Can a run start right now — nothing about where it runs,
                                     which is our problem to solve and not the operator's. */}
                                 {tpgHelper && (
                                     tpgHelperOffline ? (
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-bg text-warning">
                                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                             Not ready
                                         </span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-success-bg text-success">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                             Ready
                                         </span>
@@ -2239,7 +2239,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 separates the two buttons rather than burying the difference in
                                 a paragraph. Confirming cannot be undone, which is why the safe
                                 option is described first. */}
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xl space-y-1">
+                            <div className="text-xs text-muted mt-1 max-w-xl space-y-1">
                                 <p>
                                     Signs in to TPGateway with your Singpass, confirms every Direct Application
                                     waiting for confirmation, and enrols those learners with SSG — in one go.
@@ -2266,10 +2266,10 @@ export const UploadDirectApplicationView: React.FC = () => {
                         there is no longer anything the operator must do locally. */}
                     <div className="flex items-end gap-2">
                         <label className="block">
-                            <span className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Limit</span>
+                            <span className="block text-[11px] font-medium text-muted mb-1">Limit</span>
                             <input type="number" min="1" value={tpgMax} onChange={e => setTpgMax(e.target.value)} placeholder="all"
                                 disabled={tpgRunning}
-                                className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                className="w-20 px-2 py-1.5 text-sm border border-strong rounded-md dark:bg-gray-700 dark:text-white" />
                         </label>
                         {/* Disabled rather than explained: a button that queues a run nothing
                             can pick up is worse than no button, and the badge above already
@@ -2288,18 +2288,18 @@ export const UploadDirectApplicationView: React.FC = () => {
                 </div>
 
                 {tpgError && (
-                    <div className="mt-4 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 flex items-start gap-3">
+                    <div className="mt-4 rounded-lg border border-red-300 dark:border-red-800 bg-danger-bg p-4 flex items-start gap-3">
                         <div className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
                             <Icon name={IconName.Close} className="w-3 h-3 text-red-500 dark:text-red-400" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-red-900 dark:text-red-200">Could not start the run</p>
-                            <p className="text-xs text-red-800 dark:text-red-300 mt-1">{tpgError}</p>
+                            <p className="text-xs text-danger mt-1">{tpgError}</p>
                             {/* The server rejects legacy and expired tokens outright, so this
                                 is by far the most common cause — and it is not obvious from
                                 the raw message that re-logging in is the fix. */}
                             {/not authenticated|unauthor/i.test(tpgError) && (
-                                <p className="text-xs text-red-800 dark:text-red-300 mt-1.5">
+                                <p className="text-xs text-danger mt-1.5">
                                     Your sign-in has expired. Log out and log back in, then try again.
                                 </p>
                             )}
@@ -2312,11 +2312,11 @@ export const UploadDirectApplicationView: React.FC = () => {
                 )}
 
                 {tpgJob && (
-                    <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="mt-4 rounded-lg border border-default p-4">
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                             <div className="flex items-center gap-2">
                                 {tpgRunning && <span className="inline-block w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />}
-                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{TPG_PHASE_LABEL[tpgJob.phase] || tpgJob.phase}</span>
+                                <span className="text-sm font-semibold text-on-surface">{TPG_PHASE_LABEL[tpgJob.phase] || tpgJob.phase}</span>
                             </div>
                             <div className="flex items-center gap-3">
                                 {/* Hidden in two cases, both of them duplication: the all-clear
@@ -2324,7 +2324,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     line already says it — the header was echoing the phase
                                     label verbatim next to itself. */}
                                 {!tpgNothingToConfirm && !(tpgRunning && tpgJob.log?.length > 0) && (
-                                    <span className="text-xs text-gray-500 dark:text-gray-400 text-right">{tpgJob.message}</span>
+                                    <span className="text-xs text-muted text-right">{tpgJob.message}</span>
                                 )}
                                 {/* "Clear" implies discarding a result worth keeping. When the
                                     answer is simply "nothing to do", there is no result to
@@ -2332,12 +2332,12 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     X means everywhere else. */}
                                 {!tpgRunning && (tpgNothingToConfirm ? (
                                     <button onClick={() => setTpgJob(null)} aria-label="Dismiss" title="Dismiss"
-                                        className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                        className="flex-shrink-0 p-1 rounded text-muted hover:text-gray-600 dark:hover:text-gray-200 hover:bg-surface-hover">
                                         <Icon name={IconName.Close} className="w-4 h-4" />
                                     </button>
                                 ) : (
                                     <button onClick={() => setTpgJob(null)}
-                                        className="flex-shrink-0 text-xs font-medium px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                        className="flex-shrink-0 text-xs font-medium px-2 py-1 rounded border border-strong text-on-surface-secondary hover:bg-surface-hover">
                                         Clear
                                     </button>
                                 ))}
@@ -2348,19 +2348,19 @@ export const UploadDirectApplicationView: React.FC = () => {
                             the picture forwards a click at the same spot on the real page,
                             which is all this flow needs: a tap or two, then scan the QR. */}
                         {tpgJob.needsOperator && tpgJob.screen && (
-                            <div className="mt-4 rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+                            <div className="mt-4 rounded-lg border border-blue-300 dark:border-blue-800 bg-info-bg p-4">
                                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                                     <div>
                                         <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
                                             Sign in with Singpass to continue
                                         </p>
-                                        <p className="text-xs text-blue-800 dark:text-blue-300 mt-1 max-w-2xl">
+                                        <p className="text-xs text-info mt-1 max-w-2xl">
                                             This is the live browser running on the server. Scan the QR with the
                                             Singpass app on your phone — you are signing in as yourself. Click the
                                             picture if you need to press something on the page.
                                         </p>
                                     </div>
-                                    <span className="text-[11px] text-blue-700 dark:text-blue-300 tabular-nums">
+                                    <span className="text-[11px] text-primary tabular-nums">
                                         updated {new Date(tpgJob.screen.at).toLocaleTimeString([], { hour12: false })}
                                     </span>
                                 </div>
@@ -2386,7 +2386,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                             the buttons are disabled when none is, so reaching this state at all
                             means the helper dropped out mid-click. */}
                         {tpgJob.phase === 'queued' && (
-                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                            <p className="text-xs text-warning mt-2">
                                 Starting…
                             </p>
                         )}
@@ -2397,10 +2397,10 @@ export const UploadDirectApplicationView: React.FC = () => {
                             old panel showed a raw status line plus a full purple bar at
                             100%, which looks like work was completed. */}
                         {tpgNothingToConfirm && (
-                            <div className="mt-3 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-3">
+                            <div className="mt-3 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-success-bg p-3">
                                 <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                        <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <svg className="w-3 h-3 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
@@ -2410,7 +2410,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                         </p>
                                         {/* One template string, not text split around JSX
                                             expressions — that quietly inserts stray spaces. */}
-                                        <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-1">
+                                        <p className="text-xs text-success mt-1">
                                             {`No Direct Applications on TPGateway are waiting for confirmation${tpgCheckedAt ? ` as of ${tpgCheckedAt}` : ''}. Nothing was confirmed or changed.`}
                                         </p>
                                         {tpgJob.screenshot && (
@@ -2423,11 +2423,11 @@ export const UploadDirectApplicationView: React.FC = () => {
                             </div>
                         )}
                         {tpgJob.phase === 'awaiting_approval' && (
-                            <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+                            <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-warning-bg p-3">
                                 <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
                                     {tpgJob.total} application(s) are ready to confirm.
                                 </p>
-                                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                                <p className="text-xs text-warning mt-1">
                                     Nothing has been confirmed on TPGateway yet. Check the list below, then approve.
                                     Confirming cannot be undone.
                                 </p>
@@ -2442,12 +2442,12 @@ export const UploadDirectApplicationView: React.FC = () => {
                             </div>
                         )}
                         {tpgJob.found > tpgJob.total && tpgJob.total > 0 && (
-                            <p className="text-[11px] mt-1 text-gray-500 dark:text-gray-400">
+                            <p className="text-[11px] mt-1 text-muted">
                                 {tpgJob.found} application(s) are awaiting confirmation — this run is limited to {tpgJob.total}.
                             </p>
                         )}
                         {tpgJob.phase === 'cancelled' && (
-                            <p className="text-[11px] mt-1 text-red-600 dark:text-red-300">
+                            <p className="text-[11px] mt-1 text-danger">
                                 Stopped by you. Anything already confirmed on TPGateway was still enrolled.
                             </p>
                         )}
@@ -2456,7 +2456,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                             const total = tpgJob.total || 0;
                             return (
                                 <div className="mt-3">
-                                    <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                                    <div className="flex justify-between text-[11px] text-muted mb-1">
                                         <span>{total > 0 ? `${doneCount} / ${total}` : (tpgJob.phase === 'done' ? 'Complete' : 'Working…')}</span>
                                         <span className="tabular-nums">{fmtElapsed(tpgElapsed)} · {Math.round(tpgProgress)}%</span>
                                     </div>
@@ -2474,7 +2474,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                         {!tpgNothingToConfirm && tpgJob.log?.length > 0 && (
                             <div className="mt-4">
                                 <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Activity</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Activity</p>
                                     {tpgRunning && (
                                         <span className="flex items-center gap-1.5 text-[10px] font-medium text-purple-500 dark:text-purple-400">
                                             <span className="relative flex w-1.5 h-1.5">
@@ -2511,11 +2511,11 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                     </span>
                                                     <div className="min-w-0 flex-1 flex items-baseline justify-between gap-3">
                                                         <span className={`text-xs leading-relaxed ${isCurrent
-                                                            ? 'font-semibold text-gray-900 dark:text-gray-50'
-                                                            : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            ? 'font-semibold text-on-surface'
+                                                            : 'text-muted'}`}>
                                                             {entry.text}
                                                         </span>
-                                                        <span className="flex-shrink-0 text-[10px] tabular-nums text-gray-400 dark:text-gray-600">
+                                                        <span className="flex-shrink-0 text-[10px] tabular-nums text-muted">
                                                             {new Date(entry.at).toLocaleTimeString([], { hour12: false })}
                                                         </span>
                                                     </div>
@@ -2527,12 +2527,12 @@ export const UploadDirectApplicationView: React.FC = () => {
                             </div>
                         )}
                         {tpgJob.apps.length > 0 && (
-                            <div className="mt-3 max-h-64 overflow-y-auto rounded border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                            <div className="mt-3 max-h-64 overflow-y-auto rounded border border-default divide-y divide-default">
                                 {tpgJob.apps.map(a => (
                                     <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
                                         <span className="min-w-0 truncate">
-                                            <span className="font-semibold text-gray-800 dark:text-gray-100">{a.name || '—'}</span>
-                                            <span className="ml-2 font-mono text-gray-400 dark:text-gray-500">{a.id}</span>
+                                            <span className="font-semibold text-on-surface">{a.name || '—'}</span>
+                                            <span className="ml-2 font-mono text-muted">{a.id}</span>
                                         </span>
                                         <span className={`flex-shrink-0 px-2 py-0.5 rounded-full font-semibold ${tpgAppChipClass(a.status)}`} title={a.reason || ''}>
                                             {tpgStatusLabel(a.status)}{a.reason ? ` — ${a.reason}` : ''}
@@ -2542,7 +2542,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                             </div>
                         )}
                         {tpgJob.phase === 'error' && tpgJob.screenshot && (
-                            <p className="text-[11px] mt-2 text-gray-500 dark:text-gray-400">A debug screenshot was saved to scratch/ for troubleshooting.</p>
+                            <p className="text-[11px] mt-2 text-muted">A debug screenshot was saved to scratch/ for troubleshooting.</p>
                         )}
                     </div>
                 )}
@@ -2792,11 +2792,11 @@ export const ViewDirectApplicationView: React.FC = () => {
         if (brokenDocumentKeys.has(key)) {
             return (
                 <div className="flex flex-col items-start gap-1">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">
                         <Icon name={IconName.Warning} className="w-3 h-3" />
                         Unavailable
                     </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400">Document may have been deleted</span>
+                    <span className="text-[10px] text-muted">Document may have been deleted</span>
                 </div>
             );
         }
@@ -3416,26 +3416,26 @@ export const ViewDirectApplicationView: React.FC = () => {
                 const invoiced = applications.filter(a => isInvoiceCheckboxChecked(a)).length;
                 return (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-blue-600">{total}</p><p className="text-xs text-gray-500 mt-1">Direct Applications</p></Card>
-                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-green-600">{enrolled}</p><p className="text-xs text-gray-500 mt-1">Enrolled</p></Card>
-                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-indigo-600">{calAdded}</p><p className="text-xs text-gray-500 mt-1">Added to Calendar</p></Card>
-                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-amber-600">{invoiced}</p><p className="text-xs text-gray-500 mt-1">Invoice Created</p></Card>
+                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-primary">{total}</p><p className="text-xs text-muted mt-1">Direct Applications</p></Card>
+                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-success">{enrolled}</p><p className="text-xs text-muted mt-1">Enrolled</p></Card>
+                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-indigo-700 dark:text-indigo-300">{calAdded}</p><p className="text-xs text-muted mt-1">Added to Calendar</p></Card>
+                        <Card className="p-4 text-center"><p className="text-3xl font-bold text-warning">{invoiced}</p><p className="text-xs text-muted mt-1">Invoice Created</p></Card>
                     </div>
                 );
             })()}
 
             {/* Email-toggle banner */}
-            <Card className={`p-4 mb-6 border-2 ${emailToggleOn ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700' : 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700'}`}>
+            <Card className={`p-4 mb-6 border-2 ${emailToggleOn ? 'border-emerald-300 bg-success-bg dark:border-emerald-700' : 'border-amber-300 bg-warning-bg dark:border-amber-700'}`}>
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3">
-                        <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-amber-100 dark:bg-amber-800/40'}`}>
-                            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`} />
+                        <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-warning-bg'}`}>
+                            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-success' : 'text-warning'}`} />
                         </div>
                         <div>
-                            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-warning'}`}>
                                 Send Tax Invoice Email to Learner: {emailToggleOn ? 'ON' : 'OFF (test mode)'}
                             </p>
-                            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-success' : 'text-warning'}`}>
                                 {emailToggleOn
                                     ? 'After invoice generation, the main tax invoice will be emailed to the learner.'
                                     : 'Invoices will still be generated and saved to Drive — emails are NOT sent. Safe for testing.'}
@@ -3453,7 +3453,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
                     <label className="block">
-                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">CC recipients</span>
+                        <span className="block text-xs font-medium text-on-surface-secondary mb-1">CC recipients</span>
                         <input
                             type="text"
                             value={invoiceEmailCc}
@@ -3463,7 +3463,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                         />
                     </label>
                     <label className="block">
-                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">BCC recipients</span>
+                        <span className="block text-xs font-medium text-on-surface-secondary mb-1">BCC recipients</span>
                         <input
                             type="text"
                             value={invoiceEmailBcc}
@@ -3485,21 +3485,21 @@ export const ViewDirectApplicationView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1">
-                        <label htmlFor="search-da" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Search Applications</label>
+                        <label htmlFor="search-da" className="block text-sm font-bold text-on-surface-secondary mb-1">Search Applications</label>
                         <input id="search-da" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by name, application ID, course, or email..." className={inputClasses} />
                     </div>
                     <Button onClick={fetchApplications} disabled={isLoading}>
                         {isLoading ? <div className="flex items-center"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />Loading...</div> : <><Icon name={IconName.Download} className="w-4 h-4 mr-2" />Refresh</>}
                     </Button>
                 </div>
-                {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+                {error && <p className="text-danger text-sm mt-3">{error}</p>}
             </Card>
 
             {isLoading && (
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching DA applications from database...</p>
+                        <p className="mt-4 text-on-surface-secondary">Fetching DA applications from database...</p>
                     </div>
                 </div>
             )}
@@ -3514,7 +3514,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                         <div className="flex justify-between items-start gap-4 flex-wrap">
                             <div>
                                 <h3 className="text-xl font-bold">DA Applications</h3>
-                                <p className="text-gray-500 dark:text-gray-400 mt-1">
+                                <p className="text-muted mt-1">
                                     Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredApplications.length)} of {filteredApplications.length} applications
                                     {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
                                 </p>
@@ -3538,7 +3538,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                     <button
                                         onClick={() => runStatusRepair(repairCount === null)}
                                         disabled={repairBusy}
-                                        className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg border border-amber-400 text-amber-700 dark:text-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg border border-amber-400 text-warning dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         title="Find applications marked failed that actually hold an SSG enrolment ID, and correct their status. Checks first — nothing is changed until you click again."
                                     >
                                         {repairBusy
@@ -3563,7 +3563,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button
                                 onClick={handleGenerateInvoice}
                                 disabled={isGeneratingInv || selectedIds.size === 0}
-                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-amber-600 hover:bg-amber-700 shadow-sm shadow-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-amber-700 hover:bg-amber-800 shadow-sm shadow-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 title="Run the QuickBooks invoice pipeline for the selected rows without emailing the learner"
                             >
                                 {isGeneratingInv ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Generating...</> : <><Icon name={IconName.FileText} className="w-3.5 h-3.5 mr-1.5" />Generate Invoice</>}
@@ -3579,74 +3579,74 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button
                                 onClick={handleSendInvoiceEmail}
                                 disabled={isSendingInvoiceEmail || selectedIds.size === 0}
-                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-emerald-700 hover:bg-emerald-800 shadow-sm shadow-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 title="Send selected generated tax invoice emails to learners"
                             >
                                 {isSendingInvoiceEmail ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Sending...</> : <><Icon name={IconName.Mail} className="w-3.5 h-3.5 mr-1.5" />Send Invoice Email</>}
                             </button>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-1 tabular-nums">
+                            <span className="text-xs text-muted ml-1 tabular-nums">
                                 {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Tick rows to use these'}
                             </span>
                         </div>
                     </div>
                     {repairMsg && (
-                        <div className="px-4 py-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-b dark:border-gray-700">
+                        <div className="px-4 py-2 text-xs text-warning bg-warning-bg border-b dark:border-gray-700">
                             {repairMsg}
                         </div>
                     )}
 
                     {/* Toolbar */}
-                    <div className="px-4 py-3 border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700 flex flex-wrap items-center gap-2">
+                    <div className="px-4 py-3 border-b bg-surface-elevated dark:border-gray-700 flex flex-wrap items-center gap-2">
                         <div className="relative">
-                            <button onClick={() => { setShowFilterDropdown(!showFilterDropdown); setShowSortDropdown(false); }} className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-200">
+                            <button onClick={() => { setShowFilterDropdown(!showFilterDropdown); setShowSortDropdown(false); }} className="inline-flex items-center px-3 py-1.5 text-sm border border-strong rounded bg-surface hover:bg-surface-hover text-on-surface-secondary">
                                 <Icon name={IconName.Eye} className="w-4 h-4 mr-1.5" />Filter
                             </button>
                             {showFilterDropdown && (
-                                <div className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 p-3 space-y-3">
+                                <div className="absolute left-0 top-full mt-1 w-72 bg-surface border border-strong rounded-lg shadow-lg z-50 p-3 space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">Column</label>
-                                        <select value={filterColumn} onChange={(e) => setFilterColumn(e.target.value)} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200">
+                                        <label className="block text-xs font-medium text-on-surface-secondary mb-1">Column</label>
+                                        <select value={filterColumn} onChange={(e) => setFilterColumn(e.target.value)} className="w-full px-2 py-1.5 text-sm border border-strong rounded bg-surface text-on-surface">
                                             <option value="">Select column...</option>
                                             {filterableColumns.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
-                                        <input type="text" value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="Enter a value..." className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200" />
+                                        <label className="block text-xs font-medium text-on-surface-secondary mb-1">Value</label>
+                                        <input type="text" value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="Enter a value..." className="w-full px-2 py-1.5 text-sm border border-strong rounded bg-surface text-on-surface" />
                                     </div>
-                                    <button onClick={applyFilter} disabled={!filterColumn || !filterValue.trim()} className="w-full px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed">Apply filter</button>
+                                    <button onClick={applyFilter} disabled={!filterColumn || !filterValue.trim()} className="w-full px-3 py-1.5 text-sm bg-green-700 text-white rounded hover:bg-green-800 disabled:bg-gray-300 disabled:cursor-not-allowed">Apply filter</button>
                                 </div>
                             )}
                         </div>
 
                         <div className="relative">
-                            <button onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFilterDropdown(false); }} className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-200">
+                            <button onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFilterDropdown(false); }} className="inline-flex items-center px-3 py-1.5 text-sm border border-strong rounded bg-surface hover:bg-surface-hover text-on-surface-secondary">
                                 <Icon name={IconName.ChevronDown} className="w-4 h-4 mr-1.5" />Sort
                             </button>
                             {showSortDropdown && (
-                                <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 p-3 space-y-3">
+                                <div className="absolute left-0 top-full mt-1 w-56 bg-surface border border-strong rounded-lg shadow-lg z-50 p-3 space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">Column</label>
-                                        <select value={sortColumn} onChange={(e) => setSortColumn(e.target.value)} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200">
+                                        <label className="block text-xs font-medium text-on-surface-secondary mb-1">Column</label>
+                                        <select value={sortColumn} onChange={(e) => setSortColumn(e.target.value)} className="w-full px-2 py-1.5 text-sm border border-strong rounded bg-surface text-on-surface">
                                             <option value="">Default order</option>
                                             {filterableColumns.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
                                         </select>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setSortDirection('asc'); setShowSortDropdown(false); }} className={`flex-1 px-2 py-1 text-xs rounded border ${sortDirection === 'asc' ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300'} dark:text-gray-200`}>Ascending</button>
-                                        <button onClick={() => { setSortDirection('desc'); setShowSortDropdown(false); }} className={`flex-1 px-2 py-1 text-xs rounded border ${sortDirection === 'desc' ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300'} dark:text-gray-200`}>Descending</button>
+                                        <button onClick={() => { setSortDirection('asc'); setShowSortDropdown(false); }} className={`flex-1 px-2 py-1 text-xs rounded border ${sortDirection === 'asc' ? 'bg-blue-100 border-blue-400' : 'bg-white border-strong'} dark:text-gray-200`}>Ascending</button>
+                                        <button onClick={() => { setSortDirection('desc'); setShowSortDropdown(false); }} className={`flex-1 px-2 py-1 text-xs rounded border ${sortDirection === 'desc' ? 'bg-blue-100 border-blue-400' : 'bg-white border-strong'} dark:text-gray-200`}>Descending</button>
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         <div className="relative group">
-                            <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-200 cursor-pointer">
+                            <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-strong rounded bg-surface hover:bg-surface-hover text-on-surface-secondary cursor-pointer">
                                 <input type="checkbox" checked={toBeEnrolledFilter} onChange={(e) => {
                                     const checked = e.target.checked; setToBeEnrolledFilter(checked); setCurrentPage(1);
                                     if (checked) { const eligibleIds = applications.filter(app => (app.application_status || '').toLowerCase() === 'confirmed' && (!app.enrolment_status || app.enrolment_status.trim() === '')).map(app => app.application_id); setSelectedIds(new Set(eligibleIds)); }
                                     else setSelectedIds(new Set());
-                                }} className="w-4 h-4 text-blue-600 rounded border-gray-300" />
+                                }} className="w-4 h-4 text-primary rounded border-strong" />
                                 To be enrolled Learner(s)
                             </label>
                         </div>
@@ -3663,9 +3663,9 @@ export const ViewDirectApplicationView: React.FC = () => {
 
                         {selectedIds.size > 0 && (
                             <>
-                                <span className="text-sm text-gray-600 dark:text-gray-300">{selectedIds.size} row(s) selected</span>
+                                <span className="text-sm text-on-surface-secondary">{selectedIds.size} row(s) selected</span>
                                 {/* [ARCHIVED] Green button for background auto-enrol pipeline
-                                <button onClick={() => handleAutoEnrol()} disabled={isAutoEnrolling || isCancelling || isDeleting || isEnrolling} className="inline-flex items-center px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400">
+                                <button onClick={() => handleAutoEnrol()} disabled={isAutoEnrolling || isCancelling || isDeleting || isEnrolling} className="inline-flex items-center px-3 py-1.5 text-sm bg-green-700 text-white rounded hover:bg-green-800 disabled:bg-green-400">
                                     {isAutoEnrolling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5" />Queuing...</> : 'Auto Enrol Selected'}
                                 </button>
                                 */}
@@ -3688,9 +3688,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                             isDeleting={isDeleting}
                             onConfirm={confirmDelete}
                             onClose={() => setDeleteConfirmOpen(false)}
-                            description={<>For rows with an Enrolment ID this <strong className="text-red-700 dark:text-red-300">cancels the live TPGateway enrolment</strong>, removes its grant, and voids the QBO invoices (main tax / SFC / grant) — only when no other application shares them — then deletes the record. A shared invoice is flagged for manual adjustment in QuickBooks.</>}
+                            description={<>For rows with an Enrolment ID this <strong className="text-danger">cancels the live TPGateway enrolment</strong>, removes its grant, and voids the QBO invoices (main tax / SFC / grant) — only when no other application shares them — then deletes the record. A shared invoice is flagged for manual adjustment in QuickBooks.</>}
                             columns={[
-                                { header: 'Name', className: 'font-semibold text-gray-900 dark:text-gray-100 max-w-[160px] truncate', render: (r: any) => r.trainee_name || '(unnamed)' },
+                                { header: 'Name', className: 'font-semibold text-on-surface max-w-[160px] truncate', render: (r: any) => r.trainee_name || '(unnamed)' },
                                 { header: 'Course', className: 'max-w-[200px] truncate', render: (r: any) => r.course_title || '-' },
                                 { header: 'Course Ref', className: 'font-mono text-[11px] whitespace-nowrap', render: (r: any) => r.course_reference_number || '-' },
                                 { header: 'Enrolment', className: 'font-mono text-[11px] whitespace-nowrap', render: (r: any) => r.enrolment_id || '-' },
@@ -3704,70 +3704,70 @@ export const ViewDirectApplicationView: React.FC = () => {
                             {/* The Type and Renewal columns encode meaning in colour and weight,
                                 which nobody can be expected to infer. Spelled out here rather
                                 than left to hover-only tooltips. */}
-                            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-gray-500 dark:text-gray-400">
-                                <span className="font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Reading the columns</span>
+                            <div className="px-4 py-2 border-b border-default flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-muted">
+                                <span className="font-semibold uppercase tracking-wide text-muted">Reading the columns</span>
                                 <span className="inline-flex items-center gap-1.5">
-                                    <span className="px-1.5 py-0.5 font-semibold uppercase tracking-wide rounded bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">WSQ</span>
+                                    <span className="px-1.5 py-0.5 font-semibold uppercase tracking-wide rounded bg-info-bg text-primary">WSQ</span>
                                     <span className="px-1.5 py-0.5 font-semibold uppercase tracking-wide rounded bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300">CASL</span>
                                     <span>Type &mdash; how this enrolment is billed, not how the course is typed today</span>
                                 </span>
                                 <span className="inline-flex items-center gap-1.5">
                                     <span className="font-mono font-bold text-teal-700 dark:text-teal-400">TGS-old</span>
                                     <span aria-hidden>&rarr;</span>
-                                    <span className="font-mono text-gray-400 dark:text-gray-500">TGS-new</span>
+                                    <span className="font-mono text-muted">TGS-new</span>
                                     <span><strong className="font-semibold">The highlighted code is the one this learner is enrolled under.</strong> Old on the left, new on the right.</span>
                                 </span>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
-                                    <thead className="bg-gray-50 dark:bg-gray-800">
+                                <table className="min-w-full divide-y divide-default text-[11px]">
+                                    <thead className="bg-surface-elevated">
                                         <tr>
-                                            <th className="px-2 py-2 w-8"><input type="checkbox" checked={paginatedApplications.length > 0 && paginatedApplications.every(app => selectedIds.has(app.application_id))} onChange={toggleSelectAll} className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300" /></th>
-                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
-                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
-                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
-                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Tax invoice email sent to learner">Email</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Application ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">DA Date</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">ID Type</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500"><Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" /></button></th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500"><Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" /></button></th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Name</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Email</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Phone</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Course Title</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="The SSG reference this learner was enrolled under. It never changes once the application exists.">Course Ref No.</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Old and new SSG reference for courses that have been renewed. The side this learner is enrolled under is highlighted.">Renewal (old &rarr; new)</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="When the course stopped being WSQ-funded. An invoice raised before this date correctly reads WSQ; one raised after should read CASL.">Renewed On</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="When this invoice was raised, from its document number. Marked when it was raised after the renewal.">Invoice Generated On</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="WSQ or CASL as this enrolment is billed. Rows enrolled before a renewal keep the older type; the Renewal column shows which reference they are on.">Type</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Start Date</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Run ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Sponsor</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Fee</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">GST</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID (BL)</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Amt (BL)</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Scheme</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Amount</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">TG Amt</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Claim ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Cr</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Payable</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Qualification</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Certification</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Status</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Cancel By</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol Status</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Invoice #</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Tax Invoice</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant Invoice</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SFC Invoice</th>
+                                            <th className="px-2 py-2 w-8"><input type="checkbox" checked={paginatedApplications.length > 0 && paginatedApplications.every(app => selectedIds.has(app.application_id))} onChange={toggleSelectAll} className="w-3.5 h-3.5 text-primary rounded border-strong" /></th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="SSG Enrolment Done">Enrol</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="Added to Google Calendar">Cal</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="Invoice Generated">Inv</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="Tax invoice email sent to learner">Email</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Application ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">DA Date</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">ID Type</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-muted hover:text-blue-500"><Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" /></button></th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-muted hover:text-blue-500"><Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" /></button></th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Name</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Email</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Phone</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Course Title</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="The SSG reference this learner was enrolled under. It never changes once the application exists.">Course Ref No.</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="Old and new SSG reference for courses that have been renewed. The side this learner is enrolled under is highlighted.">Renewal (old &rarr; new)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="When the course stopped being WSQ-funded. An invoice raised before this date correctly reads WSQ; one raised after should read CASL.">Renewed On</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="When this invoice was raised, from its document number. Marked when it was raised after the renewal.">Invoice Generated On</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="WSQ or CASL as this enrolment is billed. Rows enrolled before a renewal keep the older type; the Renewal column shows which reference they are on.">Type</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Start Date</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Run ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Sponsor</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Fee</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">GST</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Grant ID (BL)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Amt (BL)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Grant ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Scheme</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Amount</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">TG Amt</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">SF Claim ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">SF Cr</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Payable</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Qualification</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Certification</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Status</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Cancel By</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Enrol Status</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Enrol ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Invoice #</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Tax Invoice</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Grant Invoice</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">SFC Invoice</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                    <tbody className="bg-surface divide-y divide-default">
                                         {paginatedApplications.map((app, index) => (
                                             <tr
                                                 key={app.id || index}
@@ -3779,13 +3779,13 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 // would wash the tint off the moment the cursor crossed the row.
                                                 className={
                                                     selectedIds.has(app.application_id)
-                                                        ? 'bg-blue-50 dark:bg-blue-900/30 hover:bg-gray-50 dark:hover:bg-gray-600'
+                                                        ? 'bg-info-bg hover:bg-surface-hover'
                                                         : !realApplicationId(app.application_id)
-                                                            ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
-                                                            : 'hover:bg-gray-50 dark:hover:bg-gray-600'
+                                                            ? 'bg-danger-bg hover:bg-red-100 dark:hover:bg-red-900/30'
+                                                            : 'hover:bg-surface-hover'
                                                 }
                                             >
-                                                <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(app.application_id)} onChange={() => toggleSelect(app.application_id)} className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300" /></td>
+                                                <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(app.application_id)} onChange={() => toggleSelect(app.application_id)} className="w-3.5 h-3.5 text-primary rounded border-strong" /></td>
                                                 <td className="px-2 py-1.5 text-center">
                                                     {(() => {
                                                         const isCancelled = app.enrolment_status === 'Cancelled' || (app.application_status || '').toLowerCase() === 'cancelled';
@@ -3795,30 +3795,30 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                             return <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 border border-red-200" title={`Cancelled Enrolment: ${app.enrolment_id}`}>X</span>;
                                                         }
                                                         
-                                                        return <input type="checkbox" checked={hasEnrolmentId && !isCancelled} onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${hasEnrolmentId ? 'text-green-600 accent-green-600' : ''}`} title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'} />;
+                                                        return <input type="checkbox" checked={hasEnrolmentId && !isCancelled} onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)} className={`w-3.5 h-3.5 rounded border-strong cursor-pointer ${hasEnrolmentId ? 'text-success accent-green-600' : ''}`} title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'} />;
                                                     })()}
                                                 </td>
-                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!app.calendar_added} onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} title={app.calendar_added ? 'Added to calendar' : 'Click to mark'} /></td>
-                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-amber-600 accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${getDisplayInvoiceNumber(app)} - click to uncheck` : `Invoice: ${getDisplayInvoiceNumber(app)} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
+                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!app.calendar_added} onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-strong cursor-pointer ${app.calendar_added ? 'text-primary accent-blue-600' : ''}`} title={app.calendar_added ? 'Added to calendar' : 'Click to mark'} /></td>
+                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-strong cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-warning accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${getDisplayInvoiceNumber(app)} - click to uncheck` : `Invoice: ${getDisplayInvoiceNumber(app)} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
                                                 <td className="px-2 py-1.5 text-center">
                                                     {app.invoice_sent_at ? (
                                                         <span
-                                                            className="relative inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-700/60 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                                                            className="relative inline-flex items-center justify-center w-6 h-6 rounded-md bg-success-bg ring-1 ring-inset ring-emerald-200 dark:ring-emerald-700/60 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                                                             title={`Sent${app.invoice_sent_to ? ` to ${app.invoice_sent_to}` : ''} on ${new Date(app.invoice_sent_at).toLocaleString('en-SG')}`}
                                                         >
-                                                            <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                            <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-success" />
                                                             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-700" />
                                                         </span>
                                                     ) : (
                                                         <span
-                                                            className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-gray-300 dark:border-gray-600 bg-transparent"
+                                                            className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-strong bg-transparent"
                                                             title="Not sent to learner"
                                                         >
-                                                            <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                                                            <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-muted" />
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                                                <td className="px-2 py-1.5 whitespace-nowrap font-medium text-on-surface">
                                                     {(() => {
                                                         // Rows minted for a manual TPG enrolment have no MySkillsFuture
                                                         // application, only an internal `MANUAL-…` key. Show the SSG
@@ -3827,20 +3827,20 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         return isPlaceholder ? (
                                                             <span className="inline-flex items-center gap-1.5" title="Enrolled directly with SSG — no MySkillsFuture application. Showing the enrolment reference.">
                                                                 <span>{label}</span>
-                                                                <span className="px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-200">Manual</span>
+                                                                <span className="px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-gray-100 text-on-surface-secondary dark:bg-gray-600">Manual</span>
                                                             </span>
                                                         ) : label;
                                                     })()}
                                                 </td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.trainee_id ? (showPii ? app.trainee_id : `${app.trainee_id.charAt(0)}****${app.trainee_id.slice(-3)}`) : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.date_of_birth ? (showPii ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : `**/**/` + new Date(app.date_of_birth).getFullYear()) : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_name || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={app.trainee_email}>{app.trainee_email || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[180px] truncate" title={app.course_title}>{app.course_title || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.trainee_id_type || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted font-mono">{app.trainee_id ? (showPii ? app.trainee_id : `${app.trainee_id.charAt(0)}****${app.trainee_id.slice(-3)}`) : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.date_of_birth ? (showPii ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : `**/**/` + new Date(app.date_of_birth).getFullYear()) : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.trainee_name || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted max-w-[160px] truncate" title={app.trainee_email}>{app.trainee_email || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted max-w-[180px] truncate" title={app.course_title}>{app.course_title || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted font-mono">{app.course_reference_number || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-mono">{(() => {
                                                     // Shows the renewal itself, not this row's position in it. A learner
                                                     // who enrolled AFTER the renewal is on the current code and has
@@ -3849,7 +3849,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     const previous = String(app.course_previous_code || '').trim();
                                                     const current = String(app.course_current_code || '').trim();
                                                     if (!previous || !current || previous.toUpperCase() === current.toUpperCase()) {
-                                                        return <span className="text-gray-400 dark:text-gray-500">-</span>;
+                                                        return <span className="text-muted">-</span>;
                                                     }
                                                     const rowRef = String(app.course_reference_number || '').trim().toUpperCase();
                                                     const onPrevious = rowRef === previous.toUpperCase();
@@ -3859,42 +3859,42 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                             className="inline-flex items-center gap-1"
                                                             title={`This course was renewed from ${previous} to ${current}. This learner is enrolled under ${rowRef || '(no reference)'}.`}
                                                         >
-                                                            <span className={onPrevious ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{previous}</span>
-                                                            <span className="text-gray-400 text-[9px]" aria-hidden>&rarr;</span>
-                                                            <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{current}</span>
+                                                            <span className={onPrevious ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-muted'}>{previous}</span>
+                                                            <span className="text-muted text-[9px]" aria-hidden>&rarr;</span>
+                                                            <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-muted'}>{current}</span>
                                                         </span>
                                                     );
                                                 })()}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-[11px]"><RenewedOnCell renewedOn={app.course_renewed_on} exact={app.course_renewed_on_exact === true || app.course_renewed_on_exact === 't'} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-[11px]"><InvoiceGeneratedOnCell docNumber={app.invoice_doc_number} renewedOn={app.course_renewed_on} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><FundingTypeBadge courseType={app.course_type} currentCode={app.course_current_code} rowCode={app.course_reference_number} hasInvoice={hasRealInvoice(app.invoice_id)} /></td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.bl_grant_id || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.bl_amount != null ? `$${parseFloat(app.bl_amount).toFixed(2)}` : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.other_grant_id || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_scheme_code || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.course_run_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.sponsorship_type || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted font-mono">{app.bl_grant_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.bl_amount != null ? `$${parseFloat(app.bl_amount).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted font-mono">{app.other_grant_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.other_scheme_code || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.skillsfuture_credit_claim_id || '-'}</td>
                                                 {(() => {
                                                     // Show the credit that actually applies to this bill, not the
                                                     // balance the learner holds — otherwise $500 sits beside a
                                                     // $0.00 payable and the row contradicts itself.
                                                     const b = computeDaBilling(app);
                                                     if (app.skillsfuture_credit == null) {
-                                                        return <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">-</td>;
+                                                        return <td className="px-2 py-1.5 whitespace-nowrap text-muted">-</td>;
                                                     }
                                                     const capped = b != null && b.creditApplied < b.declaredCredit;
                                                     const shown = b != null ? b.creditApplied : parseFloat(app.skillsfuture_credit || 0);
                                                     return (
-                                                        <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300"
+                                                        <td className="px-2 py-1.5 whitespace-nowrap text-muted"
                                                             title={capped ? `Learner holds $${b!.declaredCredit.toFixed(2)}; only $${b!.creditApplied.toFixed(2)} applies to this course, the rest stays in their account.` : undefined}>
                                                             {`$${shown.toFixed(2)}`}
-                                                            {capped && <span className="ml-1 text-amber-500" aria-hidden>*</span>}
+                                                            {capped && <span className="ml-1 text-warning" aria-hidden>*</span>}
                                                         </td>
                                                     );
                                                 })()}
@@ -3903,33 +3903,33 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     const uploaded = app.payable_fee != null ? parseFloat(app.payable_fee) : null;
                                                     const stale = live != null && uploaded != null && Math.abs(live - uploaded) >= 0.01;
                                                     return (
-                                                        <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300"
+                                                        <td className="px-2 py-1.5 whitespace-nowrap text-muted"
                                                             title={stale ? `TPGateway sent $${uploaded!.toFixed(2)} when this was uploaded, before the grant was issued. $${live!.toFixed(2)} is what is owed now.` : undefined}>
                                                             {live != null ? `$${live.toFixed(2)}` : '-'}
-                                                            {stale && <span className="ml-1 text-amber-500" aria-hidden>*</span>}
+                                                            {stale && <span className="ml-1 text-warning" aria-hidden>*</span>}
                                                         </td>
                                                     );
                                                 })()}
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.highest_qualification || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.highest_relevant_certification || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>{app.application_status || 'Pending'}</span></td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_cancelled_by || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted">{app.application_cancelled_by || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap">
                                                     {app.enrolment_status && app.enrolment_status.trim() !== '' ? (
                                                         <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${app.enrolment_status === 'Confirmed' ? 'bg-green-100 text-green-800' : app.enrolment_status === 'Not Found' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>{app.enrolment_status}</span>
-                                                    ) : <span className="text-gray-400">-</span>}
+                                                    ) : <span className="text-muted">-</span>}
                                                 </td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{getVisibleInvoiceNumber(app) || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted font-mono">{app.enrolment_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-muted font-mono">{getVisibleInvoiceNumber(app) || '-'}</td>
                                                 <td className="px-2 py-1.5">
                                                     {(hasRealInvoice(app.invoice_id) && hasMainInvoiceDocument(app)) || brokenDocumentKeys.has(getDocumentKey(app, 'main'))
-                                                        ? renderDocumentButton(app, 'main', 'bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40')
-                                                        : <span className="text-gray-400">-</span>}
+                                                        ? renderDocumentButton(app, 'main', 'bg-success-bg text-success hover:bg-green-100 dark:hover:bg-green-900/40')
+                                                        : <span className="text-muted">-</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5">
                                                     {hasVisibleMainInvoice(app) && (app.grant_id || app.bl_grant_id || app.other_grant_id) && app.grant_invoice_id && ((app.grant_invoice_drive_web_view_link || app.grant_invoice_drive_file_id) || brokenDocumentKeys.has(getDocumentKey(app, 'grant')))
-                                                        ? renderDocumentButton(app, 'grant', 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40')
-                                                        : <span className="text-gray-400">-</span>}
+                                                        ? renderDocumentButton(app, 'grant', 'bg-info-bg text-primary hover:bg-blue-100 dark:hover:bg-blue-900/40')
+                                                        : <span className="text-muted">-</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5">
                                                     {/* Mirrors shouldGenerateSfcInvoice in the pipeline: a claim id OR an SFC
@@ -3938,7 +3938,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         which is long after the invoice is raised. */}
                                                     {hasVisibleMainInvoice(app) && (app.skillsfuture_credit_claim_id || parseFloat(app.skillsfuture_credit || 0) > 0) && app.sfc_invoice_id && ((app.sfc_invoice_drive_web_view_link || app.sfc_invoice_drive_file_id) || brokenDocumentKeys.has(getDocumentKey(app, 'sfc')))
                                                         ? renderDocumentButton(app, 'sfc', 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:hover:bg-purple-900/40')
-                                                        : <span className="text-gray-400">-</span>}
+                                                        : <span className="text-muted">-</span>}
                                                 </td>
                                             </tr>
                                         ))}
@@ -3947,20 +3947,20 @@ export const ViewDirectApplicationView: React.FC = () => {
                             </div>
                             {totalPages > 1 && (
                                 <div className="p-4 border-t flex items-center justify-between">
-                                    <div className="text-sm text-gray-500">Page {currentPage} of {totalPages}</div>
+                                    <div className="text-sm text-muted">Page {currentPage} of {totalPages}</div>
                                     <div className="flex items-center gap-1">
-                                        <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                                        <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="px-3 py-1 text-sm border rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
                                         {getPageNumbers().map((page, idx) => typeof page === 'number' ? (
-                                            <button key={idx} onClick={() => goToPage(page)} className={`px-3 py-1 text-sm border rounded ${currentPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'}`}>{page}</button>
-                                        ) : <span key={idx} className="px-2 text-gray-400">...</span>)}
-                                        <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                                            <button key={idx} onClick={() => goToPage(page)} className={`px-3 py-1 text-sm border rounded ${currentPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-surface-hover'}`}>{page}</button>
+                                        ) : <span key={idx} className="px-2 text-muted">...</span>)}
+                                        <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
                                     </div>
                                 </div>
                             )}
                         </>
                     ) : (
-                        <div className="p-12 text-center text-gray-500 dark:text-gray-400">
-                            <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <div className="p-12 text-center text-muted">
+                            <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-muted" />
                             <p className="text-lg font-medium">No applications found</p>
                             <p className="text-sm mt-2">{searchQuery ? 'Try adjusting your search query' : 'No DA applications in the database yet'}</p>
                         </div>
@@ -3975,26 +3975,26 @@ export const ViewDirectApplicationView: React.FC = () => {
                 const hasWarnings = invProgressDone && invProgressWarnings > 0 && !allFailed;
                 return (
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" style={{ backdropFilter: 'blur(8px)' }}>
-                        <div className="w-full max-w-md mx-4 rounded-2xl bg-white dark:bg-gray-800 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <div className="w-full max-w-md mx-4 rounded-2xl bg-surface shadow-2xl overflow-hidden border border-default">
                             <div className={`h-1 ${invProgressDone ? (allFailed ? 'bg-red-500' : hasWarnings ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-amber-500'}`} />
                             <div className="flex flex-col items-center pt-7 pb-2 px-6">
-                                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${invProgressDone ? (allFailed ? 'bg-red-100 dark:bg-red-900/30' : hasWarnings ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30') : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${invProgressDone ? (allFailed ? 'bg-danger-bg' : hasWarnings ? 'bg-warning-bg' : 'bg-success-bg') : 'bg-warning-bg'}`}>
                                     {invProgressDone ? (
                                         allFailed ? (
-                                            <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            <svg className="w-7 h-7 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                                         ) : hasWarnings ? (
-                                            <svg className="w-7 h-7 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.65 18h16.7a1 1 0 00.86-1.5l-7.5-13a1 1 0 00-1.72 0z" /></svg>
+                                            <svg className="w-7 h-7 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.65 18h16.7a1 1 0 00.86-1.5l-7.5-13a1 1 0 00-1.72 0z" /></svg>
                                         ) : (
-                                            <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                            <svg className="w-7 h-7 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                                         )
                                     ) : (
                                         <div className="animate-spin rounded-full h-7 w-7 border-[3px] border-amber-200 border-t-amber-500" />
                                     )}
                                 </div>
-                                <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                                <h3 className="text-base font-semibold text-on-surface">
                                     {invProgressDone ? (allFailed ? 'Generation Failed' : hasWarnings ? 'Generated With Warnings' : 'Invoices Generated!') : 'Generating Invoices...'}
                                 </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <p className="text-xs text-muted mt-1">
                                     {invProgressDone ? `Completed in ${fmt(elapsed)}` : `Processing ${invProgressTotal} invoice(s), please wait...`}
                                 </p>
                             </div>
@@ -4014,18 +4014,18 @@ export const ViewDirectApplicationView: React.FC = () => {
 
                             {invProgressDone && (
                                 <div className="px-6 pt-3 pb-1">
-                                    <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 divide-x divide-gray-200 dark:divide-gray-600 overflow-hidden">
+                                    <div className="flex rounded-lg border border-default divide-x divide-default overflow-hidden">
                                         <div className="flex-1 py-3 text-center">
-                                            <div className="text-base font-bold text-emerald-500">{invProgressSucceeded}</div>
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Generated</div>
+                                            <div className="text-base font-bold text-success">{invProgressSucceeded}</div>
+                                            <div className="text-[10px] text-muted font-medium mt-0.5">Generated</div>
                                         </div>
                                         <div className="flex-1 py-3 text-center">
-                                            <div className={`text-base font-bold ${invProgressFailed > 0 ? 'text-red-400' : 'text-gray-400'}`}>{invProgressFailed}</div>
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Failed</div>
+                                            <div className={`text-base font-bold ${invProgressFailed > 0 ? 'text-red-400' : 'text-muted'}`}>{invProgressFailed}</div>
+                                            <div className="text-[10px] text-muted font-medium mt-0.5">Failed</div>
                                         </div>
                                         <div className="flex-1 py-3 text-center">
-                                            <div className="text-base font-bold text-gray-700 dark:text-gray-300">{fmt(elapsed)}</div>
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Duration</div>
+                                            <div className="text-base font-bold text-on-surface-secondary">{fmt(elapsed)}</div>
+                                            <div className="text-[10px] text-muted font-medium mt-0.5">Duration</div>
                                         </div>
                                     </div>
                                 </div>
@@ -4033,26 +4033,26 @@ export const ViewDirectApplicationView: React.FC = () => {
 
                             {invProgressDone && invProgressIssues.length > 0 && (
                                 <div className="px-6 pt-3">
-                                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-1.5">
                                         What went wrong
                                     </div>
-                                    <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
+                                    <div className="max-h-44 overflow-y-auto rounded-lg border border-default divide-y divide-default">
                                         {invProgressIssues.map((issue, idx) => (
                                             <div key={`${issue.label}-${idx}`} className="px-3 py-2">
                                                 <div className="flex items-start gap-2">
                                                     <span
                                                         className={`mt-0.5 shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${issue.kind === 'failed'
-                                                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                            ? 'bg-danger-bg text-danger'
+                                                            : 'bg-warning-bg text-warning'
                                                             }`}
                                                     >
                                                         {issue.kind === 'failed' ? 'Failed' : 'Warning'}
                                                     </span>
                                                     <div className="min-w-0">
-                                                        <div className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">
+                                                        <div className="text-[11px] font-semibold text-on-surface-secondary truncate">
                                                             {issue.label}
                                                         </div>
-                                                        <div className="text-[11px] text-gray-600 dark:text-gray-400 break-words whitespace-pre-wrap">
+                                                        <div className="text-[11px] text-on-surface-secondary break-words whitespace-pre-wrap">
                                                             {issue.message}
                                                         </div>
                                                     </div>
@@ -4065,11 +4065,11 @@ export const ViewDirectApplicationView: React.FC = () => {
 
                             <div className="px-6 pt-4 pb-5">
                                 {invProgressDone ? (
-                                    <button onClick={() => setShowInvProgress(false)} className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-500 hover:bg-red-600' : hasWarnings ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
+                                    <button onClick={() => setShowInvProgress(false)} className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-600 hover:bg-red-700' : hasWarnings ? 'bg-amber-700 hover:bg-amber-800' : 'bg-emerald-700 hover:bg-emerald-800'}`}>
                                         Done
                                     </button>
                                 ) : (
-                                    <p className="text-[11px] text-center text-gray-400 dark:text-gray-500">Please do not close this page while processing.</p>
+                                    <p className="text-[11px] text-center text-muted">Please do not close this page while processing.</p>
                                 )}
                             </div>
                         </div>
@@ -4082,13 +4082,13 @@ export const ViewDirectApplicationView: React.FC = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
                         <div className="flex items-center justify-between p-4 border-b">
-                            <h3 className="text-lg font-semibold text-gray-900">{pendingPage !== null && pendingPage > currentPage ? 'Confirm moving to next page' : 'Confirm moving to previous page'}</h3>
-                            <button onClick={() => { setPendingPage(null); setShowPageModal(false); }} className="text-gray-400 hover:text-gray-600"><Icon name={IconName.Close} className="w-5 h-5" /></button>
+                            <h3 className="text-lg font-semibold text-on-surface">{pendingPage !== null && pendingPage > currentPage ? 'Confirm moving to next page' : 'Confirm moving to previous page'}</h3>
+                            <button onClick={() => { setPendingPage(null); setShowPageModal(false); }} className="text-muted hover:text-on-surface"><Icon name={IconName.Close} className="w-5 h-5" /></button>
                         </div>
-                        <div className="p-4"><p className="text-gray-600">The currently selected lines will be deselected, do you want to proceed?</p></div>
+                        <div className="p-4"><p className="text-on-surface-secondary">The currently selected lines will be deselected, do you want to proceed?</p></div>
                         <div className="flex gap-3 p-4 border-t">
-                            <button onClick={() => { setPendingPage(null); setShowPageModal(false); }} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                            <button onClick={() => { if (pendingPage !== null) { setSelectedIds(new Set()); setCurrentPage(pendingPage); setPendingPage(null); setShowPageModal(false); } }} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Confirm</button>
+                            <button onClick={() => { setPendingPage(null); setShowPageModal(false); }} className="flex-1 px-4 py-2.5 text-sm font-medium text-on-surface-secondary bg-white border border-strong rounded-md hover:bg-surface-hover">Cancel</button>
+                            <button onClick={() => { if (pendingPage !== null) { setSelectedIds(new Set()); setCurrentPage(pendingPage); setPendingPage(null); setShowPageModal(false); } }} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-700 rounded-md hover:bg-green-800">Confirm</button>
                         </div>
                     </div>
                 </div>
@@ -4170,9 +4170,9 @@ export const UpdateDirectApplicationView: React.FC = () => {
     const resetView = () => { setFile(null); setUploadResult(null); setError(null); setUpdatedRecordsPage(1); };
     const UploadStep = () => (
         <Card className="p-6">
-            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 rounded-lg p-4 mb-4">
-                <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Update Existing Records</h4>
-                <ul className="text-sm text-blue-700 dark:text-blue-400 mt-2 list-disc list-inside space-y-1">
+            <div className="bg-info-bg border border-blue-200 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-info mb-2">Update Existing Records</h4>
+                <ul className="text-sm text-primary mt-2 list-disc list-inside space-y-1">
                     <li>Match records by <strong>Application ID</strong></li>
                     <li>Update all fields from the Excel file</li>
                     <li><strong>Preserve</strong> the current <strong>Enrolment Status</strong></li>
@@ -4188,20 +4188,20 @@ export const UpdateDirectApplicationView: React.FC = () => {
             </div>
             <div className="text-center mb-4">
                 <h3 className="text-xl font-bold dark:text-white">Update Direct Applications</h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">Upload an Excel file to bulk update existing DA records.</p>
+                <p className="text-muted mt-1">Upload an Excel file to bulk update existing DA records.</p>
             </div>
             <div onDragOver={(e) => handleDragEvents(e, true)} onDragLeave={(e) => handleDragEvents(e, false)} onDrop={handleDrop}
-                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'}`}>
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-strong hover:border-blue-500'}`}>
                 <input type="file" id="file-upload-da-update" className="hidden" accept=".xlsx, .xls" onChange={(e) => handleFileChange(e.target.files?.[0])} />
                 <label htmlFor="file-upload-da-update" className="cursor-pointer">
-                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">{file ? file.name : 'Drag & drop your file here, or click to browse'}</p>
-                    <p className="text-xs text-gray-500 mt-1">XLSX or XLS file format</p>
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+                    <p className="mt-2 font-semibold text-on-surface">{file ? file.name : 'Drag & drop your file here, or click to browse'}</p>
+                    <p className="text-xs text-muted mt-1">XLSX or XLS file format</p>
                 </label>
             </div>
             {error && (
-                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-                    <div className="flex-shrink-0 w-10 h-10 bg-white border border-red-200 rounded-full flex items-center justify-center"><Icon name={IconName.Close} className="w-5 h-5 text-red-500" /></div>
+                <div className="mt-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-white border border-red-200 rounded-full flex items-center justify-center"><Icon name={IconName.Close} className="w-5 h-5 text-danger" /></div>
                     <div className="flex-1"><h4 className="font-semibold text-gray-900 dark:text-red-100">Something went wrong!</h4><p className="text-sm text-gray-600 dark:text-red-200/90 mt-1 whitespace-pre-line">{error}</p></div>
                     <button onClick={() => setError(null)} className="text-gray-400 hover:text-gray-600 dark:text-red-300 dark:hover:text-red-100"><Icon name={IconName.Close} className="w-5 h-5" /></button>
                 </div>
@@ -4215,36 +4215,36 @@ export const UpdateDirectApplicationView: React.FC = () => {
         <Card>
             <div className="p-6 border-b dark:border-gray-700">
                 <h3 className="text-xl font-bold dark:text-white">Update Results</h3>
-                <p className="text-gray-500 mt-1">The following records were updated.</p>
+                <p className="text-muted mt-1">The following records were updated.</p>
             </div>
             <div className="p-6">
                 {uploadResult?.success && uploadResult?.updated > 0 ? (
                     <div className="space-y-6">
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                             <h4 className="font-bold text-green-800">{uploadResult.updated} Record(s) Updated</h4>
-                            <p className="text-sm text-green-700">{uploadResult.notFound || 0} record(s) were not found (skipped)</p>
+                            <p className="text-sm text-success">{uploadResult.notFound || 0} record(s) were not found (skipped)</p>
                         </div>
                         {uploadResult.updatedRecords && uploadResult.updatedRecords.length > 0 && (
                             <div className="border border-blue-200 rounded-lg overflow-hidden">
                                 <div className="bg-blue-100 px-4 py-3"><h4 className="font-semibold text-blue-800">Updated Records ({uploadResult.updatedRecords.length})</h4></div>
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200">
+                                    <table className="min-w-full divide-y divide-default">
                                         <thead className="bg-gray-50">
                                             <tr>
                                                 {['Application ID', 'Trainee Name', 'Course Title', 'Application Date', 'Application Status', 'Enrolment Status'].map(h => (
-                                                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                                                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">{h}</th>
                                                 ))}
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
+                                        <tbody className="bg-white divide-y divide-default">
                                             {uploadResult.updatedRecords.slice((updatedRecordsPage - 1) * resultsPerPage, updatedRecordsPage * resultsPerPage).map((record: any, index: number) => (
-                                                <tr key={index} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{record.application_id || 'N/A'}</td>
-                                                    <td className="px-4 py-3 text-sm text-gray-500">{record.trainee_name || 'N/A'}</td>
-                                                    <td className="px-4 py-3 text-sm text-gray-500">{record.course_title || 'N/A'}</td>
-                                                    <td className="px-4 py-3 text-sm text-gray-500">{record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}</td>
+                                                <tr key={index} className="hover:bg-surface-hover">
+                                                    <td className="px-4 py-3 text-sm font-medium text-on-surface">{record.application_id || 'N/A'}</td>
+                                                    <td className="px-4 py-3 text-sm text-muted">{record.trainee_name || 'N/A'}</td>
+                                                    <td className="px-4 py-3 text-sm text-muted">{record.course_title || 'N/A'}</td>
+                                                    <td className="px-4 py-3 text-sm text-muted">{record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}</td>
                                                     <td className="px-4 py-3"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || '')}`}>{record.application_status || 'N/A'}</span></td>
-                                                    <td className="px-4 py-3">{record.enrolment_status ? <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${record.enrolment_status === 'Confirmed' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>{record.enrolment_status} (preserved)</span> : <span className="text-gray-400">-</span>}</td>
+                                                    <td className="px-4 py-3">{record.enrolment_status ? <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${record.enrolment_status === 'Confirmed' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-on-surface border-default'}`}>{record.enrolment_status} (preserved)</span> : <span className="text-muted">-</span>}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -4252,10 +4252,10 @@ export const UpdateDirectApplicationView: React.FC = () => {
                                 </div>
                                 {uploadResult.updatedRecords.length > resultsPerPage && (
                                     <div className="flex items-center justify-between p-3 bg-gray-50 border-t">
-                                        <p className="text-sm text-gray-500">Showing {(updatedRecordsPage - 1) * resultsPerPage + 1}-{Math.min(updatedRecordsPage * resultsPerPage, uploadResult.updatedRecords.length)} of {uploadResult.updatedRecords.length}</p>
+                                        <p className="text-sm text-muted">Showing {(updatedRecordsPage - 1) * resultsPerPage + 1}-{Math.min(updatedRecordsPage * resultsPerPage, uploadResult.updatedRecords.length)} of {uploadResult.updatedRecords.length}</p>
                                         <div className="flex items-center gap-1">
-                                            <button onClick={() => setUpdatedRecordsPage(p => Math.max(1, p - 1))} disabled={updatedRecordsPage === 1} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50">Previous</button>
-                                            <button onClick={() => setUpdatedRecordsPage(p => Math.min(Math.ceil(uploadResult.updatedRecords.length / resultsPerPage), p + 1))} disabled={updatedRecordsPage >= Math.ceil(uploadResult.updatedRecords.length / resultsPerPage)} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50">Next</button>
+                                            <button onClick={() => setUpdatedRecordsPage(p => Math.max(1, p - 1))} disabled={updatedRecordsPage === 1} className="px-3 py-1 text-sm border rounded hover:bg-surface-hover disabled:opacity-50">Previous</button>
+                                            <button onClick={() => setUpdatedRecordsPage(p => Math.min(Math.ceil(uploadResult.updatedRecords.length / resultsPerPage), p + 1))} disabled={updatedRecordsPage >= Math.ceil(uploadResult.updatedRecords.length / resultsPerPage)} className="px-3 py-1 text-sm border rounded hover:bg-surface-hover disabled:opacity-50">Next</button>
                                         </div>
                                     </div>
                                 )}
@@ -4280,7 +4280,7 @@ export const UpdateDirectApplicationView: React.FC = () => {
                 <div className="flex justify-center py-20">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Updating records in database...</p>
+                        <p className="mt-4 text-on-surface-secondary">Updating records in database...</p>
                     </div>
                 </div>
             ) : uploadResult ? <ResultsStep /> : <UploadStep />}

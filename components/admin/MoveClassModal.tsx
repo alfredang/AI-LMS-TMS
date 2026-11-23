@@ -294,22 +294,22 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
 
   const cell = (on: boolean, checked: boolean, onChange: () => void, disabled = false, title?: string) =>
     on ? <input type="checkbox" checked={checked} disabled={saving || disabled} onChange={onChange} className="h-3.5 w-3.5 align-middle" title={title} />
-       : <span className="text-[10px] text-gray-300 dark:text-gray-600">—</span>;
+       : <span className="text-[10px] text-muted">—</span>;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[90vh] overflow-auto">
-        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div className="bg-surface rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[90vh] overflow-auto">
+        <div className="p-5 border-b border-default flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Move class to another run</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{run.courseTitle} · {run.courseCode} · run {run.courseRunId}</p>
+            <h3 className="text-lg font-semibold text-on-surface">Move class to another run</h3>
+            <p className="text-xs text-muted">{run.courseTitle} · {run.courseCode} · run {run.courseRunId}</p>
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
+          <button type="button" onClick={onClose} className="text-muted hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
         </div>
 
         <div className="p-5 space-y-4">
           {!(syncTrainerTpg && syncEnrolmentTpg) && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+            <div className="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-warning-bg p-3 text-sm text-warning">
               <span>⚠️ {!syncTrainerTpg && !syncEnrolmentTpg
                 ? 'The trainer and learner enrolments won’t change on TPGateway — tick the options below to update them automatically, or change them on TPGateway manually after.'
                 : syncTrainerTpg
@@ -319,49 +319,49 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
           )}
 
           {loading ? (
-            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
+            <div className="text-sm text-muted flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
           ) : (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Move to course run *</label>
-                <select value={targetRunId} onChange={(e) => setTargetRunId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Move to course run *</label>
+                <select value={targetRunId} onChange={(e) => setTargetRunId(e.target.value)} className="w-full px-3 py-2 border border-strong rounded-md text-sm dark:bg-gray-700 dark:text-white">
                   <option value="">Select the new run…</option>
                   {siblings.map((r) => (
                     <option key={r.id} value={r.id}>{r.courseRunId} · {ymd(r.startDate)}–{ymd(r.endDate)} · {r.classStatus} · {r.enrolledCount} enrolled · {r.sessionCount ?? 0} session{(r.sessionCount ?? 0) === 1 ? '' : 's'}</option>
                   ))}
                 </select>
                 {targetRunId && (siblings.find((s) => s.id === targetRunId)?.sessionCount ?? 0) === 0 && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">⚠️ This run has no scheduled sessions — the class won&apos;t appear on the calendar until it&apos;s scheduled (the move transfers people, not the dates).</p>
+                  <p className="mt-1 text-xs text-warning">⚠️ This run has no scheduled sessions — the class won&apos;t appear on the calendar until it&apos;s scheduled (the move transfers people, not the dates).</p>
                 )}
-                <label className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
-                  <input type="checkbox" checked={includeHistorical} onChange={(e) => { setIncludeHistorical(e.target.checked); void loadSiblings(e.target.checked); }} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <label className="mt-2 flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
+                  <input type="checkbox" checked={includeHistorical} onChange={(e) => { setIncludeHistorical(e.target.checked); void loadSiblings(e.target.checked); }} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
                   <span>Include past (historical) runs</span>
                 </label>
-                {siblings.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">No {includeHistorical ? '' : 'upcoming '}runs for this course{includeHistorical ? '' : ' — tick "Include past runs"'}.</p>}
+                {siblings.length === 0 && <p className="text-sm text-muted mt-1">No {includeHistorical ? '' : 'upcoming '}runs for this course{includeHistorical ? '' : ' — tick "Include past runs"'}.</p>}
               </div>
 
               {/* Sync options — set these first; they enable the matching columns in the table below. */}
-              <div className="space-y-2 rounded-md border border-gray-200 dark:border-gray-700 p-3">
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                  <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <div className="space-y-2 rounded-md border border-default p-3">
+                <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
+                  <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
                   <span>Also update Google Calendar</span>
                   <HelpTip>Moves attendees to the new run&apos;s events, and removes this run&apos;s events if it&apos;s left empty. Enables the <strong>Calendar</strong> column below.</HelpTip>
                 </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                  <input type="checkbox" checked={syncTrainerTpg} onChange={(e) => setSyncTrainerTpg(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
+                  <input type="checkbox" checked={syncTrainerTpg} onChange={(e) => setSyncTrainerTpg(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
                   <span>Update the <strong>official</strong> trainer on TPGateway</span>
                   <HelpTip>Adds the official trainer to the new run and clears them from the original run. Enables the <strong>TPG</strong> column below. Needs the trainer&apos;s NRIC + SSG profile.</HelpTip>
                 </label>
                 {tpgBlocked && (
-                  <div className="ml-6 text-xs text-red-600 dark:text-red-400">
+                  <div className="ml-6 text-xs text-danger">
                     ⚠️ {official ? `${official.name || official.email} has no NRIC on file` : 'No official trainer selected (tick the TPG box for one)'} — pick an eligible official or untick this. The move can still proceed (LMS only).
                   </div>
                 )}
                 {syncTrainerTpg && !tpgBlocked && official && (
-                  <div className="ml-6 text-xs text-gray-500 dark:text-gray-400">{official.name || official.email} will be set as the trainer on TPGateway for the new run; the original run&apos;s trainer is cleared.</div>
+                  <div className="ml-6 text-xs text-muted">{official.name || official.email} will be set as the trainer on TPGateway for the new run; the original run&apos;s trainer is cleared.</div>
                 )}
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                  <input type="checkbox" checked={syncEnrolmentTpg} onChange={(e) => setSyncEnrolmentTpg(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
+                  <input type="checkbox" checked={syncEnrolmentTpg} onChange={(e) => setSyncEnrolmentTpg(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
                   <span>Update learner <strong>enrolments</strong> on TPGateway</span>
                   <HelpTip>Re-points moved learners to the new run and cancels removed ones — directly on live SSG. Only learners already enrolled on TPGateway are affected. (A day/session reschedule, by contrast, never changes enrolments.)</HelpTip>
                 </label>
@@ -369,15 +369,15 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
 
               {/* Unified "Adjust attendees" roster table for the move */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">People to move</label>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">People to move</label>
+                <p className="text-[11px] text-muted mb-2">
                   Ticked people move to the new run (keeping their existing enrolment). <strong>Untick to drop someone</strong> —
                   they aren't moved and are removed from the original run, which is being vacated. <strong>TPG</strong> = the one
                   official trainer on TPGateway. <strong>Calendar</strong> = include on the new run's events.
                 </p>
-                <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="rounded border border-default overflow-hidden">
                   <table className="min-w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    <thead className="bg-surface-elevated text-muted">
                       <tr>
                         <th className="text-left px-2 py-1 font-medium">Person</th>
                         <th className="text-center px-1 py-1 font-medium w-16">Learner</th>
@@ -386,9 +386,9 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
                         <th className={`text-center px-1 py-1 font-medium w-20 ${syncCalendar ? '' : 'opacity-40'}`}>Calendar</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tbody className="divide-y divide-default">
                       {people.length === 0 ? (
-                        <tr><td colSpan={5} className="px-3 py-3 text-sm text-gray-400">No learners or trainers on this run.</td></tr>
+                        <tr><td colSpan={5} className="px-3 py-3 text-sm text-muted">No learners or trainers on this run.</td></tr>
                       ) : people.map((p, i) => {
                         const d = draftOf(p);
                         const isTrainerRow = p.isTrainer || d.moveTrainer;
@@ -396,8 +396,8 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
                         return (
                           <tr key={p.email || p.name || i} className="align-middle">
                             <td className="px-2 py-1.5">
-                              <div className="text-gray-800 dark:text-gray-100 truncate max-w-[15rem]" title={p.email}>{p.name || p.email}</div>
-                              {p.name && <div className="text-[10px] text-gray-400 truncate max-w-[15rem]">{p.email || '—'}{isTrainerRow && !nric && <span className="ml-1 text-amber-600 dark:text-amber-400">· no NRIC</span>}</div>}
+                              <div className="text-on-surface truncate max-w-[15rem]" title={p.email}>{p.name || p.email}</div>
+                              {p.name && <div className="text-[10px] text-muted truncate max-w-[15rem]">{p.email || '—'}{isTrainerRow && !nric && <span className="ml-1 text-warning">· no NRIC</span>}</div>}
                             </td>
                             <td className="px-1 py-1.5 text-center">{cell(p.isLearner, d.moveLearner, () => toggle(p, 'moveLearner'), false, 'Move this learner')}</td>
                             <td className="px-1 py-1.5 text-center">{cell(isTrainerRow, d.moveTrainer, () => toggle(p, 'moveTrainer'), false, 'Carry this trainer')}</td>
@@ -411,28 +411,28 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
                 </div>
                 <div className="mt-2">
                   <SearchableSelect options={addOptions} value="" onChange={addTrainer} placeholder="Add a trainer not on this run…"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" />
+                    className="w-full px-3 py-2 border border-strong rounded-md text-sm dark:bg-gray-700 dark:text-white" />
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
+                <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
                 <span>Notify attendees by email — review &amp; edit the email and choose recipients below; sent after you confirm the move (never automatic)</span>
               </label>
               {notifyAttendees && (
                 targetRunId ? (
-                  <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                  <div className="rounded-md border border-default p-3">
                     <NotifyComposer courseRunId={targetRunId} changeType="class_reschedule" summary={`Your class "${run.courseTitle}" has been moved to a new run.`} onChange={setNotifyPayload} />
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Select the new run above to set up the email.</p>
+                  <p className="text-xs text-muted">Select the new run above to set up the email.</p>
                 )
               )}
             </>
           )}
         </div>
 
-        <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+        <div className="p-5 border-t border-default flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <button type="button" disabled={saving || !targetRunId || tpgBlocked} onClick={() => void doMove(false)}
             className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">

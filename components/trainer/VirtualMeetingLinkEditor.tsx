@@ -41,7 +41,7 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
     // reads as "the feature isn't there".
     if (!courseRunUuid) {
         return (
-            <p className="mt-3 text-xs text-gray-400 dark:text-gray-500 italic">
+            <p className="mt-3 text-xs text-muted italic">
                 Loading class details…
             </p>
         );
@@ -75,7 +75,7 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
             <button
                 type="button"
                 onClick={() => { setValue(currentLink || ''); setError(null); setIsEditing(true); }}
-                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary"
             >
                 <Icon name={IconName.Edit} className="w-4 h-4" />
                 {currentLink ? `Edit ${providerLabel} link` : `Add ${providerLabel} link`}
@@ -85,7 +85,7 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
 
     return (
         <div className="mt-3">
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+            <label className="block text-xs font-semibold text-on-surface-secondary mb-1">
                 {providerLabel} link
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -97,7 +97,7 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
                     placeholder="https://meet.google.com/abc-defg-hij"
                     disabled={isSaving}
                     autoFocus
-                    className="flex-1 min-w-0 px-3 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    className="flex-1 min-w-0 px-3 py-2 text-sm rounded-md border border-strong bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 />
                 <div className="flex gap-2">
                     <button
@@ -112,7 +112,7 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
                         type="button"
                         onClick={() => { setIsEditing(false); setError(null); }}
                         disabled={isSaving}
-                        className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                        className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
                     >
                         Cancel
                     </button>
@@ -123,13 +123,13 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
                     type="button"
                     onClick={() => save('')}
                     disabled={isSaving}
-                    className="mt-2 text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                    className="mt-2 text-xs text-danger hover:underline disabled:opacity-50"
                 >
                     Remove link
                 </button>
             )}
             {error && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
+                <p className="mt-2 text-sm text-danger">{error}</p>
             )}
         </div>
     );

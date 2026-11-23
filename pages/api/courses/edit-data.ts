@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCaslSkillsColumn } from '@lib/course-casl-skills-ensure-column';
 import { splitTrainerList } from '@/lib/trainerInvitations';
+import { canSeeGithubLink } from '@lib/auth/githubLinkAccess';
 
 interface LearningUnitRow {
   learning_unit_id: string;
@@ -98,14 +99,16 @@ async function handler(
         c.slides_url           AS learner_slides_url,
         c.trainer_slides_url,
         c.activities_url,
+        c.lab_simulator_url,
+        c.practice_exam_url,
         c.written_assessment_link,
         c.practical_performance_assessment_link,
         c.courseware_link,
         c.brochure_link,
         c.skillsfuture_link,
+        c.github_url,
         c.assessment_record_link,
         c.assessment_summary_record_url,
-        c.is_gamified          AS is_leaderboard_enabled,
         c.image_url,
         c.funding_validity,
           (SELECT h.valid_from::text FROM course_code_history h
@@ -237,14 +240,17 @@ async function handler(
       slidesUrl: courseData.learner_slides_url,
       trainerSlidesUrl: courseData.trainer_slides_url,
       activitiesUrl: courseData.activities_url,
+      labSimulatorUrl: courseData.lab_simulator_url,
+      practiceExamUrl: courseData.practice_exam_url,
       writtenAssessmentLink: courseData.written_assessment_link,
       practicalPerformanceAssessmentLink: courseData.practical_performance_assessment_link,
       courseLink: courseData.courseware_link,
       brochureLink: courseData.brochure_link,
       skillsfutureLink: courseData.skillsfuture_link,
+      // Developer-only link: left out of the response for every other role.
+      ...(canSeeGithubLink((req as any).authUser) ? { githubUrl: courseData.github_url || '' } : {}),
       assessmentRecordLink: courseData.assessment_record_link,
       assessmentSummaryRecordUrl: courseData.assessment_summary_record_url,
-      isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       fundingValidity: courseData.funding_validity || null,
       fundingValidityStart: courseData.funding_validity_start || null,

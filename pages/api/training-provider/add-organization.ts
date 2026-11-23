@@ -335,12 +335,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         auto_send_proforma_invoice, auto_send_confirm_email, auto_send_invoice, 
         auto_send_receipt, auto_send_certificate, auto_send_thankyou_email,
         auto_mask_sensitive_data, auto_delete_after_six_months,
-        enable_otp_login, enable_default_otp, enable_leaderboard, enable_point_sys,
+        enable_otp_login, enable_default_otp,
         created_at, updated_at
       ) VALUES (
         gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         false, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false,
+        false, false, false, false,
         NOW(), NOW()
       ) RETURNING id
     `, [

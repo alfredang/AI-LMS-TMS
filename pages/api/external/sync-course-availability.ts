@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { refreshCourseAvailabilityBatch } from '../../../lib/ssg/courseAvailability';
+import { requestCourseRunsForStorefront, type RunsNeededResult } from '../../../lib/ssg/courseRunsNeeded';
 
 type StorefrontAvailability = {
   course_code: string;
@@ -51,7 +52,11 @@ async function pushAvailabilityToStorefront(courses: StorefrontAvailability[]) {
   }
 }
 
-/** Daily SSG -> TMS -> storefront reconciliation. */
+/**
+ * Daily SSG -> TMS -> storefront reconciliation. The storefront keeps registration open
+ * for every enabled course; for those SSG has no future run for it answers with
+ * `runs_needed`, and their website schedule is published to TPGateway here.
+ */
 export async function runAutomation() {
   const refreshedBefore = new Date().toISOString();
   const totals: Record<string, number> = {};
@@ -89,6 +94,16 @@ export async function runAutomation() {
   );
 
   const storefront = await pushAvailabilityToStorefront(rows.rows);
+
+  // A failure here must not fail the availability sync itself.
+  let courseRunsNeeded: RunsNeededResult | { error: string };
+  try {
+    courseRunsNeeded = await requestCourseRunsForStorefront(storefront?.runs_needed || []);
+  } catch (error) {
+    console.error('sync-course-availability: course-run request failed:', error);
+    courseRunsNeeded = { error: error instanceof Error ? error.message : String(error) };
+  }
+
   return {
     status: remaining === 0 ? 'completed' : 'partial',
     rounds,
@@ -96,6 +111,7 @@ export async function runAutomation() {
     refreshed: totals,
     pushed: rows.rows.length,
     storefront,
+    courseRunsNeeded,
   };
 }
 

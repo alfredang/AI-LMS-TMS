@@ -90,15 +90,31 @@ const nextConfig = {
     return config;
   },
 
-  // Rewrite /uploads/* to the API file-serving route so dynamically-uploaded
-  // files in the Docker volume are served reliably in standalone mode.
+  // Send every /uploads/* request to the API file-serving route. It must be a
+  // `beforeFiles` rewrite: a plain rewrite runs only when no file under public/
+  // matches, and the uploads volume is mounted under public/, so the static
+  // server would hand out anything in it (including server-only key files)
+  // without the route's checks.
   async rewrites() {
-    return [
-      {
-        source: '/uploads/:path*',
-        destination: '/api/uploads/:path*',
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: '/uploads/:path*',
+          destination: '/api/uploads/:path*',
+        },
+        // App links: let the tenant's mobile app open /quiz/... links (see the route).
+        {
+          source: '/.well-known/apple-app-site-association',
+          destination: '/api/public/app-links?kind=ios',
+        },
+        {
+          source: '/.well-known/assetlinks.json',
+          destination: '/api/public/app-links?kind=android',
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
   },
 
   // Only expose PUBLIC environment variables

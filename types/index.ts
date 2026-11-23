@@ -237,6 +237,7 @@ export enum DeveloperPage {
 export enum TrainerPage {
   MyCalendar = 'myCalendar',
   EAttendance = 'eAttendance',
+  ClassFeedback = 'classFeedback',
   AssessmentGrading = 'assessmentGrading',
   MyClasses = 'myClasses',
   PastAttendance = 'pastAttendance',
@@ -327,6 +328,8 @@ export interface Course {
   assessmentPlanUrl?: string;
   trainerSlidesUrl?: string;
   activitiesUrl?: string;
+  labSimulatorUrl?: string;
+  practiceExamUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   writtenAssessmentPublished?: boolean;
@@ -356,10 +359,11 @@ export interface Course {
   traqomQualityRating?: number | null;
   casScore?: number | null;
   esScore?: number | null;
-  isLeaderboardEnabled?: boolean;
   courseLink?: string;
   brochureLink?: string;
   skillsfutureLink?: string;
+  /** GitHub repository of the course. Developer-only: only the course editor APIs return it, and only to a Developer. */
+  githubUrl?: string | null;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   topics: Topic[];
@@ -383,6 +387,8 @@ export interface CourseDetail {
   courseRunId: string;
   courseRunUuid: string;
   digitalAttendanceId: string;
+  /** Trainer name(s) of this class run, comma-separated. */
+  trainerNames?: string;
   trainingHours: number;
   assessmentHours: number;
   lessonPlanUrl: string;
@@ -391,10 +397,14 @@ export interface CourseDetail {
   facilitatorGuideUrl?: string;
   trainerSlidesUrl?: string;
   activitiesUrl?: string;
+  labSimulatorUrl?: string;
+  practiceExamUrl?: string;
   assessmentPlanUrl?: string;
   courseLink?: string;
   brochureLink?: string;
   skillsfutureLink?: string;
+  /** GitHub repository of the course. Developer-only: only the course editor APIs return it, and only to a Developer. */
+  githubUrl?: string | null;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   writtenAssessmentLink?: string;

@@ -4,6 +4,7 @@ import pool from '../db';
 import { getCalendarClient } from './calendarClient';
 import { ensureClassCalendarEvent } from './ensureClassCalendarEvent';
 import { collectRunCalendarEvents, meetLinkOfEvent, storeRunMeetLink } from './meetLink';
+import { ensureMeetAutoRecording } from './meetRecording';
 
 /**
  * Everything Google-Calendar-side that must happen when a trainer ACCEPTS an
@@ -165,6 +166,9 @@ export async function confirmTrainerOnCalendar(
           if (meetLink) {
             await storeRunMeetLink(run.id, meetLink);
             console.log(`📹 [confirmTrainerOnCalendar] Google Meet generated for run=${runIdStr}: ${meetLink}`);
+            // Every class session on Meet records automatically (meetRecordingRule.ts).
+            const rec = await ensureMeetAutoRecording(meetLink);
+            console.log(`🎥 [confirmTrainerOnCalendar] auto-recording for run=${runIdStr}: ${rec.status}${rec.message ? ` (${rec.message})` : ''}`);
           } else {
             console.warn(`⚠️ [confirmTrainerOnCalendar] Meet create request sent but no link resolved for run=${runIdStr}`);
           }

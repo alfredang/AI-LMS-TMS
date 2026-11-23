@@ -14,9 +14,9 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
     // If error has details array, format them as a list
     if (error.details && Array.isArray(error.details) && error.details.length > 0) {
         return (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
+            <div className="p-4 bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
-                    <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <Icon name={IconName.X} className="w-5 h-5 text-danger flex-shrink-0" />
                     <div className="font-semibold text-red-900 dark:text-red-200">
                         {error.message || 'Enrolment Created Unsuccessfully'}
                     </div>
@@ -25,7 +25,7 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
                     {error.details.map((detail: any, idx: number) => {
                         let message = detail.message || JSON.stringify(detail);
                         return (
-                            <div key={idx} className="text-sm text-red-800 dark:text-red-300 font-mono bg-red-100 dark:bg-red-900/40 px-2 py-1 rounded inline-block">
+                            <div key={idx} className="text-sm text-danger font-mono bg-danger-bg px-2 py-1 rounded inline-block">
                                 {message}
                             </div>
                         );
@@ -38,14 +38,14 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
     // Fallback to error message if no details
     if (error.message) {
         return (
-            <div className="space-y-2 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
+            <div className="space-y-2 p-4 bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
                 <div className="flex items-center gap-2">
-                    <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <Icon name={IconName.X} className="w-5 h-5 text-danger flex-shrink-0" />
                     <div className="font-semibold text-red-900 dark:text-red-200">
                         Enrolment Created Unsuccessfully
                     </div>
                 </div>
-                <div className="pl-7 text-sm text-red-800 dark:text-red-300">
+                <div className="pl-7 text-sm text-danger">
                     {error.message}
                 </div>
             </div>
@@ -619,14 +619,14 @@ export const BulkUploadEnrolmentView: React.FC = () => {
         <Card className="p-6">
             <div className="text-center mb-4">
                 <h3 className="text-xl font-bold dark:text-white">Bulk Upload Enrolments</h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">Submit enrolment data in bulk by uploading an Excel file.</p>
+                <p className="text-muted mt-1">Submit enrolment data in bulk by uploading an Excel file.</p>
             </div>
 
             <div
                 onDragOver={(e) => handleDragEvents(e, true)}
                 onDragLeave={(e) => handleDragEvents(e, false)}
                 onDrop={handleDrop}
-                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400'}`}
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-info-bg' : 'border-strong hover:border-blue-500 dark:hover:border-blue-400'}`}
             >
                 <input
                     type="file"
@@ -636,28 +636,28 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                     onChange={(e) => handleFileChange(e.target.files?.[0])}
                 />
                 <label htmlFor="file-upload-enrolment" className="cursor-pointer">
-                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500" />
-                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-muted" />
+                    <p className="mt-2 font-semibold text-on-surface">
                         {file ? file.name : 'Drag & drop your file here, or click to browse'}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-muted mt-1">
                         XLSX or XLS file format
                     </p>
                 </label>
             </div>
 
             {error && (
-                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                <div className="mt-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
                     <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
                         <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+                        <h4 className="font-semibold text-on-surface">Something went wrong!</h4>
+                        <p className="text-sm text-on-surface-secondary mt-1 whitespace-pre-line">{error}</p>
                     </div>
                     <button
                         onClick={() => setError(null)}
-                        className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                        className="flex-shrink-0 text-muted hover:text-gray-600 dark:hover:text-gray-300"
                     >
                         <Icon name={IconName.Close} className="w-5 h-5" />
                     </button>
@@ -765,11 +765,11 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             <Card>
                 <div className="p-6 border-b dark:border-gray-700">
                     <h3 className="text-xl font-bold dark:text-white">Bulk Enrolment Results</h3>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">SSG response for each enrolment record.</p>
+                    <p className="text-muted mt-1">SSG response for each enrolment record.</p>
                 </div>
                 <div className="p-6">
                     {dbInsertErrors.length > 0 && (
-                        <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-lg">
+                        <div className="mb-4 p-4 bg-warning-bg border border-orange-300 dark:border-orange-700 rounded-lg">
                             <div className="font-semibold text-orange-900 dark:text-orange-200 mb-2">
                                 ⚠️ {dbInsertErrors.length} row(s) failed to save to database
                             </div>
@@ -784,37 +784,37 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                     )}
                     {results.length > 0 ? (
                         <div className="space-y-6">
-                            <div className={`border rounded-lg p-4 ${successCount > 0 && failedCount === 0 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800' : failedCount > 0 && successCount === 0 ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' : 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800'}`}>
-                                <h4 className={`font-bold ${successCount > 0 && failedCount === 0 ? 'text-green-800 dark:text-green-300' : failedCount > 0 && successCount === 0 ? 'text-red-800 dark:text-red-300' : 'text-yellow-800 dark:text-yellow-300'}`}>
+                            <div className={`border rounded-lg p-4 ${successCount > 0 && failedCount === 0 ? 'bg-success-bg border-green-200 dark:border-green-800' : failedCount > 0 && successCount === 0 ? 'bg-danger-bg border-red-200 dark:border-red-800' : 'bg-warning-bg border-yellow-200 dark:border-yellow-800'}`}>
+                                <h4 className={`font-bold ${successCount > 0 && failedCount === 0 ? 'text-success' : failedCount > 0 && successCount === 0 ? 'text-danger' : 'text-warning'}`}>
                                     {successCount > 0 && `${successCount} Successful`}
                                     {successCount > 0 && failedCount > 0 && ', '}
                                     {failedCount > 0 && `${failedCount} Failed`}
                                 </h4>
-                                <p className={`text-sm ${successCount > 0 && failedCount === 0 ? 'text-green-700 dark:text-green-400' : failedCount > 0 && successCount === 0 ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'}`}>
+                                <p className={`text-sm ${successCount > 0 && failedCount === 0 ? 'text-success' : failedCount > 0 && successCount === 0 ? 'text-danger' : 'text-warning'}`}>
                                     Total: {results.length} record(s) processed
                                 </p>
                             </div>
 
-                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                                <div className="bg-gray-100 dark:bg-gray-800 px-4 py-3">
-                                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">Enrolment Results ({results.length})</h4>
+                            <div className="border border-default rounded-lg overflow-hidden">
+                                <div className="bg-surface-elevated px-4 py-3">
+                                    <h4 className="font-semibold text-on-surface">Enrolment Results ({results.length})</h4>
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                        <thead className="bg-gray-50 dark:bg-gray-800">
+                                    <table className="min-w-full divide-y divide-default">
+                                        <thead className="bg-surface-elevated">
                                             <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">#</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Email</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Reference</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship Type</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SSG Response</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">#</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Trainee ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Trainee Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Trainee Email</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Course Run ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Course Reference</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Sponsorship Type</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">SSG Response</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                        <tbody className="bg-surface divide-y divide-default">
                                             {paginatedResults.map((record: any, index: number) => {
                                                 console.log(`🎯 Rendering record ${index}:`, record);
                                                 console.log(`   - parsedResult:`, record.parsedResult);
@@ -822,14 +822,14 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                 console.log(`   - parsedResult?.status:`, record.parsedResult?.status);
 
                                                 const isSuccess = isRecordSuccess(record);
-                                                const statusColor = isSuccess ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700' : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+                                                const statusColor = isSuccess ? 'bg-success-bg text-success border-green-200 dark:border-green-700' : 'bg-danger-bg text-danger border-red-200 dark:border-red-700';
 
                                                 return (
-                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                    <tr key={index} className="hover:bg-surface-hover">
                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
                                                             {(resultsPage - 1) * resultsPerPage + index + 1}
                                                         </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-on-surface">
                                                             {record.traineeId || 'N/A'}
                                                         </td>
                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
@@ -860,16 +860,16 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         const enrolmentRef = pr?.data?.enrolment?.referenceNumber || 'N/A';
                                                                         const enrolmentStatus = pr?.data?.enrolment?.status || 'Confirmed';
                                                                         return (
-                                                                            <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
+                                                                            <div className="space-y-2 p-4 bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                                                                                    <div className="text-sm text-green-800 dark:text-green-200 font-semibold">Enrolment created successfully</div>
+                                                                                    <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success flex-shrink-0" />
+                                                                                    <div className="text-sm text-success font-semibold">Enrolment created successfully</div>
                                                                                 </div>
                                                                                 <div className="pl-7 space-y-1">
-                                                                                    <div className="text-xs text-green-700 dark:text-green-300">
-                                                                                        <span className="font-medium">Reference:</span> <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">{enrolmentRef}</span>
+                                                                                    <div className="text-xs text-success">
+                                                                                        <span className="font-medium">Reference:</span> <span className="font-mono bg-success-bg px-2 py-0.5 rounded">{enrolmentRef}</span>
                                                                                     </div>
-                                                                                    <div className="text-xs text-green-700 dark:text-green-300">
+                                                                                    <div className="text-xs text-success">
                                                                                         <span className="font-medium">Status:</span> <span className="font-medium">{enrolmentStatus}</span>
                                                                                     </div>
                                                                                 </div>
@@ -886,7 +886,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         return <ErrorMessageDisplay error={errPayload} />;
                                                                     } else if (record.parsedResult) {
                                                                         // parsedResult exists but no clear error or data - show parsed result
-                                                                        return <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">{JSON.stringify(record.parsedResult, null, 2)}</pre>;
+                                                                        return <pre className="text-xs bg-surface-elevated p-2 rounded">{JSON.stringify(record.parsedResult, null, 2)}</pre>;
                                                                     } else if (record.result && typeof record.result === 'string' && record.result.startsWith('{')) {
                                                                         // If result is JSON string but not parsed, try to parse it here
                                                                         try {
@@ -901,16 +901,16 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                                 const enrolmentRef = parsed.data?.enrolment?.referenceNumber || 'N/A';
                                                                                 const enrolmentStatus = parsed.data?.enrolment?.status || 'Confirmed';
                                                                                 return (
-                                                                                    <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
+                                                                                    <div className="space-y-2 p-4 bg-success-bg border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
                                                                                         <div className="flex items-center gap-2">
-                                                                                            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                                                                                            <div className="text-sm text-green-800 dark:text-green-200 font-semibold">Enrolment created successfully</div>
+                                                                                            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success flex-shrink-0" />
+                                                                                            <div className="text-sm text-success font-semibold">Enrolment created successfully</div>
                                                                                         </div>
                                                                                         <div className="pl-7 space-y-1">
-                                                                                            <div className="text-xs text-green-700 dark:text-green-300">
-                                                                                                <span className="font-medium">Reference:</span> <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">{enrolmentRef}</span>
+                                                                                            <div className="text-xs text-success">
+                                                                                                <span className="font-medium">Reference:</span> <span className="font-mono bg-success-bg px-2 py-0.5 rounded">{enrolmentRef}</span>
                                                                                             </div>
-                                                                                            <div className="text-xs text-green-700 dark:text-green-300">
+                                                                                            <div className="text-xs text-success">
                                                                                                 <span className="font-medium">Status:</span> <span className="font-medium">{enrolmentStatus}</span>
                                                                                             </div>
                                                                                         </div>
@@ -919,12 +919,12 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                             } else if (hasErrorParsed) {
                                                                                 return <ErrorMessageDisplay error={parsed.error} />;
                                                                             }
-                                                                            return <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">{JSON.stringify(parsed, null, 2)}</pre>;
+                                                                            return <pre className="text-xs bg-surface-elevated p-2 rounded">{JSON.stringify(parsed, null, 2)}</pre>;
                                                                         } catch (e) {
                                                                             return (
-                                                                                <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                                                                                    <Icon name={IconName.InfoCircle} className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
-                                                                                    <span className="text-sm text-orange-700 dark:text-orange-300">Failed to parse response</span>
+                                                                                <div className="flex items-center gap-2 p-3 bg-warning-bg border border-orange-200 dark:border-orange-800 rounded-lg">
+                                                                                    <Icon name={IconName.InfoCircle} className="w-4 h-4 text-warning flex-shrink-0" />
+                                                                                    <span className="text-sm text-warning">Failed to parse response</span>
                                                                                 </div>
                                                                             );
                                                                         }
@@ -934,9 +934,9 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         return <span className="text-sm">{record.result}</span>;
                                                                     } else {
                                                                         return (
-                                                                            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                                                                                <Icon name={IconName.InfoCircle} className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                                                                <span className="text-sm text-gray-500 dark:text-gray-400">No response</span>
+                                                                            <div className="flex items-center gap-2 p-3 bg-surface-elevated border border-default rounded-lg">
+                                                                                <Icon name={IconName.InfoCircle} className="w-4 h-4 text-muted flex-shrink-0" />
+                                                                                <span className="text-sm text-muted">No response</span>
                                                                             </div>
                                                                         );
                                                                     }
@@ -950,15 +950,15 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                     </table>
                                 </div>
                                 {results.length > resultsPerPage && (
-                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="flex items-center justify-between p-3 bg-surface-elevated border-t dark:border-gray-700">
+                                        <p className="text-sm text-muted">
                                             Showing {(resultsPage - 1) * resultsPerPage + 1}-{Math.min(resultsPage * resultsPerPage, results.length)} of {results.length}
                                         </p>
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={() => setResultsPage(p => Math.max(1, p - 1))}
                                                 disabled={resultsPage === 1}
-                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-surface-hover dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Previous
                                             </button>
@@ -966,7 +966,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                 <button
                                                     key={page}
                                                     onClick={() => setResultsPage(page)}
-                                                    className={`px-3 py-1 text-sm border rounded ${resultsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
+                                                    className={`px-3 py-1 text-sm border rounded ${resultsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-surface-hover dark:border-gray-600 dark:text-gray-200'}`}
                                                 >
                                                     {page}
                                                 </button>
@@ -974,7 +974,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                             <button
                                                 onClick={() => setResultsPage(p => Math.min(totalPages, p + 1))}
                                                 disabled={resultsPage === totalPages}
-                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-surface-hover dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Next
                                             </button>
@@ -984,10 +984,10 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-8 text-center">
+                        <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-800 rounded-lg p-8 text-center">
                             <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                            <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Results</h4>
-                            <p className="text-yellow-700 dark:text-yellow-400">
+                            <h4 className="text-lg font-bold text-warning mb-2">No Results</h4>
+                            <p className="text-warning">
                                 The webhook did not return any results.
                             </p>
                         </div>
@@ -1007,7 +1007,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-20">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Processing bulk enrolment...</p>
+                        <p className="mt-4 text-on-surface-secondary">Processing bulk enrolment...</p>
                     </div>
                 </div>
             ) : uploadResult ? (

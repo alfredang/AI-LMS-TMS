@@ -49,20 +49,20 @@ export default function CancelClaimView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Cancel Claim</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-on-surface">Cancel Claim</h1>
+        <p className="mt-1 text-sm text-muted">
           POST /skillsFutureCredits/claims/&#123;claimId&#125; (v2)
         </p>
       </div>
 
       <div>
-        <label className="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider mb-2">
+        <label className="block text-xs font-semibold uppercase text-muted tracking-wider mb-2">
           Certificate / OAuth
         </label>
         <select
           value={selectedApp}
           onChange={(e) => setSelectedApp(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-primary"
+          className="w-full max-w-xs rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-primary"
         >
           {APP_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -72,35 +72,35 @@ export default function CancelClaimView() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Claim ID</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">Claim ID</label>
           <input
             value={claimId}
             onChange={(e) => setClaimId(e.target.value)}
             placeholder="e.g. 200123456789"
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+            className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">NRIC</label>
           <input
             value={nric}
             onChange={(e) => setNric(e.target.value)}
             placeholder="e.g. S1234567A"
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+            className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cancel Code</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">Cancel Code</label>
           <input
             value={claimCancelCode}
             onChange={(e) => setClaimCancelCode(e.target.value)}
             placeholder="e.g. 01"
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+            className="w-full rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
           />
         </div>
       </div>
 
-      <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm">
+      <div className="p-3 rounded-lg bg-warning-bg border border-amber-200 dark:border-amber-800 text-warning text-sm">
         This action will cancel the claim and cannot be undone.
       </div>
 
@@ -113,27 +113,27 @@ export default function CancelClaimView() {
       </button>
 
       {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+        <div className="p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-danger text-sm">
           {error}
         </div>
       )}
 
       {result && (
         <div className="space-y-4">
-          <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm font-medium">
+          <div className="p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-success text-sm font-medium">
             Claim cancelled successfully.
           </div>
 
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <div className="border border-default rounded-lg overflow-hidden">
             <button
               onClick={() => setShowJson(!showJson)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors"
             >
               <span>▶ JSON Response</span>
-              <span className="text-xs text-gray-400">{showJson ? 'collapse' : 'expand'}</span>
+              <span className="text-xs text-muted">{showJson ? 'collapse' : 'expand'}</span>
             </button>
             {showJson && (
-              <pre className="px-4 py-3 bg-gray-50 dark:bg-slate-900 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto max-h-96 border-t border-gray-200 dark:border-gray-700">
+              <pre className="px-4 py-3 bg-surface-elevated text-xs font-mono text-on-surface overflow-x-auto max-h-96 border-t border-default">
                 {JSON.stringify(result, null, 2)}
               </pre>
             )}

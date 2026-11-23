@@ -10,7 +10,7 @@ import { clearMyEventsCache } from '@lib/calendar/myEventsCache';
 import { isLabsUnit } from '@lib/courseLessonUnits';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams'; mobileAppIosUrl?: string | null; mobileAppAndroidUrl?: string | null }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -54,6 +54,8 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: strin
       briefingOnAssessment: result.data.briefingOnAssessment || '',
       referenceLinks: result.data.referenceLinks,
       virtualMeetingProvider: result.data.virtualMeetingProvider || 'google_meet',
+      mobileAppIosUrl: result.data.mobileAppIosUrl || null,
+      mobileAppAndroidUrl: result.data.mobileAppAndroidUrl || null,
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
@@ -500,6 +502,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               feedbackFormEnabled: providerInfo.feedbackFormEnabled,
               feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
               briefingOnAssessment: providerInfo.briefingOnAssessment,
+              mobileAppIosUrl: providerInfo.mobileAppIosUrl ?? null,
+              mobileAppAndroidUrl: providerInfo.mobileAppAndroidUrl ?? null,
               integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
           } catch (error) {
@@ -897,6 +901,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             feedbackFormEnabled: providerInfo.feedbackFormEnabled,
             feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
             briefingOnAssessment: providerInfo.briefingOnAssessment,
+            mobileAppIosUrl: providerInfo.mobileAppIosUrl ?? null,
+            mobileAppAndroidUrl: providerInfo.mobileAppAndroidUrl ?? null,
             integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
@@ -951,6 +957,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               feedbackFormEnabled: providerInfo.feedbackFormEnabled,
               feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
               briefingOnAssessment: providerInfo.briefingOnAssessment,
+              mobileAppIosUrl: providerInfo.mobileAppIosUrl ?? null,
+              mobileAppAndroidUrl: providerInfo.mobileAppAndroidUrl ?? null,
               integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');
@@ -1056,6 +1064,12 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Reset view to dashboard when switching roles
     setCurrentView(View.Dashboard);
     setSelectedCourse(null);
+    // An open course editor belongs to the role that opened it. Every layout
+    // renders <CourseEditor /> while editingCourse is set, so leaving it here
+    // showed the Developer's editor inside the next role instead of its dashboard.
+    setEditingCourse(null);
+    setCourseEditMode(null);
+    setEditingCourseRun(null);
 
     // Trigger profile refresh after role change
     try {
@@ -1202,6 +1216,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           facilitatorGuideUrl: trainerData.data.courseDetail.facilitatorGuideUrl,
           trainerSlidesUrl: trainerData.data.courseDetail.trainerSlidesUrl,
           activitiesUrl: trainerData.data.courseDetail.activitiesUrl,
+          labSimulatorUrl: trainerData.data.courseDetail.labSimulatorUrl,
+          practiceExamUrl: trainerData.data.courseDetail.practiceExamUrl,
           assessmentPlanUrl: trainerData.data.courseDetail.assessmentPlanUrl,
           courseLink: trainerData.data.courseDetail.courseLink,
           assessmentRecordLink: trainerData.data.courseDetail.assessmentRecordLink,

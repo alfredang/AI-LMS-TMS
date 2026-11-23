@@ -68,7 +68,7 @@ const PaxCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
   if (!stale) return <>{frozen}</>;
   return (
     <span
-      className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400"
+      className="inline-flex items-center gap-1 text-warning"
       title={`This payout was worked out from ${frozen} learner${frozen === 1 ? '' : 's'}, but the class now has ${live}. Edit the payout to bring it up to date.`}
     >
       <Icon name={IconName.Warning} className="w-3 h-3 flex-shrink-0" />
@@ -96,7 +96,7 @@ const EstimateCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
   if (!uncalculable) return <>{fmtCurrency(row.estimated_payout)}</>;
   return (
     <span
-      className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400"
+      className="inline-flex items-center gap-1 text-warning"
       title="This course has no fee recorded, so the payout can't be worked out. Add the course fee, or enter the actual payout by hand."
     >
       <Icon name={IconName.Warning} className="w-3 h-3 flex-shrink-0" />
@@ -108,7 +108,7 @@ const EstimateCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
 const fmtScore = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 // 2 and below is red — no trainer payment is made for that learner.
 const scoreColor = (n: number) =>
-  n <= 2 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+  n <= 2 ? 'text-danger' : 'text-success';
 
 /**
  * The class's average review score (mean of each learner's overall score) plus
@@ -145,7 +145,7 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
             : "Click to view each learner's score"
         }
         className={`text-xs underline underline-offset-2 hover:opacity-80 ${
-          lowCount > 0 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-primary'
+          lowCount > 0 ? 'text-danger font-semibold' : 'text-primary'
         }`}
       >
         {reviews.length} review{reviews.length === 1 ? '' : 's'}
@@ -161,7 +161,7 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
               if (e.target === e.currentTarget) setOpen(false);
             }}
           >
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="bg-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
               <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-default">
                 <div className="min-w-0">
                   <h2 className="text-lg font-semibold leading-tight">Learner Review Scores</h2>
@@ -175,7 +175,7 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-on-surface-secondary"
+                  className="p-1 rounded hover:bg-surface-hover text-on-surface-secondary"
                   aria-label="Close"
                 >
                   <Icon name={IconName.X} className="w-5 h-5" />
@@ -192,7 +192,7 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
                       <th className="py-2 pl-2 font-semibold text-right">Average</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                  <tbody className="divide-y divide-default">
                     {reviews.map((r, i) => (
                       <tr key={i}>
                         <td className="py-2 pr-3 max-w-[12rem] truncate" title={r.learner_name}>{r.learner_name}</td>
@@ -243,7 +243,7 @@ const CompactStat: React.FC<{
   sub?: string;
   dot: string;
 }> = ({ label, value, sub, dot }) => (
-  <div className="px-4 py-2.5 bg-white dark:bg-slate-800/60">
+  <div className="px-4 py-2.5 bg-surface">
     <div className="flex items-center gap-1.5">
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
       <span className="text-[10px] uppercase tracking-wider text-on-surface-secondary font-semibold truncate">{label}</span>
@@ -628,10 +628,10 @@ const PayoutListView: React.FC = () => {
         className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
           active
             ? 'bg-primary text-white border-primary'
-            : 'bg-white dark:bg-slate-800 border-default text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+            : 'bg-surface border-default text-on-surface-secondary hover:bg-surface-hover'
         }`}
       >
-        {label} <span className={active ? 'opacity-80' : 'opacity-60'}>({counts[value] ?? 0})</span>
+        {label} <span className={active ? '' : 'opacity-75'}>({counts[value] ?? 0})</span>
       </button>
     );
   };
@@ -749,7 +749,7 @@ const PayoutListView: React.FC = () => {
       </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-default shadow-sm p-3 space-y-3">
+      <div className="bg-surface rounded-lg border border-default shadow-sm p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <FilterPill value="all" label="All" />
@@ -768,7 +768,7 @@ const PayoutListView: React.FC = () => {
                 className={`px-2.5 transition ${
                   windowMode === m
                     ? 'bg-primary text-white'
-                    : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                    : 'bg-surface text-on-surface-secondary hover:bg-surface-hover'
                 }`}
               >
                 {m === 'month' ? 'Month' : 'Range'}
@@ -777,18 +777,18 @@ const PayoutListView: React.FC = () => {
           </div>
 
           {windowMode === 'month' ? (
-            <div className="flex items-center h-8 border border-default rounded-md bg-white dark:bg-slate-800 overflow-hidden text-xs">
-              <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-7 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-base leading-none">‹</button>
+            <div className="flex items-center h-8 border border-default rounded-md bg-surface overflow-hidden text-xs">
+              <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-7 h-full flex items-center justify-center text-on-surface-secondary hover:bg-surface-hover text-base leading-none">‹</button>
               <span className="font-semibold min-w-[7rem] text-center px-1">{monthLabel}</span>
               <button
                 onClick={() => shiftMonth(1)}
                 disabled={month >= currentMonthStr}
                 aria-label="Next month"
-                className="w-7 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-base leading-none disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-7 h-full flex items-center justify-center text-on-surface-secondary hover:bg-surface-hover text-base leading-none disabled:opacity-30 disabled:cursor-not-allowed"
               >›</button>
             </div>
           ) : (
-            <div className="flex items-center gap-1 h-8 pl-2.5 pr-1 border border-default rounded-md bg-white dark:bg-slate-800">
+            <div className="flex items-center gap-1 h-8 pl-2.5 pr-1 border border-default rounded-md bg-surface">
               <span className="text-[10px] uppercase tracking-wider text-on-surface-secondary font-medium whitespace-nowrap">Last</span>
               <select
                 value={months}
@@ -807,7 +807,7 @@ const PayoutListView: React.FC = () => {
           {windowMode === 'month' && month !== currentMonthStr && (
             <button
               onClick={() => setMonth(currentMonthStr)}
-              className="h-8 px-2.5 text-xs font-medium border border-default rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+              className="h-8 px-2.5 text-xs font-medium border border-default rounded-md hover:bg-surface-hover text-on-surface-secondary transition"
             >
               This month
             </button>
@@ -816,7 +816,7 @@ const PayoutListView: React.FC = () => {
             onClick={() => load()}
             title="Refresh"
             aria-label="Refresh"
-            className="inline-flex items-center justify-center h-8 w-8 border border-default rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+            className="inline-flex items-center justify-center h-8 w-8 border border-default rounded-md hover:bg-surface-hover text-on-surface-secondary transition"
           >
             <Icon name={IconName.Sync} className="w-4 h-4" />
           </button>
@@ -828,7 +828,7 @@ const PayoutListView: React.FC = () => {
               className={`inline-flex items-center gap-1.5 px-3 h-8 transition-colors ${
                 !groupByTrainer
                   ? 'bg-primary text-white'
-                  : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                  : 'bg-surface text-on-surface-secondary hover:bg-surface-hover'
               }`}
             >
               <Icon name={IconName.Courses} className="w-3.5 h-3.5" />
@@ -840,7 +840,7 @@ const PayoutListView: React.FC = () => {
               className={`inline-flex items-center gap-1.5 px-3 h-8 border-l border-default transition-colors ${
                 groupByTrainer
                   ? 'bg-primary text-white'
-                  : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                  : 'bg-surface text-on-surface-secondary hover:bg-surface-hover'
               }`}
             >
               <Icon name={IconName.Users} className="w-3.5 h-3.5" />
@@ -861,7 +861,7 @@ const PayoutListView: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search trainer, course, run code or bill no…"
-              className="w-full h-9 border border-default rounded-md pl-8 pr-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full h-9 border border-default rounded-md pl-8 pr-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
 
@@ -869,7 +869,7 @@ const PayoutListView: React.FC = () => {
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
             aria-label="Filter by course type"
-            className="h-9 border border-default rounded-md px-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="h-9 border border-default rounded-md px-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option className={OPTION_CLASS} value="all">All types</option>
             <option className={OPTION_CLASS} value="wsq">WSQ only</option>
@@ -880,7 +880,7 @@ const PayoutListView: React.FC = () => {
             value={trainerFilter}
             onChange={(e) => setTrainerFilter(e.target.value)}
             aria-label="Filter by trainer"
-            className="h-9 min-w-[11rem] max-w-[15rem] border border-default rounded-md px-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="h-9 min-w-[11rem] max-w-[15rem] border border-default rounded-md px-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option className={OPTION_CLASS} value="all">All trainers</option>
             {trainerOptions.map((t) => (
@@ -892,7 +892,7 @@ const PayoutListView: React.FC = () => {
             value={classFilter}
             onChange={(e) => setClassFilter(e.target.value)}
             aria-label="Filter by class"
-            className="h-9 min-w-[11rem] max-w-[18rem] border border-default rounded-md px-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="h-9 min-w-[11rem] max-w-[18rem] border border-default rounded-md px-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option className={OPTION_CLASS} value="all">All classes</option>
             {classOptions.map((c) => (
@@ -901,7 +901,7 @@ const PayoutListView: React.FC = () => {
           </select>
 
           <div
-            className="flex items-center gap-1 h-9 border border-default rounded-md pl-2.5 pr-1 bg-white dark:bg-slate-700/40 text-sm"
+            className="flex items-center gap-1 h-9 border border-default rounded-md pl-2.5 pr-1 bg-surface text-sm"
             title="Filter by course start date — pick a start and end day to set a range"
           >
             <span className="text-on-surface-secondary text-xs whitespace-nowrap">Start date</span>
@@ -922,7 +922,7 @@ const PayoutListView: React.FC = () => {
             <button
               type="button"
               onClick={clearFilters}
-              className="inline-flex items-center gap-1.5 h-9 px-3 text-sm border border-default rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary"
+              className="inline-flex items-center gap-1.5 h-9 px-3 text-sm border border-default rounded-md hover:bg-surface-hover text-on-surface-secondary"
             >
               <Icon name={IconName.X} className="w-3.5 h-3.5" />
               Clear
@@ -932,14 +932,14 @@ const PayoutListView: React.FC = () => {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 px-3 py-2 text-sm">
+        <div className="rounded-md border border-red-300 bg-danger-bg text-danger px-3 py-2 text-sm">
           {error}
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-default">
+      <div className="overflow-x-auto bg-surface rounded-xl shadow-sm border border-default">
         <table className="min-w-full text-[11px]">
-          <thead className="bg-gray-50 dark:bg-slate-900/40 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary font-semibold border-b border-default">
+          <thead className="bg-surface-elevated text-left text-[11px] uppercase tracking-wider text-on-surface-secondary font-semibold border-b border-default">
             {groupByTrainer ? (
               <tr>
                 <th className="px-3 py-2 whitespace-nowrap">Trainer</th>
@@ -1055,7 +1055,7 @@ const PayoutListView: React.FC = () => {
                   <td className="px-2 py-2.5 text-right tabular-nums"><PaxCell row={r} /></td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums"><EstimateCell row={r} /></td>
-                  <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
+                  <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-success' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap"><ReviewScoreCell row={r} /></td>
                   <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
@@ -1127,7 +1127,7 @@ const PayoutListView: React.FC = () => {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); bulkSetPaid(g.key, g.rows, !allCompleted); }}
                             disabled={bulkSaving !== null}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-surface hover:bg-surface-hover text-on-surface disabled:opacity-50"
                           >
                             {busy ? (
                               <>
@@ -1136,12 +1136,12 @@ const PayoutListView: React.FC = () => {
                               </>
                             ) : allCompleted ? (
                               <>
-                                <Icon name={IconName.Clock} className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                <Icon name={IconName.Clock} className="w-3.5 h-3.5 text-warning" />
                                 Unmark all as paid
                               </>
                             ) : (
                               <>
-                                <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                                <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-success" />
                                 Mark all as paid
                               </>
                             )}
@@ -1149,14 +1149,14 @@ const PayoutListView: React.FC = () => {
                         </div>
 
                         {bulkError && !busy && (
-                          <div className="mb-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md px-2.5 py-1.5">
+                          <div className="mb-2 text-xs text-danger bg-danger-bg border border-red-200 dark:border-red-800/50 rounded-md px-2.5 py-1.5">
                             {bulkError}
                           </div>
                         )}
 
-                        <div className="overflow-x-auto rounded-lg border border-default bg-white dark:bg-slate-800">
+                        <div className="overflow-x-auto rounded-lg border border-default bg-surface">
                           <table className="min-w-full text-[11px]">
-                            <thead className="bg-gray-100 dark:bg-slate-700 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary">
+                            <thead className="bg-surface-elevated text-left text-[11px] uppercase tracking-wider text-on-surface-secondary">
                               <tr>
                                 <th className="px-3 py-2 whitespace-nowrap">Course</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Course Code</th>
@@ -1252,7 +1252,7 @@ const PayoutListView: React.FC = () => {
                                     <td className="px-2 py-2.5 text-right tabular-nums"><PaxCell row={r} /></td>
                                     <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                                     <td className="px-2 py-2.5 text-right tabular-nums"><EstimateCell row={r} /></td>
-                                    <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${hasActual ? 'text-green-600 dark:text-green-400' : ''}`}>
+                                    <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${hasActual ? 'text-success' : ''}`}>
                                       {fmtCurrency(r.actual_payout)}
                                     </td>
                                     <td className="px-2 py-2.5 whitespace-nowrap"><ReviewScoreCell row={r} /></td>
@@ -1279,7 +1279,7 @@ const PayoutListView: React.FC = () => {
         </table>
 
         {!loading && totalItems > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-default bg-gray-50 dark:bg-slate-700/30 text-xs text-on-surface-secondary">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-default bg-surface-elevated text-xs text-on-surface-secondary">
             <div>
               Showing <span className="font-medium text-on-surface">{rangeStart}</span>–
               <span className="font-medium text-on-surface">{rangeEnd}</span> of{' '}
@@ -1364,7 +1364,7 @@ const PayoutListView: React.FC = () => {
           onConfirm={() => setBillNotice(null)}
           onCancel={() => setBillNotice(null)}
         >
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-300">
+          <div className="rounded-lg border border-default bg-surface-elevated p-3 space-y-1.5 text-xs text-on-surface-secondary">
             <p>
               The bill{billNotice.count === 1 ? ' is' : 's are'} being posted to QuickBooks.
               This runs in the background, so it may take a moment to appear.

@@ -41,7 +41,7 @@ const VirtualToolsPage: React.FC = () => {
                 <Icon name={tool.icon} className="w-6 h-6 text-primary" />
               </div>
               <h3 className="text-xl font-bold mb-2 dark:text-white">{tool.title}</h3>
-              <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{tool.description}</p>
+              <p className="text-on-surface-secondary text-sm flex-grow">{tool.description}</p>
             </Card>
           </a>
         ))}

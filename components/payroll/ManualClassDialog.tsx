@@ -52,19 +52,19 @@ const STATUS_OPTIONS: {
     value: 'pending',
     label: 'Pending',
     dot: 'bg-amber-500',
-    active: 'border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-500/60 dark:bg-amber-900/30 dark:text-amber-200',
+    active: 'border-amber-400 bg-warning-bg text-warning dark:border-amber-500/60',
   },
   {
     value: 'completed',
     label: 'Completed',
     dot: 'bg-emerald-500',
-    active: 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-200',
+    active: 'border-emerald-400 bg-success-bg text-emerald-700 dark:border-emerald-500/60 dark:text-emerald-200',
   },
   {
     value: 'cancelled',
     label: 'Cancelled',
     dot: 'bg-red-500',
-    active: 'border-red-400 bg-red-50 text-red-700 dark:border-red-500/60 dark:bg-red-900/30 dark:text-red-200',
+    active: 'border-red-400 bg-danger-bg text-danger dark:border-red-500/60',
   },
 ];
 
@@ -77,7 +77,7 @@ const todayIso = () => {
 };
 
 const inputCls =
-  'w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30';
+  'w-full border border-default rounded-md px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30';
 
 const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, onDeleted }) => {
   const isEdit = !!initial;
@@ -352,7 +352,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
         if (e.target === e.currentTarget) requestClose();
       }}
     >
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-default bg-primary/[0.03] dark:bg-primary/[0.06]">
           <div className="flex items-start gap-3 min-w-0">
@@ -371,7 +371,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
           <button
             onClick={requestClose}
             aria-label="Close"
-            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-slate-700 flex-shrink-0"
+            className="p-1 rounded-md text-muted hover:text-on-surface hover:bg-surface-hover flex-shrink-0"
           >
             <Icon name={IconName.X} className="w-5 h-5" />
           </button>
@@ -428,7 +428,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
               <label className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
                 Class Dates
               </label>
-              <div className="flex items-center gap-2 border border-default rounded-md px-2.5 min-h-[38px] bg-white dark:bg-slate-700 focus-within:ring-2 focus-within:ring-primary/30">
+              <div className="flex items-center gap-2 border border-default rounded-md px-2.5 min-h-[38px] bg-surface focus-within:ring-2 focus-within:ring-primary/30">
                 <Icon name={IconName.Calendar} className="w-4 h-4 text-on-surface-secondary flex-shrink-0" />
                 <DateRangeCell
                   compact
@@ -554,7 +554,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 inputMode="decimal"
                 value={actual}
                 onChange={(e) => setActual(e.target.value)}
-                className="w-full border border-default rounded-md pl-10 pr-3 py-2.5 text-lg font-semibold bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                className="w-full border border-default rounded-md pl-10 pr-3 py-2.5 text-lg font-semibold bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
                 placeholder="0.00"
               />
             </div>
@@ -575,7 +575,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                       className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${
                         active
                           ? o.active
-                          : 'border-default text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                          : 'border-default text-on-surface-secondary hover:bg-surface-hover'
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${active ? o.dot : 'bg-gray-300 dark:bg-slate-500'}`} />
@@ -601,7 +601,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 value={billNo}
                 onChange={(e) => setBillNo(e.target.value.toUpperCase())}
                 placeholder="Auto-assigned from the class date"
-                className="w-full border border-default rounded-md px-2 py-1.5 text-sm font-mono tracking-wide bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full border border-default rounded-md px-2 py-1.5 text-sm font-mono tracking-wide bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
               <p className="mt-1 text-[11px] text-on-surface-secondary">
                 Format TX + YYMMDD + running no. (e.g. TX26030605). Edit to match an existing QuickBooks bill.
@@ -637,7 +637,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                     </button>
                   </div>
                   {regenNote && (
-                    <p className="mt-2 text-[11px] font-medium text-green-700 dark:text-green-400">{regenNote}</p>
+                    <p className="mt-2 text-[11px] font-medium text-success">{regenNote}</p>
                   )}
                 </div>
               )}
@@ -651,25 +651,25 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 onChange={(e) => setRemark(e.target.value)}
                 rows={2}
                 placeholder="Optional note (e.g. PayNow ref, adjustment reason)…"
-                className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
+                className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
               />
             </div>
           </div>
 
           {error && (
-            <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md px-3 py-2">
+            <div className="text-sm text-danger bg-danger-bg border border-red-200 dark:border-red-800/50 rounded-md px-3 py-2">
               {error}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-default flex justify-end items-center gap-2 bg-gray-50 dark:bg-slate-800/80 rounded-b-xl">
+        <div className="px-5 py-3 border-t border-default flex justify-end items-center gap-2 bg-surface-elevated rounded-b-xl">
           {isEdit && onDeleted && (
             <button
               onClick={() => setConfirmDelete(true)}
               disabled={saving || deleting}
-              className="mr-auto inline-flex items-center gap-1.5 px-3 py-1.5 border border-red-300 dark:border-red-800/60 text-red-700 dark:text-red-300 rounded-md text-sm hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+              className="mr-auto inline-flex items-center gap-1.5 px-3 py-1.5 border border-red-300 dark:border-red-800/60 text-danger rounded-md text-sm hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
             >
               <Icon name={IconName.Delete} className="w-4 h-4" />
               Delete
@@ -709,9 +709,9 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
             if (e.target === e.currentTarget && !deleting) setConfirmDelete(false);
           }}
         >
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-default w-full max-w-xs p-4">
+          <div className="bg-surface rounded-lg shadow-xl border border-default w-full max-w-xs p-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-danger-bg text-danger">
                 <Icon name={IconName.Delete} className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -727,7 +727,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 type="button"
                 onClick={() => setConfirmDelete(false)}
                 disabled={deleting}
-                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-surface-hover disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -758,9 +758,9 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
             if (e.target === e.currentTarget) setBillMismatch(null);
           }}
         >
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-default w-full max-w-sm p-4">
+          <div className="bg-surface rounded-lg shadow-xl border border-default w-full max-w-sm p-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-warning-bg text-warning">
                 <Icon name={IconName.Warning} className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -781,14 +781,14 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
               <button
                 type="button"
                 onClick={() => setBillMismatch(null)}
-                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-surface-hover"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => save(false)}
-                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-surface-hover"
               >
                 Save only
               </button>
@@ -811,9 +811,9 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
             if (e.target === e.currentTarget) setConfirmDiscard(false);
           }}
         >
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-default w-full max-w-xs p-4">
+          <div className="bg-surface rounded-lg shadow-xl border border-default w-full max-w-xs p-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-warning-bg text-warning">
                 <Icon name={IconName.Warning} className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -827,7 +827,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
               <button
                 type="button"
                 onClick={() => setConfirmDiscard(false)}
-                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-surface-hover"
               >
                 Keep editing
               </button>

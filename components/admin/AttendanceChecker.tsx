@@ -47,40 +47,40 @@ const AttendanceChecker: React.FC<{ courseRunId: string; traineeId: string }> = 
   return (
     <div className="mt-1.5 text-sm">
       {loading ? (
-        <span className="text-xs text-gray-400 dark:text-gray-500">Checking attendance…</span>
+        <span className="text-xs text-muted">Checking attendance…</span>
       ) : err ? (
-        <span className="text-xs text-red-600 dark:text-red-400">{err}</span>
+        <span className="text-xs text-danger">{err}</span>
       ) : data && !data.available ? (
-        <span className="text-xs text-amber-600 dark:text-amber-400">⚠ {data.reason || 'No attendance recorded for this run yet.'}</span>
+        <span className="text-xs text-warning">⚠ {data.reason || 'No attendance recorded for this run yet.'}</span>
       ) : data ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${data.met ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${data.met ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
             {data.met ? '✅ Attendance met' : '❌ Attendance NOT met'} — {data.present}/{data.totalWithAttendance} = {data.percent}% (req {data.threshold}%)
           </span>
           {Array.isArray(data.sessions) && data.sessions.length > 0 && (
-            <button type="button" onClick={() => setShowSessions((s) => !s)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+            <button type="button" onClick={() => setShowSessions((s) => !s)} className="text-xs text-primary hover:underline">
               {showSessions ? 'Hide sessions' : 'View sessions'}
             </button>
           )}
           {showSessions && Array.isArray(data.sessions) && (
-            <div className="w-full mt-1 rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="w-full mt-1 rounded border border-default overflow-hidden">
               <table className="w-full text-xs">
-                <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                <thead className="bg-surface-elevated text-muted">
                   <tr>
                     <th className="text-left px-2 py-1 font-medium">Session</th>
                     <th className="text-left px-2 py-1 font-medium">Date</th>
                     <th className="text-left px-2 py-1 font-medium">Attendance</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                <tbody className="divide-y divide-default">
                   {(data.sessions as SessionRow[]).map((s) => (
                     <tr key={s.sessionId}>
-                      <td className="px-2 py-1 font-mono text-gray-700 dark:text-gray-200">{shortSession(s.sessionId)}</td>
-                      <td className="px-2 py-1 text-gray-600 dark:text-gray-300">{fmtDate(s.date)}</td>
+                      <td className="px-2 py-1 font-mono text-on-surface-secondary">{shortSession(s.sessionId)}</td>
+                      <td className="px-2 py-1 text-on-surface-secondary">{fmtDate(s.date)}</td>
                       <td className="px-2 py-1">
-                        {s.present ? <span className="text-green-700 dark:text-green-400 font-medium">Present</span>
-                          : s.hadAttendance ? <span className="text-red-700 dark:text-red-400 font-medium">Absent</span>
-                          : <span className="text-gray-400">No attendance taken</span>}
+                        {s.present ? <span className="text-success font-medium">Present</span>
+                          : s.hadAttendance ? <span className="text-danger font-medium">Absent</span>
+                          : <span className="text-muted">No attendance taken</span>}
                       </td>
                     </tr>
                   ))}

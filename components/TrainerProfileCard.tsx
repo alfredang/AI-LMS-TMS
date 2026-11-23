@@ -8,12 +8,12 @@ import { useLms } from '@contexts/LmsContext';
 import { AssessorSignatureForm } from './trainer/AssessorSignatureForm';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
-import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
+import ThemePreferencePicker from './common/ThemePreferencePicker';
 import { maskNric, formatDate, formatDateForInput } from '../utils';
 import TrainerPayoutHistory from './payroll/TrainerPayoutHistory';
 
 // Constants for styling consistency
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 // Reusable Profile Bio Item Component
 const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
@@ -149,7 +149,7 @@ const LoginDetailsCard: React.FC<{
                             ) : (
                                 <Button
                                     variant="ghost"
-                                    className="border border-gray-300 flex-shrink-0"
+                                    className="border border-strong flex-shrink-0"
                                     onClick={() => setIsResetting(true)}
                                 >
                                     Reset Password
@@ -270,7 +270,7 @@ const WorkExperienceSection: React.FC<{
                                             type="checkbox"
                                             checked={isPresent}
                                             onChange={() => togglePresent(index)}
-                                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                                            className="h-4 w-4 text-primary focus:ring-primary border-strong rounded"
                                         />
                                         Present
                                     </label>
@@ -291,7 +291,7 @@ const WorkExperienceSection: React.FC<{
                                     const updated = experience.filter((_, i) => i !== index);
                                     onUpdate(updated);
                                 }}
-                                className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-2 right-2 p-1.5 text-muted hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                                 <Icon name={IconName.Delete} className="w-4 h-4" />
                             </button>
@@ -319,7 +319,7 @@ const WorkExperienceSection: React.FC<{
                 const displayEndDate = item.endDate === null || item.endDate === '' ? 'Present' : item.endDate;
 
                 return (
-                    <div key={item.id || index} className="p-4 border border-gray-200 rounded-md dark:border-gray-700">
+                    <div key={item.id || index} className="p-4 border border-default rounded-md">
                         <h4 className="font-bold">{item.jobTitle}</h4>
                         <p className="text-subtle">{item.company} | {item.startDate} - {displayEndDate}</p>
                         <p className="text-sm mt-1">{item.description}</p>
@@ -356,9 +356,9 @@ const MultiSelectCheckboxes: React.FC<{
                             value={option}
                             checked={selected.includes(option)}
                             onChange={onChange}
-                            className={`h-4 w-4 ${colorClasses[color].text} ${colorClasses[color].ring} border-gray-300 rounded`}
+                            className={`h-4 w-4 ${colorClasses[color].text} ${colorClasses[color].ring} border-strong rounded`}
                         />
-                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-gray-900 dark:text-gray-200">{option}</label>
+                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-on-surface">{option}</label>
                     </div>
                 ))}
             </div>
@@ -431,8 +431,8 @@ const DocumentSection: React.FC<{
                 <div className="space-y-4">
                     {/* CV Folder URL */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">CV & Documents Folder</label>
-                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">CV & Documents Folder</label>
+                        <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border dark:border-gray-600">
                             <Icon name={IconName.Folder} className="w-5 h-5 text-blue-500" />
                             <input
                                 type="url"
@@ -448,7 +448,7 @@ const DocumentSection: React.FC<{
                                 </a>
                             )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Add the link to your Google Drive folder containing your CV and certifications.</p>
+                        <p className="text-xs text-muted mt-1">Add the link to your Google Drive folder containing your CV and certifications.</p>
                     </div>
                 </div>
             </section>
@@ -460,12 +460,12 @@ const DocumentSection: React.FC<{
             <h2 className="text-xl font-bold mb-4">{title}</h2>
             <div className="space-y-4">
                 {cvFolderUrl && (
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
+                    <div className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                         <div className="flex items-center gap-3">
                             <Icon name={IconName.Folder} className="w-6 h-6 text-blue-500 flex-shrink-0" />
                             <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">CV & Documents Folder</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Google Drive</p>
+                                <p className="text-sm font-medium text-on-surface">CV & Documents Folder</p>
+                                <p className="text-xs text-muted">Google Drive</p>
                             </div>
                         </div>
                         <a
@@ -480,11 +480,11 @@ const DocumentSection: React.FC<{
                     </div>
                 )}
                 {cvUrl && (
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
+                    <div className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                         <div className="flex items-center gap-3">
-                            <Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                            <Icon name={IconName.FilePdf} className="w-6 h-6 text-danger flex-shrink-0" />
                             <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">Curriculum Vitae</p>
+                                <p className="text-sm font-medium text-on-surface">Curriculum Vitae</p>
                             </div>
                         </div>
                         <a
@@ -500,11 +500,11 @@ const DocumentSection: React.FC<{
                 {(certifications && certifications.length > 0) && (
                     <div className="space-y-2">
                         {certifications.map(cert => (
-                            <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
+                            <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                                 <div className="flex items-center gap-3">
-                                    <Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                    <Icon name={IconName.FilePdf} className="w-6 h-6 text-danger flex-shrink-0" />
                                     <div>
-                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{cert.name}</p>
+                                        <p className="text-sm font-medium text-on-surface">{cert.name}</p>
                                     </div>
                                 </div>
                                 <a
@@ -545,7 +545,6 @@ export const TrainerProfileCard: React.FC<{
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
     const [profileImageLink, setProfileImageLink] = useState('');
-    const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     useEffect(() => {
         setFormData(profile);
@@ -575,13 +574,6 @@ export const TrainerProfileCard: React.FC<{
 
     const handleEducationChange = (value: string) => {
         setFormData(prev => ({ ...prev, education: value }));
-    };
-
-    const handleThemeToggle = () => {
-        const newTheme: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
-        setThemeMode(newTheme);
-        applyTheme(newTheme);
-        console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
     const handleWorkExperienceUpdate = (newExp: WorkExperienceItem[]) => {
@@ -1250,7 +1242,7 @@ export const TrainerProfileCard: React.FC<{
             {!isEditing && (
                 <Card className="p-8 mt-8">
                     <h2 className="text-xl font-bold mb-1 dark:text-white">Assessor Signature</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    <p className="text-sm text-muted mb-4">
                         Draw your signature once. On <span className="font-semibold">Assessment Grading</span>, ticking <span className="font-semibold">SIGN</span> beside a learner stamps your name, NRIC, the assessment date and this signature into the Assessor block of every file they submitted.
                     </p>
                     <AssessorSignatureForm showDate={false} saveLabel="Save Signature" />
@@ -1260,36 +1252,7 @@ export const TrainerProfileCard: React.FC<{
                 <Card className="p-8 mt-8">
                     <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
-                                    {themeMode === 'dark' ? (
-                                        <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                                        </svg>
-                                    ) : (
-                                        <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                                        </svg>
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                        {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleThemeToggle}
-                                className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'}`}
-                            >
-                                <span
-                                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'}`}
-                                />
-                            </button>
-                        </div>
+                        <ThemePreferencePicker />
                     </div>
                 </Card>
             )}

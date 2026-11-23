@@ -32,30 +32,30 @@ const CourseCard: React.FC<{
   const sgUrl = singaporeUrl(course.baseUrl);
 
   return (
-    <article className="p-5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm transition-colors">
+    <article className="p-5 rounded-lg border border-default bg-surface shadow-sm transition-colors">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/25">
+        <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/15 text-primary border border-blue-200 dark:border-blue-500/25">
           {course.courseNumber}
         </span>
         {course.solutionArea && (
-          <span className="text-xs text-gray-400 dark:text-gray-500">
+          <span className="text-xs text-muted">
             {course.solutionArea}
           </span>
         )}
       </div>
 
-      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
+      <h3 className="text-base font-semibold text-on-surface mb-3">
         {course.title}
       </h3>
 
       <div className="flex flex-wrap gap-1.5 mb-4">
         {course.duration && (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
+          <span className="text-xs px-2.5 py-1 rounded-full bg-surface-elevated text-on-surface-secondary">
             {course.duration}
           </span>
         )}
         {course.credential && (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
+          <span className="text-xs px-2.5 py-1 rounded-full bg-surface-elevated text-on-surface-secondary">
             {course.credential}
           </span>
         )}
@@ -117,10 +117,10 @@ export const MicrosoftCertificateView: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-5">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+        <h2 className="text-xl font-semibold text-on-surface mb-1">
           Microsoft Certificate
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-muted">
           Search the Microsoft MCT Title Plan and open the Singapore-tracked
           course page.
         </p>
@@ -147,12 +147,12 @@ export const MicrosoftCertificateView: React.FC = () => {
           placeholder="Search by course number or title…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-3.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full pl-12 pr-4 py-3.5 rounded-lg border border-strong bg-surface text-on-surface placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
       </div>
 
       {/* Status line */}
-      <p className="mb-3 text-xs text-gray-400 dark:text-gray-500 min-h-[16px]">
+      <p className="mb-3 text-xs text-muted min-h-[16px]">
         {!debouncedQuery.trim()
           ? `${microsoftCourses.length} Microsoft courses loaded`
           : matches.length === 0
@@ -165,15 +165,15 @@ export const MicrosoftCertificateView: React.FC = () => {
       {/* Results */}
       <div className="grid gap-3.5">
         {!debouncedQuery.trim() ? (
-          <div className="py-12 px-6 text-center rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-400 dark:text-gray-500">
-            <strong className="block text-gray-700 dark:text-gray-300 text-base mb-1.5">
+          <div className="py-12 px-6 text-center rounded-lg border border-dashed border-strong text-muted">
+            <strong className="block text-on-surface-secondary text-base mb-1.5">
               Start typing to find a course
             </strong>
             Search by course number (AI-102) or any words in the title.
           </div>
         ) : matches.length === 0 ? (
-          <div className="py-12 px-6 text-center rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-400 dark:text-gray-500">
-            <strong className="block text-gray-700 dark:text-gray-300 text-base mb-1.5">
+          <div className="py-12 px-6 text-center rounded-lg border border-dashed border-strong text-muted">
+            <strong className="block text-on-surface-secondary text-base mb-1.5">
               No matching course
             </strong>
             Try a shorter query or a course number like MS-900.
@@ -184,7 +184,7 @@ export const MicrosoftCertificateView: React.FC = () => {
               <CourseCard key={c.courseNumber} course={c} />
             ))}
             {matches.length > MAX_VISIBLE && (
-              <div className="py-6 px-6 text-center rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-400 dark:text-gray-500 text-sm">
+              <div className="py-6 px-6 text-center rounded-lg border border-dashed border-strong text-muted text-sm">
                 …and {matches.length - MAX_VISIBLE} more. Refine your search.
               </div>
             )}
@@ -192,7 +192,7 @@ export const MicrosoftCertificateView: React.FC = () => {
         )}
       </div>
 
-      <p className="mt-8 text-center text-xs text-gray-400 dark:text-gray-500">
+      <p className="mt-8 text-center text-xs text-muted">
         Singapore partner campaign ocid=5238477
       </p>
     </div>

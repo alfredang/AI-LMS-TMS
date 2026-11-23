@@ -2,372 +2,188 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Light Theme (default) */
-:root, [data-theme="light"] {
-  /* Primary colors - dynamic, set via JavaScript */
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --primary-rgb: 59, 130, 246;
+/* ==========================================================================
+   Design system — ONE shared set of tokens and component classes for every
+   role and page. Pages compose these (and layout utilities); they never set
+   their own colours, borders, radius or shadow.
 
-  /* Surface colors - Light theme */
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-hover: #f3f4f6;
-  --on-surface: #1f2937;
-  --on-surface-secondary: #4b5563;
+   Tokens are RGB channels so tailwind.config.js can map them as
+   rgb(var(--c-x) / <alpha-value>): every variant works (hover:, focus:, /50,
+   ring-, divide-, placeholder-). Light = the ai-mms back-office palette;
+   dark = the same names with dark values. All text tokens pass WCAG AA
+   (4.5:1) on surface, background and raised surfaces in both themes.
+   The tenant brand colour is applied at runtime by utils/colorUtils.ts
+   (--c-primary / --c-primary-hover / --c-primary-text), contrast-adjusted per theme.
+   ========================================================================== */
+@layer base {
+  :root,
+  [data-theme="light"] {
+    color-scheme: light;
+    --c-bg: 232 238 250;              /* #e8eefa page */
+    --c-surface: 255 255 255;         /* cards, header, sidebar */
+    --c-surface-elevated: 244 247 253;/* #f4f7fd table heads, inner panels */
+    --c-surface-hover: 230 236 248;   /* #e6ecf8 */
+    --c-text: 15 29 71;               /* #0f1d47 headings / primary text */
+    --c-text-2: 30 42 82;             /* #1e2a52 body, labels (ai-mms --t2) */
+    --c-muted: 67 80 127;             /* #43507f hints, meta (ai-mms --t4, 7:1 on page) */
+    --c-border: 211 220 238;          /* #d3dcee card / divider */
+    --c-border-strong: 132 148 181;   /* #8494b5 inputs (3:1) */
+    --c-primary: 47 91 230;           /* #2f5be6 fills (white text 5.6:1) */
+    --c-primary-hover: 29 78 216;     /* #1d4ed8 */
+    --c-primary-text: 47 91 230;      /* links / accent text */
+    --c-on-primary: 255 255 255;
+    --c-secondary: 71 85 105;         /* #475569 */
+    --c-success: 4 120 87;   --c-success-bg: 236 253 245;
+    --c-warning: 146 64 14;  --c-warning-bg: 255 251 235;
+    --c-danger: 185 28 28;   --c-danger-bg: 254 242 242;
+    --c-info: 30 64 175;     --c-info-bg: 239 246 255;
+    --shadow-card: 0 1px 2px rgba(15, 29, 71, 0.05), 0 1px 3px rgba(15, 29, 71, 0.06);
+    --shadow-pop: 0 10px 30px rgba(15, 29, 71, 0.14);
+  }
 
-  /* Background */
-  --background: #f9fafb;
-  --background-secondary: #f3f4f6;
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --c-bg: 15 23 42;                 /* #0f172a */
+    --c-surface: 30 41 59;            /* #1e293b */
+    --c-surface-elevated: 39 52 73;   /* #273449 */
+    --c-surface-hover: 51 65 85;      /* #334155 */
+    --c-text: 241 245 249;            /* #f1f5f9 */
+    --c-text-2: 203 213 225;          /* #cbd5e1 */
+    --c-muted: 165 178 199;           /* #a5b2c7 */
+    --c-border: 51 65 85;             /* #334155 */
+    --c-border-strong: 100 116 139;   /* #64748b */
+    --c-primary: 37 99 235;           /* #2563eb fills (white text 5.2:1) */
+    --c-primary-hover: 29 78 216;
+    --c-primary-text: 122 167 251;    /* #7aa7fb links on dark (6:1) */
+    --c-on-primary: 255 255 255;
+    --c-secondary: 100 116 139;
+    --c-success: 52 211 153; --c-success-bg: 18 54 41;
+    --c-warning: 251 191 36; --c-warning-bg: 58 44 12;
+    --c-danger: 248 113 113; --c-danger-bg: 59 26 29;
+    --c-info: 147 197 253;   --c-info-bg: 23 37 84;
+    --shadow-card: 0 1px 2px rgba(2, 6, 23, 0.35);
+    --shadow-pop: 0 12px 32px rgba(2, 6, 23, 0.5);
+  }
 
-  /* Text colors */
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
-
-  /* Border colors */
-  --border: #e5e7eb;
-  --border-focus: #3b82f6;
-
-  /* Secondary/subtle */
-  --secondary: #6b7280;
-  --secondary-hover: #4b5563;
-  --subtle: #6b7280;
-
-  /* Input fields */
-  --input-bg: #ffffff;
-  --input-border: #d1d5db;
-  --input-text: #1f2937;
-  --input-placeholder: #9ca3af;
-
-  /* Cards */
-  --card-bg: #ffffff;
-  --card-border: #e5e7eb;
-
-  /* Sidebar/Navigation */
-  --sidebar-bg: #ffffff;
-  --sidebar-hover: #f3f4f6;
-  --sidebar-active: rgba(59, 130, 246, 0.1);
-
-  /* Header */
-  --header-bg: #ffffff;
-  --header-border: #e5e7eb;
-
-  /* Status colors */
-  --success: #10b981;
-  --success-bg: #ecfdf5;
-  --warning: #f59e0b;
-  --warning-bg: #fffbeb;
-  --error: #ef4444;
-  --error-bg: #fef2f2;
-  --info: #3b82f6;
-  --info-bg: #eff6ff;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-on-surface;
+  }
 }
 
-/* Dark Theme */
-[data-theme="dark"] {
-  /* Primary colors - dynamic, set via JavaScript */
-  --primary: #60a5fa;
-  --primary-hover: #3b82f6;
-  --primary-rgb: 96, 165, 250;
+/* --------------------------------------------------------------------------
+   Shared component classes (the only place component styling is defined)
+   -------------------------------------------------------------------------- */
+@layer components {
+  /* Page structure */
+  .page-title { @apply text-2xl font-bold text-on-surface; }
+  .page-subtitle { @apply mt-1 text-sm text-on-surface-secondary; }
+  .section-title { @apply text-base font-semibold text-on-surface; }
 
-  /* Surface colors - Dark theme */
-  --surface: #1f2937;
-  --surface-elevated: #374151;
-  --surface-hover: #374151;
-  --on-surface: #f9fafb;
-  --on-surface-secondary: #d1d5db;
+  /* Cards and panels */
+  .card { @apply rounded-xl border border-default bg-surface shadow-card; }
+  .card-header { @apply flex items-center justify-between gap-3 border-b border-default px-5 py-4; }
+  .card-body { @apply p-5; }
+  .panel { @apply rounded-lg border border-default bg-surface-elevated; }
+  .stat-card { @apply rounded-xl border border-default bg-surface p-5 shadow-card; }
+  .divider { @apply border-t border-default; }
 
-  /* Background */
-  --background: #111827;
-  --background-secondary: #1f2937;
+  /* Text helpers */
+  .label { @apply mb-1 block text-sm font-medium text-on-surface-secondary; }
+  .help-text { @apply text-xs text-muted; }
+  .link { @apply font-medium text-primary hover:underline; }
 
-  /* Text colors */
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-muted: #6b7280;
+  /* Form controls */
+  .input,
+  .input-themed {
+    @apply w-full rounded-lg border border-strong bg-surface px-3 py-2 text-sm text-on-surface placeholder:text-muted;
+    @apply focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60;
+  }
 
-  /* Border colors */
-  --border: #374151;
-  --border-focus: #60a5fa;
+  /* Buttons: outlined is the default action (as in ai-mms); one filled primary per view */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary { @apply bg-primary text-on-primary hover:bg-primary-hover; }
+  .btn-outline { @apply border border-primary bg-transparent text-primary hover:bg-primary/10; }
+  .btn-secondary { @apply border border-strong bg-surface text-on-surface hover:bg-surface-hover; }
+  .btn-ghost { @apply bg-transparent text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface; }
+  .btn-danger { @apply bg-danger text-white hover:bg-danger/90; }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
 
-  /* Secondary/subtle */
-  --secondary: #9ca3af;
-  --secondary-hover: #d1d5db;
-  --subtle: #9ca3af;
+  /* Disabled controls: one readable look everywhere (solid grey, muted text ≥4.8:1) instead of
+     fading the control with opacity, which left pale text on white. Overrides per-page
+     disabled:opacity-* / bg / text classes on purpose so every role looks the same. */
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    opacity: 1 !important;
+    background-color: rgb(var(--c-surface-elevated)) !important;
+    background-image: none !important;
+    color: rgb(var(--c-muted)) !important;
+    border-color: rgb(var(--c-border)) !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+  }
+  button:disabled svg { color: rgb(var(--c-muted)) !important; }
 
-  /* Input fields */
-  --input-bg: #1f2937;
-  --input-border: #4b5563;
-  --input-text: #f9fafb;
-  --input-placeholder: #6b7280;
+  /* Tables */
+  .table { @apply w-full text-sm text-on-surface; }
+  .table thead th { @apply border-b border-default bg-surface-elevated px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-secondary; }
+  .table tbody td { @apply border-b border-default px-3 py-2.5; }
+  .table tbody tr:hover { @apply bg-surface-hover; }
 
-  /* Cards */
-  --card-bg: #1f2937;
-  --card-border: #374151;
+  /* Tabs (segmented) */
+  .tabs { @apply inline-flex items-center gap-1 rounded-lg border border-default bg-surface p-1; }
+  .tab { @apply rounded-md px-3 py-1.5 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover hover:text-on-surface; }
+  .tab-active { @apply bg-primary text-on-primary hover:bg-primary hover:text-on-primary; }
 
-  /* Sidebar/Navigation */
-  --sidebar-bg: #1f2937;
-  --sidebar-hover: #374151;
-  --sidebar-active: rgba(96, 165, 250, 0.15);
+  /* Pills (outlined, e.g. roles) and status chips (tinted) */
+  .pill { @apply inline-flex items-center rounded-full border-[1.5px] px-3 py-0.5 text-xs font-semibold; }
+  .pill-role-learner { @apply border-success text-success; }
+  .pill-role-trainer { @apply border-warning text-warning; }
+  .pill-role-admin { @apply border-info text-info; }
+  .pill-role-developer { @apply border-danger text-danger; }
+  .pill-role-tp { @apply border-primary text-primary; }
+  .pill-role-finance,
+  .pill-role-payroll { @apply border-secondary text-secondary; }
+  .chip { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+  .chip-success,
+  .status-success { @apply bg-success-bg text-success; }
+  .chip-warning,
+  .status-warning { @apply bg-warning-bg text-warning; }
+  .chip-danger,
+  .status-error { @apply bg-danger-bg text-danger; }
+  .chip-info,
+  .status-info { @apply bg-info-bg text-info; }
+  .chip-neutral { @apply bg-surface-elevated text-on-surface-secondary; }
 
-  /* Header */
-  --header-bg: #1f2937;
-  --header-border: #374151;
+  /* App shell: header and sidebar (all roles) */
+  .app-header,
+  .header-themed { @apply border-b border-default bg-surface; }
+  .sidebar,
+  .sidebar-themed { @apply border-r border-default bg-surface; }
+  .nav-section { @apply px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wider text-muted; }
+  .nav-item,
+  .sidebar-item { @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-on-surface transition-colors hover:bg-surface-hover; }
+  .nav-item-active,
+  .sidebar-item-active { @apply bg-primary text-on-primary hover:bg-primary-hover; }
+  /* Icons and labels inside the active item follow it, whatever classes they carry. */
+  .nav-item-active svg,
+  .nav-item-active span:not([class*="bg-"]) { color: rgb(var(--c-on-primary)); }
 
-  /* Status colors - adjusted for dark theme */
-  --success: #34d399;
-  --success-bg: rgba(16, 185, 129, 0.15);
-  --warning: #fbbf24;
-  --warning-bg: rgba(245, 158, 11, 0.15);
-  --error: #f87171;
-  --error-bg: rgba(239, 68, 68, 0.15);
-  --info: #60a5fa;
-  --info-bg: rgba(59, 130, 246, 0.15);
+  /* Header controls (ai-mms style) */
+  .view-as-pill { @apply inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm text-primary transition-colors hover:bg-primary/10; }
+  .icon-btn-round { @apply flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-strong bg-transparent text-on-surface-secondary transition-colors hover:border-primary hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40; }
 
-  /* Shadows - more subtle for dark theme */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
-}
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--background);
-  color: var(--text-primary);
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-/* Custom class for Header styling */
-.bg-background {
-  background-color: var(--background);
-}
-
-.bg-background-secondary {
-  background-color: var(--background-secondary);
-}
-
-.bg-surface {
-  background-color: var(--surface);
-}
-
-.bg-surface-elevated {
-  background-color: var(--surface-elevated);
-}
-
-.bg-surface-hover:hover {
-  background-color: var(--surface-hover);
-}
-
-.text-on-surface {
-  color: var(--on-surface);
-}
-
-.text-on-surface-secondary {
-  color: var(--on-surface-secondary);
-}
-
-.bg-primary {
-  background-color: var(--primary);
-}
-
-.text-primary {
-  color: var(--primary);
-}
-
-.hover\:text-primary:hover {
-  color: var(--primary);
-}
-
-.text-subtle {
-  color: var(--subtle);
-}
-
-.text-muted {
-  color: var(--text-muted);
-}
-
-.border-primary {
-  border-color: var(--primary);
-}
-
-.border-default {
-  border-color: var(--border);
-}
-
-.ring-primary {
-  --tw-ring-color: var(--primary);
-}
-
-.focus\:border-primary:focus {
-  border-color: var(--primary);
-}
-
-.focus\:ring-primary:focus {
-  --tw-ring-color: var(--primary);
-}
-
-/* Hover variants using same primary color */
-.hover\:bg-primary:hover {
-  background-color: var(--primary);
-}
-
-.hover\:bg-primary-hover:hover {
-  background-color: var(--primary);
-}
-
-.bg-primary-hover {
-  background-color: var(--primary);
-}
-
-.hover\:border-primary:hover {
-  border-color: var(--primary);
-}
-
-/* Additional primary color utilities */
-.fill-primary {
-  fill: var(--primary);
-}
-
-.stroke-primary {
-  stroke: var(--primary);
-}
-
-.hover\:fill-primary:hover {
-  fill: var(--primary-hover);
-}
-
-.hover\:stroke-primary:hover {
-  stroke: var(--primary-hover);
-}
-
-/* Secondary color utilities */
-.bg-secondary {
-  background-color: var(--secondary);
-}
-
-.text-secondary {
-  color: var(--secondary);
-}
-
-.hover\:bg-secondary:hover {
-  background-color: var(--secondary);
-}
-
-.bg-secondary-hover {
-  background-color: var(--secondary);
-}
-
-.border-secondary {
-  border-color: var(--secondary);
-}
-
-.hover\:border-secondary:hover {
-  border-color: var(--secondary);
-}
-
-.ring-secondary {
-  --tw-ring-color: var(--secondary);
-}
-
-.focus\:ring-secondary:focus {
-  --tw-ring-color: var(--secondary);
-}
-
-/* Opacity variants for primary colors */
-.bg-primary\/10 {
-  background-color: rgba(var(--primary-rgb), 0.1);
-}
-
-.bg-primary\/20 {
-  background-color: rgba(var(--primary-rgb), 0.2);
-}
-
-.ring-primary\/20 {
-  --tw-ring-color: rgba(var(--primary-rgb), 0.2);
-}
-
-/* Card styles */
-.card {
-  background-color: var(--card-bg);
-  border-color: var(--card-border);
-  box-shadow: var(--shadow);
-}
-
-/* Input styles */
-.input-themed {
-  background-color: var(--input-bg);
-  border-color: var(--input-border);
-  color: var(--input-text);
-}
-
-.input-themed::placeholder {
-  color: var(--input-placeholder);
-}
-
-.input-themed:focus {
-  border-color: var(--border-focus);
-}
-
-/* Sidebar styles */
-.sidebar-themed {
-  background-color: var(--sidebar-bg);
-}
-
-.sidebar-item:hover {
-  background-color: var(--sidebar-hover);
-}
-
-.sidebar-item-active {
-  background-color: var(--sidebar-active);
-}
-
-/* Header styles */
-.header-themed {
-  background-color: var(--header-bg);
-  border-color: var(--header-border);
-}
-
-/* Status badges */
-.status-success {
-  background-color: var(--success-bg);
-  color: var(--success);
-}
-
-.status-warning {
-  background-color: var(--warning-bg);
-  color: var(--warning);
-}
-
-.status-error {
-  background-color: var(--error-bg);
-  color: var(--error);
-}
-
-.status-info {
-  background-color: var(--info-bg);
-  color: var(--info);
-}
-
-/* Ghost/outline button text — follows theme */
-.btn-ghost {
-  color: var(--text-primary) !important;
-  border-color: var(--border);
-}
-.btn-ghost:hover {
-  background-color: var(--surface-hover);
+  /* Overlays */
+  .dropdown-panel { @apply rounded-xl border border-default bg-surface shadow-pop; }
+  .dropdown-item { @apply flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-primary transition-colors hover:bg-surface-hover; }
+  .avatar { @apply inline-flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-elevated text-xs font-bold text-primary ring-2 ring-primary ring-offset-2 ring-offset-surface; }
+  .modal-panel { @apply rounded-2xl border border-default bg-surface shadow-pop; }
 }
 
 /* Smooth transitions for theme changes */
@@ -433,6 +249,16 @@ body {
   animation: none;
 }
 
+/* Support avatar in the chat launcher: a gentle bob (the button itself keeps the pulse ring). */
+.chat-avatar-bob {
+  animation: chat-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes chat-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 @keyframes chat-pulse {
   0%,
   100% {
@@ -455,6 +281,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .chat-avatar-bob,
   .chat-launcher,
   .chat-launcher::before {
     animation: none;

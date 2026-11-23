@@ -276,17 +276,17 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
   // ── Category card helpers ──────────────────────────────────────────────────
 
   const categoryCards: { key: FilterCategory; label: string; count: number; color: string; activeColor: string }[] = [
-    { key: 'all',     label: 'All',     count: allResults.length, color: 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600',       activeColor: 'bg-gray-200 dark:bg-gray-600 border-gray-400 dark:border-gray-400' },
-    { key: 'created', label: 'Created', count: summary.created,   color: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',   activeColor: 'bg-green-100 dark:bg-green-900/40 border-green-500 dark:border-green-500' },
-    { key: 'updated', label: 'Updated', count: summary.updated,   color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',       activeColor: 'bg-blue-100 dark:bg-blue-900/40 border-blue-500 dark:border-blue-500' },
-    { key: 'failed',  label: 'Failed',  count: summary.failed,    color: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',           activeColor: 'bg-red-100 dark:bg-red-900/40 border-red-500 dark:border-red-500' },
+    { key: 'all',     label: 'All',     count: allResults.length, color: 'bg-surface-elevated border-default',       activeColor: 'bg-gray-200 dark:bg-gray-600 border-gray-400 dark:border-gray-400' },
+    { key: 'created', label: 'Created', count: summary.created,   color: 'bg-success-bg border-green-200 dark:border-green-800',   activeColor: 'bg-success-bg border-green-500 dark:border-green-500' },
+    { key: 'updated', label: 'Updated', count: summary.updated,   color: 'bg-info-bg border-blue-200 dark:border-blue-800',       activeColor: 'bg-info-bg border-blue-500 dark:border-blue-500' },
+    { key: 'failed',  label: 'Failed',  count: summary.failed,    color: 'bg-danger-bg border-red-200 dark:border-red-800',           activeColor: 'bg-danger-bg border-red-500 dark:border-red-500' },
   ];
 
   const textColors: Record<FilterCategory, string> = {
-    all:     'text-gray-800 dark:text-gray-200',
-    created: 'text-green-700 dark:text-green-400',
-    updated: 'text-blue-700 dark:text-blue-400',
-    failed:  'text-red-700 dark:text-red-400',
+    all:     'text-on-surface',
+    created: 'text-success',
+    updated: 'text-primary',
+    failed:  'text-danger',
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -298,10 +298,10 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
           <Icon name={IconName.Back} className="w-4 h-4 mr-1" />
           Back to Courses
         </Button>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Bulk Upload Courses</h1>
+        <h1 className="text-3xl font-bold text-on-surface">Bulk Upload Courses</h1>
       </div>
       {viewState === 'results' && (
-        <Button variant="ghost" onClick={() => { setViewState('upload'); setFile(null); }} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+        <Button variant="ghost" onClick={() => { setViewState('upload'); setFile(null); }} className="border border-blue-500 text-primary hover:bg-blue-50 dark:border-blue-400 dark:hover:bg-blue-900/20">
           <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
           New Upload
         </Button>
@@ -318,11 +318,11 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
           <div className="w-full max-w-md text-center space-y-6">
             <div className="animate-spin rounded-full h-14 w-14 border-4 border-blue-200 border-t-blue-600 mx-auto" />
             <div>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading courses...</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Please do not close this page.</p>
+              <p className="text-lg font-semibold text-on-surface">Uploading courses...</p>
+              <p className="text-sm text-muted mt-1">Please do not close this page.</p>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="flex justify-between text-sm font-medium text-on-surface-secondary">
                 <span>Progress</span>
                 <span>{Math.min(progressCurrent, progressTotal)} / {progressTotal}</span>
               </div>
@@ -332,7 +332,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-right">{progressPct}%</p>
+              <p className="text-xs text-muted text-right">{progressPct}%</p>
             </div>
           </div>
         </Card>
@@ -358,7 +358,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
               <p className={`text-3xl font-bold ${textColors[key]}`}>{count}</p>
               <p className={`text-sm font-medium mt-1 ${textColors[key]}`}>{label}</p>
               {filterCategory === key && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Showing this filter</p>
+                <p className="text-xs text-muted mt-1">Showing this filter</p>
               )}
             </button>
           ))}
@@ -366,44 +366,44 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
 
         <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
           <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-base font-semibold text-on-surface">
               {filterCategory === 'all' ? 'All Results' : `${filterCategory.charAt(0).toUpperCase() + filterCategory.slice(1)} (${filteredResults.length})`}
             </h2>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{filteredResults.length} record{filteredResults.length !== 1 ? 's' : ''}</span>
+            <span className="text-sm text-muted">{filteredResults.length} record{filteredResults.length !== 1 ? 's' : ''}</span>
           </div>
 
           {filteredResults.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No records in this category.</div>
+            <div className="text-center py-12 text-muted text-sm">No records in this category.</div>
           ) : (
             <>
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+              <table className="min-w-full divide-y divide-default">
+                <thead className="bg-surface-elevated">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Course Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Message</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Course Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Action</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Message</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="bg-surface divide-y divide-default">
                   {paginatedResults.map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
+                    <tr key={i} className="hover:bg-surface-hover">
+                      <td className="px-4 py-3 text-xs text-muted">
                         {(resultsPage - 1) * RESULTS_PER_PAGE + i + 1}
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{r.course_code}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{r.title}</td>
+                      <td className="px-4 py-3 text-sm font-mono text-on-surface-secondary">{r.course_code}</td>
+                      <td className="px-4 py-3 text-sm text-on-surface">{r.title}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                          r.action === 'created' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                          : r.action === 'updated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                          r.action === 'created' ? 'bg-success-bg text-success'
+                          : r.action === 'updated' ? 'bg-info-bg text-info'
+                          : 'bg-danger-bg text-danger'
                         }`}>
                           {r.action.charAt(0).toUpperCase() + r.action.slice(1)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 text-sm text-on-surface-secondary">
                         <span>{r.message}</span>
                       </td>
                     </tr>
@@ -416,7 +416,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
                   <Button variant="ghost" onClick={() => setResultsPage(p => Math.max(1, p - 1))} disabled={resultsPage === 1}>
                     Previous
                   </Button>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-muted">
                     Page {resultsPage} of {totalResultPages}
                   </span>
                   <Button variant="ghost" onClick={() => setResultsPage(p => Math.min(totalResultPages, p + 1))} disabled={resultsPage === totalResultPages}>
@@ -437,12 +437,12 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
       {headerRow}
 
       <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Instructions</h2>
-        <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600 dark:text-gray-400">
+        <h2 className="text-lg font-semibold text-on-surface mb-3">Instructions</h2>
+        <ol className="list-decimal list-inside space-y-2 text-sm text-on-surface-secondary">
           <li>Download the template file and fill in course details.</li>
-          <li>Template columns: <strong className="text-gray-800 dark:text-gray-200">Course Title, Course Code, Domain, Type, Courseware, Schedule ID, Funding Validty, Course Fee (exl GST), GST, After Normal Funding, After MCES Funding, Duration (hrs), Days, Course Link, Assessment Record Link, Brochure Link, Google Classrooms, Google Classroom Code, Learner Slides PDF Links, Lesson Plan Link, Learner Guide Link, Facilitator Guide Link, Trainer Slides Link, Assessment Plan Link, Practical Performance Assessment Link, Written Assessment Link, SkillsFuture Link, SF for Business Link, TSC Code, TSC Title, Skills Framework, DA, Average Score, Star Rating, Num of Responders, Description, Course Outline, UTAP, Course Renewed Status</strong>.</li>
-          <li>Required columns: <strong className="text-gray-800 dark:text-gray-200">Course Code, Course Title</strong>.</li>
-          <li><strong className="text-gray-800 dark:text-gray-200">Type</strong>: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">WSQ</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">IBF</code>, or <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">Non-WSQ</code> (default).</li>
+          <li>Template columns: <strong className="text-on-surface">Course Title, Course Code, Domain, Type, Courseware, Schedule ID, Funding Validty, Course Fee (exl GST), GST, After Normal Funding, After MCES Funding, Duration (hrs), Days, Course Link, Assessment Record Link, Brochure Link, Google Classrooms, Google Classroom Code, Learner Slides PDF Links, Lesson Plan Link, Learner Guide Link, Facilitator Guide Link, Trainer Slides Link, Assessment Plan Link, Practical Performance Assessment Link, Written Assessment Link, SkillsFuture Link, SF for Business Link, TSC Code, TSC Title, Skills Framework, DA, Average Score, Star Rating, Num of Responders, Description, Course Outline, UTAP, Course Renewed Status</strong>.</li>
+          <li>Required columns: <strong className="text-on-surface">Course Code, Course Title</strong>.</li>
+          <li><strong className="text-on-surface">Type</strong>: <code className="bg-surface-elevated px-1 rounded">WSQ</code>, <code className="bg-surface-elevated px-1 rounded">IBF</code>, or <code className="bg-surface-elevated px-1 rounded">Non-WSQ</code> (default).</li>
           <li>If the course code already exists, the course information will be updated.</li>
         </ol>
         <div className="mt-4">
@@ -454,7 +454,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
       </Card>
 
       <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upload File</h2>
+        <h2 className="text-lg font-semibold text-on-surface mb-4">Upload File</h2>
 
         <div
           onDragEnter={(e) => handleDragEvents(e, true)}
@@ -464,20 +464,20 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
           onClick={() => document.getElementById('course-file-input')?.click()}
           className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
             isDragOver
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              ? 'border-blue-500 bg-info-bg'
+              : 'border-strong hover:border-blue-400 dark:hover:border-blue-500 hover:bg-surface-hover'
           }`}
         >
-          <Icon name={IconName.Upload} className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
+          <Icon name={IconName.Upload} className="w-10 h-10 text-muted mx-auto mb-3" />
           {file ? (
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{file.name}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+              <p className="text-sm font-medium text-on-surface">{file.name}</p>
+              <p className="text-xs text-muted mt-1">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
           ) : (
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Drag & drop your file here, or click to browse</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Supports .xlsx, .xls, .csv</p>
+              <p className="text-sm font-medium text-on-surface-secondary">Drag & drop your file here, or click to browse</p>
+              <p className="text-xs text-muted mt-1">Supports .xlsx, .xls, .csv</p>
             </div>
           )}
           <input
@@ -490,7 +490,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
         </div>
 
         {error && (
-          <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="mt-3 text-sm text-danger">{error}</p>
         )}
 
         <div className="mt-4 flex justify-end">

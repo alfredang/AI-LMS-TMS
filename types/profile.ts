@@ -232,6 +232,9 @@ export interface TrainingProviderProfile extends BaseProfile {
   showCertificateDelivery?: boolean;
   certificateDeliveryLabel?: string;
   certificateDeliveryLink?: string;
+  /** Store links for this tenant's mobile app (lib/mobileAppLinks.ts); null when it has none. */
+  mobileAppIosUrl?: string | null;
+  mobileAppAndroidUrl?: string | null;
   companyName: string;
   companyShortname: string;
   uen: string;
@@ -292,6 +295,8 @@ export interface TrainingProviderProfile extends BaseProfile {
     tertiaryCoursesSgApiKey?: string;
     mailerliteApiKey?: string;
     mailerliteGroupId?: string;
+    examsApiUrl?: string;
+    examsApiToken?: string;
     whatsappChatUrl?: string;
     trainerWhatsappChatUrl?: string;
     openClawMode?: 'live' | 'local';
@@ -337,10 +342,6 @@ export interface TrainingProviderProfile extends BaseProfile {
     defaultOtpValue?: string;
     forceFirstPasswordChange: boolean;
     defaultPassword?: string;
-  };
-  gamingSettings: {
-    enableLeaderboard: boolean;
-    enablePoints: boolean;
   };
   fundingSettings: {
     normalFunding: 50 | 70;

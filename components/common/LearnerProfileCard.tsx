@@ -7,16 +7,16 @@ import { useLms } from '@contexts/LmsContext';
 import { UserRole } from '@app-types';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
-import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
+import ThemePreferencePicker from './ThemePreferencePicker';
 
 // CSS classes for inputs
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 // --- Reusable Profile Components ---
 const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
-        <p className="font-semibold text-gray-900 dark:text-gray-200 break-words">{value}</p>
+        <p className="text-sm text-on-surface-secondary">{label}</p>
+        <p className="font-semibold text-on-surface break-words">{value}</p>
     </div>
 );
 
@@ -29,13 +29,13 @@ const MaskedProfileBioItem: React.FC<{
     maskFn: (val: string) => string;
 }> = ({ label, value, isVisible, onToggle, isAdmin, maskFn }) => (
     <div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
+        <p className="text-sm text-on-surface-secondary">{label}</p>
         <div className="flex items-center gap-2">
-            <p className="font-semibold text-gray-900 dark:text-gray-200 break-words">
+            <p className="font-semibold text-on-surface break-words">
                 {isAdmin && isVisible ? value : maskFn(value)}
             </p>
             {isAdmin && (
-                <button onClick={onToggle} className="text-gray-600 dark:text-gray-400 hover:text-primary">
+                <button onClick={onToggle} className="text-on-surface-secondary hover:text-primary">
                     <Icon name={isVisible ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
                 </button>
             )}
@@ -120,13 +120,13 @@ const LoginDetailsCard: React.FC<{
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
                     <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Login ID</p>
-                        <p className="font-semibold text-gray-900 dark:text-gray-200 break-words">{loginId}</p>
+                        <p className="text-sm text-on-surface-secondary">Login ID</p>
+                        <p className="font-semibold text-on-surface break-words">{loginId}</p>
                     </div>
 
                     {/* Password row */}
                     <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Password</p>
+                        <p className="text-sm text-on-surface-secondary">Password</p>
 
                         {/* one row: input/display + eye (left) | actions (right) */}
                         <div className="flex items-end gap-2">
@@ -141,14 +141,14 @@ const LoginDetailsCard: React.FC<{
                                         placeholder="Enter new password"
                                     />
                                 ) : (
-                                    <p className="font-semibold text-gray-900 dark:text-gray-200 tracking-wider">
+                                    <p className="font-semibold text-on-surface tracking-wider">
                                         {isPasswordVisible ? password : "••••••••••••••••"}
                                     </p>
                                 )}
                                 <button
                                     type="button"
                                     onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                                    className="text-gray-600 dark:text-gray-400 hover:text-primary p-1 rounded-full"
+                                    className="text-on-surface-secondary hover:text-primary p-1 rounded-full"
                                 >
                                     <Icon
                                         name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
@@ -177,7 +177,7 @@ const LoginDetailsCard: React.FC<{
                             ) : (
                                 <Button
                                     variant="ghost"
-                                    className="border border-gray-300 dark:border-gray-600 dark:text-gray-200 flex-shrink-0"
+                                    className="border border-strong dark:text-gray-200 flex-shrink-0"
                                     onClick={() => setIsResetting(true)}
                                 >
                                     Reset Password
@@ -205,7 +205,6 @@ export const LearnerProfileCard: React.FC<{
     const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
     const [profileImageLink, setProfileImageLink] = useState('');
-    const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     console.log('form data content:', formData);
 
@@ -219,13 +218,6 @@ export const LearnerProfileCard: React.FC<{
     // Handle password update from LoginDetailsCard
     const handlePasswordUpdate = (newPassword: string) => {
         setFormData(prev => ({ ...prev, password: newPassword }));
-    };
-
-    const handleThemeToggle = () => {
-        const newTheme: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
-        setThemeMode(newTheme);
-        applyTheme(newTheme);
-        console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -495,11 +487,11 @@ export const LearnerProfileCard: React.FC<{
                     </div>
                     <div className="text-center sm:text-left flex-grow">
                         <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
-                        <p className="text-gray-600 dark:text-gray-400">Learner Profile</p>
+                        <p className="text-on-surface-secondary">Learner Profile</p>
                     </div>
                     {isEditing ? (
                         <div className="flex items-center gap-2">
-                            <Button variant="ghost" className="border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200" onClick={() => {
+                            <Button variant="ghost" className="border border-strong text-on-surface-secondary" onClick={() => {
                                 setIsEditing(false);
                                 setFormData(profile);
                                 // Clear any preview state when canceling
@@ -570,38 +562,7 @@ export const LearnerProfileCard: React.FC<{
 
                         {/* Theme Mode Toggle */}
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
-                                        {themeMode === 'dark' ? (
-                                            <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleThemeToggle}
-                                    className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}
-                                >
-                                    <span
-                                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
-                                            }`}
-                                    />
-                                </button>
-                            </div>
+                            <ThemePreferencePicker />
                         </div>
 
                         {isAdmin && (
@@ -609,7 +570,7 @@ export const LearnerProfileCard: React.FC<{
                                 <div className="border-t dark:border-gray-700 my-6"></div>
                                 <h2 className="text-xl font-bold mb-4 dark:text-white">Billing Documents</h2>
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                                         <div>
                                             <p className="font-semibold dark:text-gray-200">Pro Forma Invoice</p>
                                             <p className="text-xs text-subtle dark:text-gray-400">Pro forma invoice for your enrollment.</p>
@@ -618,7 +579,7 @@ export const LearnerProfileCard: React.FC<{
                                             Download
                                         </Button>
                                     </div>
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                                         <div>
                                             <p className="font-semibold dark:text-gray-200">Course Invoice</p>
                                             <p className="text-xs text-subtle dark:text-gray-400">Invoice for your course enrollment.</p>
@@ -627,7 +588,7 @@ export const LearnerProfileCard: React.FC<{
                                             Download
                                         </Button>
                                     </div>
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border dark:border-gray-600">
                                         <div>
                                             <p className="font-semibold dark:text-gray-200">Payment Receipt</p>
                                             <p className="text-xs text-subtle dark:text-gray-400">Receipt for your payment.</p>

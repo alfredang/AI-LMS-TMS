@@ -86,7 +86,7 @@ const fmtDate = (iso: string | null | undefined) => {
 };
 
 const dateInputClass =
-    'border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30';
+    'border border-strong rounded px-2 py-1 text-xs bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30';
 
 const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string; collapsible?: boolean; defaultOpen?: boolean }> = ({ title, children, className, collapsible = false, defaultOpen = true }) => {
     const [open, setOpen] = useState(defaultOpen);
@@ -99,10 +99,10 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
                     className="w-full flex items-center justify-between text-left"
                     aria-expanded={open}
                 >
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+                    <h3 className="text-xl font-bold text-on-surface">{title}</h3>
                     <Icon
                         name={IconName.ChevronDown}
-                        className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
+                        className={`w-5 h-5 text-muted transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
                     />
                 </button>
                 {open && <div className="mt-4">{children}</div>}
@@ -111,7 +111,7 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
     }
     return (
         <Card className={`p-6 ${className}`}>
-            {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
+            {title && <h3 className="text-xl font-bold mb-4 text-on-surface">{title}</h3>}
             {children}
         </Card>
     );
@@ -119,13 +119,13 @@ const ContentSection: React.FC<{ title?: string; children: React.ReactNode; clas
 
 const SignedBadge: React.FC<{ party: PartyState | null; label: string }> = ({ party, label }) => (
     party ? (
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400" title={`${party.name || ''} · signed ${fmtDate(party.signDate)}`}>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-success" title={`${party.name || ''} · signed ${fmtDate(party.signDate)}`}>
             <Icon name={IconName.CheckCircle} className="w-4 h-4" />
             {label} signed {fmtDate(party.signDate)}
         </span>
     ) : (
-        <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-            <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600" />
+        <span className="inline-flex items-center gap-1 text-xs text-muted">
+            <span className="inline-block w-3.5 h-3.5 rounded-full border border-strong" />
             {label} pending
         </span>
     )
@@ -137,13 +137,13 @@ const PdfLink: React.FC<{ file: RecordView['file'] }> = ({ file }) => (
             href={file.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             title={file.name || 'Signed Assessment Summary Record'}
         >
             <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" /> Signed PDF
         </a>
     ) : (
-        <span className="text-xs text-gray-400">—</span>
+        <span className="text-xs text-muted">—</span>
     )
 );
 
@@ -424,25 +424,25 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                         href={templateUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        className="flex items-center gap-3 p-3 bg-surface-elevated rounded-md border dark:border-gray-600 hover:bg-surface-hover transition-colors"
                     >
-                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-primary flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 dark:text-white">Assessment Summary Record Template</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open template</p>
+                            <p className="font-semibold text-on-surface">Assessment Summary Record Template</p>
+                            <p className="text-xs text-muted">Click to open template</p>
                         </div>
                     </a>
                 )}
 
                 {noTemplate && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                    <p className="text-xs text-warning bg-warning-bg border border-amber-200 dark:border-amber-800 rounded-md p-3">
                         This course has no Assessment Summary Record template link yet, so e-signing is unavailable. Set it under the course details, or upload a manually signed copy below.
                     </p>
                 )}
 
                 {/* ── Learner: sign the Candidate block ─────────────────────── */}
                 {isLearner && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 space-y-3">
+                    <div className="p-4 bg-info-bg rounded-lg border border-blue-100 dark:border-blue-800 space-y-3">
                         <div className="flex items-start justify-between gap-3 flex-wrap">
                             <div>
                                 <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 uppercase tracking-wider">Sign your Assessment Summary Record</h4>
@@ -456,8 +456,8 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                 title={hasLearnerSignature ? 'Edit your saved name, NRIC and signature' : 'Set up your name, NRIC and signature'}
                                 className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors ${
                                     hasLearnerSignature
-                                        ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/40'
-                                        : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600'
+                                        ? 'text-warning bg-warning-bg border-amber-200 hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-900/40'
+                                        : 'text-on-surface-secondary bg-surface border-default hover:bg-surface-hover'
                                 }`}
                             >
                                 <Icon name={IconName.Edit} className="w-3.5 h-3.5" />
@@ -473,7 +473,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
 
                         <div className="flex items-center gap-3 flex-wrap">
                             {!myRecord?.learner && (
-                                <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                                <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
                                     Date
                                     <input type="date" value={signDate} onChange={e => setSignDate(e.target.value)} className={dateInputClass} />
                                 </label>
@@ -483,7 +483,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                     type="button"
                                     onClick={() => signAsLearner(false)}
                                     disabled={signing.has('self')}
-                                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border border-strong rounded text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
                                 >
                                     {signing.has('self') && <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />}
                                     Remove my signature
@@ -505,7 +505,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
 
                 {/* ── Trainer side: roster + Assessor block ─────────────────── */}
                 {isTrainerSide && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 space-y-3">
+                    <div className="p-4 bg-info-bg rounded-lg border border-blue-100 dark:border-blue-800 space-y-3">
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                             <div>
                                 <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 uppercase tracking-wider">Sign the Assessment Summary Records</h4>
@@ -514,7 +514,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                <span className="text-[11px] text-muted">
                                     Learner {learnerSignedCount}/{learners.length} · Trainer {trainerSignedCount}/{learners.length} · Both {bothSignedCount}/{learners.length}
                                 </span>
                                 {/* How-to video for signing the ASR online (virtual classes) */}
@@ -522,7 +522,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                     type="button"
                                     onClick={() => setShowSignDemo(true)}
                                     title="Watch a short demo of signing the Assessment Summary Record online"
-                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
                                 >
                                     <Icon name={IconName.Video} className="w-4 h-4" />
                                     Watch Demo
@@ -544,14 +544,14 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                     title={assessor ? `Assessor: ${assessor.assessor_name} — click to edit` : 'Set up your assessor name, NRIC, date and signature'}
                                     className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors disabled:opacity-50 ${
                                         assessor
-                                            ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/40'
-                                            : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600'
+                                            ? 'text-warning bg-warning-bg border-amber-200 hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-900/40'
+                                            : 'text-on-surface-secondary bg-surface border-default hover:bg-surface-hover'
                                     }`}
                                 >
                                     <Icon name={IconName.Edit} className="w-3.5 h-3.5" />
                                     {assessor ? 'Trainer Signature' : 'Set Up Signature'}
                                 </button>
-                                <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                                <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
                                     Date
                                     <input type="date" value={signDate} onChange={e => setSignDate(e.target.value)} className={dateInputClass} />
                                 </label>
@@ -559,7 +559,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                     type="button"
                                     onClick={() => signAsTrainer(unsignedLearners, true)}
                                     disabled={unsignedLearners.length === 0 || signing.size > 0 || noTemplate}
-                                    className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     {signing.size > 0 ? <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" /> : <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />}
                                     Sign All ({unsignedLearners.length})
@@ -570,7 +570,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                         onClick={regeneratePdfs}
                                         disabled={regenerating || signing.size > 0 || noTemplate}
                                         title="Rebuild the signed PDF for records whose PDF is missing or out of date"
-                                        className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
                                         <Icon name={regenerating ? IconName.Spinner : IconName.Sync} className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />
                                         {regenerating ? 'Generating…' : `Generate PDFs (${stalePdfCount})`}
@@ -579,16 +579,16 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                             </div>
                         </div>
 
-                        {loadError && <p className="text-xs text-red-600 dark:text-red-400">{loadError}</p>}
+                        {loadError && <p className="text-xs text-danger">{loadError}</p>}
 
                         {learners.length === 0 && !loading && !loadError && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400">No enrolled learners in this class.</p>
+                            <p className="text-xs text-muted">No enrolled learners in this class.</p>
                         )}
 
                         {learners.length > 0 && (
-                            <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <div className="overflow-x-auto rounded-md border border-default bg-surface">
                                 <table className="min-w-full text-sm">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/60 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                    <thead className="bg-surface-elevated text-[11px] uppercase tracking-wider text-muted">
                                         <tr>
                                             <th className="text-left px-3 py-2 font-semibold">Learner</th>
                                             <th className="text-left px-3 py-2 font-semibold">Learner Sign</th>
@@ -597,15 +597,15 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                             <th className="text-right px-3 py-2 font-semibold">Action</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                    <tbody className="divide-y divide-default">
                                         {learners.map(l => {
                                             const busy = signing.has(l.learnerUserId);
                                             const trainerSigned = !!l.record?.trainer;
                                             return (
                                                 <tr key={l.learnerUserId}>
                                                     <td className="px-3 py-2">
-                                                        <div className="font-medium text-gray-900 dark:text-white">{l.learnerName}</div>
-                                                        {l.email && <div className="text-[11px] text-gray-500 dark:text-gray-400">{l.email}</div>}
+                                                        <div className="font-medium text-on-surface">{l.learnerName}</div>
+                                                        {l.email && <div className="text-[11px] text-muted">{l.email}</div>}
                                                     </td>
                                                     <td className="px-3 py-2"><SignedBadge party={l.record?.learner || null} label="Learner" /></td>
                                                     <td className="px-3 py-2"><SignedBadge party={l.record?.trainer || null} label="Trainer" /></td>
@@ -616,7 +616,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                                                 type="button"
                                                                 onClick={() => signAsTrainer([l.learnerUserId], false)}
                                                                 disabled={busy}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs border border-strong rounded text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
                                                             >
                                                                 {busy && <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />}
                                                                 Unsign
@@ -644,27 +644,27 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                 )}
 
                 {signNotice && (
-                    <p className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-2">
+                    <p className="text-sm text-success font-medium flex items-center gap-2">
                         <Icon name={IconName.CheckCircle} className="w-4 h-4" /> {signNotice}
                     </p>
                 )}
                 {signWarning && (
-                    <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                    <p className="text-sm text-warning bg-warning-bg border border-amber-200 dark:border-amber-800 rounded-md p-3">
                         {signWarning}
                     </p>
                 )}
                 {signError && (
-                    <p className="text-sm text-red-600 dark:text-red-400 font-medium">Error: {signError}</p>
+                    <p className="text-sm text-danger font-medium">Error: {signError}</p>
                 )}
-                {isLearner && loadError && <p className="text-xs text-red-600 dark:text-red-400">{loadError}</p>}
+                {isLearner && loadError && <p className="text-xs text-danger">{loadError}</p>}
 
                 {/* ── Manual upload fallback ────────────────────────────────── */}
-                <details className="group rounded-lg border border-gray-200 dark:border-gray-700">
-                    <summary className="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                <details className="group rounded-lg border border-default">
+                    <summary className="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-on-surface-secondary uppercase tracking-wider">
                         Or upload a manually signed copy
                     </summary>
                     <div className="px-4 pb-4 pt-1">
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+                        <p className="text-[11px] text-muted mb-3">
                             {isLearner
                                 ? 'Print the template, fill in the learner block, sign it and upload the scan.'
                                 : 'Upload a scanned copy signed outside the LMS to the learner\'s Assessment Records folder.'}
@@ -672,7 +672,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                         <div className={`grid grid-cols-1 ${isLearner ? '' : 'md:grid-cols-2'} gap-4`}>
                             {!isLearner && (
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Select Learner</label>
+                                    <label className="block text-xs font-medium text-muted mb-1">Select Learner</label>
                                     <select
                                         className="w-full p-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-700 font-sans"
                                         value={selectedLearner}
@@ -686,29 +686,29 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                 </div>
                             )}
                             <div>
-                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Upload File</label>
+                                <label className="block text-xs font-medium text-muted mb-1">Upload File</label>
                                 <input
                                     type="file"
                                     onChange={handleUpload}
                                     disabled={(!isLearner && !selectedLearner) || isUploading}
-                                    className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
+                                    className="block w-full text-xs text-muted file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
                                 />
                             </div>
                         </div>
                         {isUploading && (
-                            <div className="flex items-center gap-2 mt-3 text-blue-600 dark:text-blue-400 text-sm italic">
+                            <div className="flex items-center gap-2 mt-3 text-primary text-sm italic">
                                 <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />
                                 <span>Uploading to learner&apos;s specific folder...</span>
                             </div>
                         )}
                         {uploadSuccess && (
-                            <div className="mt-3 text-green-600 dark:text-green-400 text-sm font-medium flex items-center gap-2">
+                            <div className="mt-3 text-success text-sm font-medium flex items-center gap-2">
                                 <Icon name={IconName.CheckCircle} className="w-4 h-4" />
                                 <span>Successfully uploaded to learner&apos;s Assessment Record folder.</span>
                             </div>
                         )}
                         {uploadError && (
-                            <div className="mt-3 text-red-600 dark:text-red-400 text-sm font-medium">Error: {uploadError}</div>
+                            <div className="mt-3 text-danger text-sm font-medium">Error: {uploadError}</div>
                         )}
                     </div>
                 </details>
@@ -717,15 +717,15 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
             {/* Trainer demo: signing the Assessment Summary Record online (virtual classes only) */}
             {showSignDemo && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowSignDemo(false)}>
-                    <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
+                    <div className="relative bg-surface rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3 px-1">
                             <div>
-                                <h3 className="text-base font-bold text-gray-900 dark:text-white">Demo: Sign the Assessment Summary Record online</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Virtual classes only — physical classes keep the printed record.</p>
+                                <h3 className="text-base font-bold text-on-surface">Demo: Sign the Assessment Summary Record online</h3>
+                                <p className="text-xs text-muted">Virtual classes only — physical classes keep the printed record.</p>
                             </div>
                             <button
                                 onClick={() => setShowSignDemo(false)}
-                                className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                className="p-1.5 rounded-full text-muted hover:text-on-surface hover:bg-surface-hover transition-colors"
                                 aria-label="Close"
                             >
                                 <Icon name={IconName.Close} className="w-5 h-5" />

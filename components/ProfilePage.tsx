@@ -45,7 +45,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     return (
       <div className="flex items-center justify-center py-24 bg-background">
         <div className="text-center">
-          <h1 className="text-xl font-bold text-red-500 mb-3">Authentication Required</h1>
+          <h1 className="text-xl font-bold text-danger mb-3">Authentication Required</h1>
           <p className="text-sm text-on-surface-secondary">Please log in to view your profile.</p>
         </div>
       </div>
@@ -67,7 +67,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     return (
       <div className="flex items-center justify-center py-24 bg-background">
         <div className="text-center">
-          <h1 className="text-xl font-bold text-red-500 mb-3">Error Loading Profile</h1>
+          <h1 className="text-xl font-bold text-danger mb-3">Error Loading Profile</h1>
           <p className="text-sm text-on-surface-secondary mb-4">{error}</p>
           <button
             onClick={refreshProfile}
@@ -82,10 +82,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-surface-elevated flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">No Profile Found</h1>
-          <p className="text-gray-600 dark:text-gray-400">No profile data available.</p>
+          <h1 className="text-2xl font-bold text-on-surface mb-4">No Profile Found</h1>
+          <p className="text-on-surface-secondary">No profile data available.</p>
         </div>
       </div>
     );
@@ -109,14 +109,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       default:
         return (
           <div className="text-center">
-            <p className="text-gray-600 dark:text-gray-400">Profile type not supported: {actualRole}</p>
+            <p className="text-on-surface-secondary">Profile type not supported: {actualRole}</p>
           </div>
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-surface-elevated">
       <div className="py-8">
         <div className="max-w-4xl mx-auto px-4 space-y-6">
           {renderProfileCard()}

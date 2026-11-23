@@ -96,18 +96,18 @@ const CpPromptTemplateEditor: React.FC<Props> = ({ section }) => {
   const isCustomised = payload ? payload.custom !== null && payload.custom !== payload.default : false;
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+    <div className="border border-default rounded-lg">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-lg"
+        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors rounded-lg"
       >
         <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
         <span>Prompt Template</span>
         {isCustomised && (
-          <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 uppercase tracking-wider font-semibold">
+          <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-warning-bg text-warning uppercase tracking-wider font-semibold">
             Customised
           </span>
         )}
@@ -119,11 +119,11 @@ const CpPromptTemplateEditor: React.FC<Props> = ({ section }) => {
             <p className="text-sm text-gray-500">Loading template…</p>
           ) : payload ? (
             <>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 Edit the prompt template used for generation. Placeholders:{' '}
                 {payload.placeholders.map((p, i) => (
                   <React.Fragment key={p}>
-                    <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-emerald-700 dark:text-emerald-300 font-mono text-[11px]">{`{${p}}`}</code>
+                    <code className="px-1.5 py-0.5 rounded bg-surface-elevated text-success font-mono text-[11px]">{`{${p}}`}</code>
                     {i < payload.placeholders.length - 1 ? ', ' : ''}
                   </React.Fragment>
                 ))}
@@ -132,7 +132,7 @@ const CpPromptTemplateEditor: React.FC<Props> = ({ section }) => {
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
                 rows={Math.min(20, Math.max(10, draft.split('\n').length + 1))}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs font-mono leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 rounded-lg border border-strong bg-surface-elevated text-on-surface text-xs font-mono leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -145,7 +145,7 @@ const CpPromptTemplateEditor: React.FC<Props> = ({ section }) => {
                 <button
                   onClick={handleReset}
                   disabled={saving || !isCustomised}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40 transition-colors"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 transition-colors"
                 >
                   Reset to Default
                 </button>
@@ -154,7 +154,7 @@ const CpPromptTemplateEditor: React.FC<Props> = ({ section }) => {
                     Last saved {new Date(payload.updatedAt).toLocaleString()}
                   </span>
                 )}
-                {status && <span className="text-xs text-emerald-600 dark:text-emerald-400">{status}</span>}
+                {status && <span className="text-xs text-success">{status}</span>}
               </div>
             </>
           ) : null}

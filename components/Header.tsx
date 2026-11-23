@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { View, UserRole, AdminPage, TrainerPage, DeveloperPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
-import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getFileUrl } from '@/lib/urlHelpers';
 import AdminSearchPalette from './admin/AdminSearchPalette';
 import FinanceSearchPalette from './finance/FinanceSearchPalette';
 import TrainingProviderSearchPalette from './training-provider/TrainingProviderSearchPalette';
+import UserAvatar from './common/UserAvatar';
+import HeaderThemeToggle from './common/HeaderThemeToggle';
+import AppStoreBadges from './common/AppStoreBadges';
 
 // ── Live SGT clock ───────────────────────────────────────────────────────────
 // Two-line compact clock shown in the header next to the profile picture.
@@ -46,10 +48,10 @@ const SgtClock: React.FC = () => {
       className="hidden sm:flex flex-col items-end leading-tight select-none pl-1"
       title="Current Singapore Time (GMT+8)"
     >
-      <span className="text-[10px] font-mono text-on-surface-secondary whitespace-nowrap">
+      <span className="text-xs text-on-surface whitespace-nowrap">
         {dateStr}
       </span>
-      <span className="text-[10px] font-mono font-semibold text-on-surface whitespace-nowrap">
+      <span className="text-xs font-bold tabular-nums text-on-surface whitespace-nowrap">
         {timeStr}
       </span>
     </div>
@@ -70,17 +72,17 @@ const getRoleDisplayName = (role: UserRole): string => {
   }
 };
 
-// Helper to get role icon
-const getRoleIcon = (role: UserRole): string => {
+// Helper to get role icon — line icons from the same set as the sidebar (no emoji)
+const getRoleIcon = (role: UserRole): IconName => {
   switch (role) {
-    case UserRole.Learner: return '📚';
-    case UserRole.Trainer: return '👨‍🏫';
-    case UserRole.Developer: return '💻';
-    case UserRole.Admin: return '⚙️';
-    case UserRole.Finance: return '💰';
-    case UserRole.Payroll: return '🧾';
-    case UserRole.TrainingProvider: return '🏢';
-    default: return '👤';
+    case UserRole.Learner: return IconName.GraduationCap;
+    case UserRole.Trainer: return IconName.Presentation;
+    case UserRole.Developer: return IconName.BookOpen;
+    case UserRole.Admin: return IconName.Shield;
+    case UserRole.Finance: return IconName.DollarSign;
+    case UserRole.Payroll: return IconName.Calculator;
+    case UserRole.TrainingProvider: return IconName.Building;
+    default: return IconName.User;
   }
 };
 
@@ -111,10 +113,10 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             onClick={() => handleRoleSwitch(r)}
             className={`w-full flex items-center space-x-3 px-3 py-2.5 text-sm rounded-md transition-colors ${r === role
               ? 'bg-primary/10 text-primary font-semibold'
-              : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              : 'text-on-surface-secondary hover:bg-surface-hover'
               }`}
           >
-            <span className="text-lg">{getRoleIcon(r)}</span>
+            <Icon name={getRoleIcon(r)} className={`w-5 h-5 flex-shrink-0 ${r === role ? 'text-primary' : 'text-muted'}`} />
             <span>{getRoleDisplayName(r)}</span>
             {r === role && (
               <svg className="w-4 h-4 ml-auto text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -143,8 +145,8 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   ];
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-72 bg-surface rounded-lg shadow-2xl z-50 border border-default overflow-hidden">
-      <div className="p-4 bg-surface-elevated">
+    <div className="dropdown-panel absolute top-full right-0 mt-2 w-60 z-50 overflow-hidden">
+      <div className="p-2">
         {menuItems.map(item => (
           <a
             href="#"
@@ -158,13 +160,12 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               }
               onClose();
             }}
-            className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-gray-100 dark:hover:bg-gray-700/60">
+            className="dropdown-item">
             <Icon name={item.icon} className="w-5 h-5" />
             <span>{item.label}</span>
           </a>
         ))}
-        <div className="border-t border-default my-1"></div>
-        <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-gray-100 dark:hover:bg-gray-700/60 rounded-md">
+        <button onClick={logout} className="dropdown-item">
           <Icon name={IconName.Logout} className="w-5 h-5" />
           <span>Logout</span>
         </button>
@@ -279,14 +280,11 @@ const Header: React.FC = () => {
   const navConfig = {
     [UserRole.Learner]: [
       { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
-      { view: View.Calendar, label: 'My Calendar', icon: IconName.Calendar },
-      { view: View.EdTools, label: 'Ed Tools', icon: IconName.BookOpen },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
-      { view: View.Dashboard, label: 'E-Attendance', icon: IconName.ClipboardCheck, trainerPage: TrainerPage.EAttendance },
-      { view: View.Dashboard, label: 'Ed Tools', icon: IconName.BookOpen, trainerPage: TrainerPage.EdTools },
-      { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
+      { view: View.Dashboard, label: 'Break Timer', icon: IconName.Clock, href: 'https://alfredang.github.io/musical-timer-countdown/' },
+      { view: View.Dashboard, label: 'Whiteboard', icon: IconName.Edit, href: 'https://alfredang.github.io/whiteboard/' },
     ],
     [UserRole.Developer]: [
       { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
@@ -336,7 +334,7 @@ const Header: React.FC = () => {
                 onClick={() => setIsSearchOpen(true)}
                 title="Search functions (⌘K)"
                 aria-label="Search functions"
-                className="flex items-center gap-2 w-full max-w-xl px-3 sm:px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-on-surface-secondary transition-colors border border-default"
+                className="flex items-center gap-2 w-full max-w-xl px-3 sm:px-4 py-2 bg-surface-elevated hover:bg-surface-hover rounded-full text-sm font-medium text-on-surface-secondary transition-colors border border-default"
               >
                 <Icon name={IconName.Search} className="w-4 h-4 flex-shrink-0" />
                 <span className="flex-1 text-left truncate">{searchPlaceholder}</span>
@@ -422,23 +420,35 @@ const Header: React.FC = () => {
                 </a>
               );
             })}
+            {/* Learners and trainers: the tenant's mobile app store badges (only the stores configured; lib/mobileAppLinks.ts). */}
+            {(role === UserRole.Learner || role === UserRole.Trainer) && (
+              <AppStoreBadges
+                iosUrl={trainingProviderProfile?.mobileAppIosUrl}
+                androidUrl={trainingProviderProfile?.mobileAppAndroidUrl}
+                size="outline"
+                className={`hidden ${role === UserRole.Trainer ? 'xl:flex' : 'md:flex'} !flex-nowrap !gap-1.5 pl-1 sm:pl-2`}
+              />
+            )}
           </nav>
           )}
 
           {/* Right Section: Actions */}
           <div className="flex items-center justify-end space-x-1.5 sm:space-x-2">
 
+            {/* Light / dark switch (all roles); System is on the profile page */}
+            <HeaderThemeToggle />
+
             {/* Role Switcher - only show if user has multiple roles */}
             {hasMultipleRoles && (
               <div className="relative" ref={roleSwitcherRef}>
                 <button
                   onClick={() => setIsRoleSwitcherOpen(prev => !prev)}
-                  className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
+                  className="view-as-pill"
                   title="Switch Role"
                 >
                   <Icon name={IconName.Eye} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="hidden md:inline text-on-surface-secondary text-xs">View As:</span>
-                  <span className="font-semibold truncate max-w-[80px] sm:max-w-none">{getRoleDisplayName(role)}</span>
+                  <span className="hidden md:inline text-xs">View As:</span>
+                  <span className="font-semibold text-on-surface truncate max-w-[80px] sm:max-w-none">{getRoleDisplayName(role)}</span>
                   <svg className={`w-3 h-3 sm:w-4 sm:h-4 transition-transform flex-shrink-0 ${isRoleSwitcherOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -449,12 +459,13 @@ const Header: React.FC = () => {
 
             {/* Profile Button (all roles) */}
             <div className="relative" ref={profileRef}>
-              <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
-                {currentUserProfile?.profilePictureUrl ? (
-                  <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Icon name={IconName.User} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
-                )}
+              <button
+                onClick={() => setIsProfileOpen(prev => !prev)}
+                aria-label="Open profile menu"
+                aria-expanded={isProfileOpen}
+                className="flex rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                <UserAvatar name={currentUserProfile?.name} imageUrl={currentUserProfile?.profilePictureUrl} className="w-8 h-8 sm:w-10 sm:h-10" />
               </button>
               {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
             </div>

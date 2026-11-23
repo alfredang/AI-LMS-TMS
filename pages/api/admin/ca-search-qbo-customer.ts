@@ -1,4 +1,5 @@
 import { withAuth } from '@lib/auth/withAuth';
+import { escapeQboQueryLiteral } from '../../../lib/quickbooks/qboQueryLiteral';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { qboQuery } from '../../../lib/services/qboInvoiceService';
 
@@ -15,7 +16,7 @@ import { qboQuery } from '../../../lib/services/qboInvoiceService';
  * detail for the admin to disambiguate (BillAddr line + email).
  */
 function escapeQboLiteral(value: string): string {
-  return value.replace(/'/g, "''");
+  return escapeQboQueryLiteral(value);
 }
 
 interface QboCustomerResult {

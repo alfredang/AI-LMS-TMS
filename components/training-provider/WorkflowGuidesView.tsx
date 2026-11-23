@@ -29,7 +29,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'trainer-invitation',
     title: 'Trainer Invitation Workflow',
     icon: '📨',
-    color: 'border-blue-500 bg-blue-50 dark:bg-blue-900/10',
+    color: 'border-blue-500 bg-info-bg',
     description: 'Automated trainer assignment via email invitation with accept/decline webhooks.',
     steps: [
       { title: '1. Admin Sends Invitation', detail: 'From Upcoming Classes, admin clicks "Send Invitation" for a course run. The system identifies the next available trainer from the approved trainers list (set in the Course record).', type: 'action' },
@@ -59,7 +59,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'certificate',
     title: 'Certificate Workflow',
     icon: '🎓',
-    color: 'border-green-500 bg-green-50 dark:bg-green-900/10',
+    color: 'border-green-500 bg-success-bg',
     description: 'Auto-generate certificates after class completion, store in Google Drive, and email to learners.',
     steps: [
       { title: '1. Class Ends', detail: 'When a course run end date passes and the class status is "Confirmed", the class becomes eligible for certificate generation.', type: 'logic' },
@@ -81,7 +81,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'proforma-invoice',
     title: 'Proforma Invoice Workflow',
     icon: '🧾',
-    color: 'border-amber-500 bg-amber-50 dark:bg-amber-900/10',
+    color: 'border-amber-500 bg-warning-bg',
     description: 'Generate proforma invoices BEFORE enrollment for learners to claim SkillsFuture Credit.',
     steps: [
       { title: '1. Learner Enquires About Course', detail: 'A learner expresses interest in a course. Before formal enrollment, the learner needs a proforma invoice to submit a SkillsFuture Credit claim or for employer sponsorship approval.', type: 'logic' },
@@ -100,7 +100,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'personal-invoice',
     title: 'Personal Invoice Workflow',
     icon: '📄',
-    color: 'border-blue-500 bg-blue-50 dark:bg-blue-900/10',
+    color: 'border-blue-500 bg-info-bg',
     description: 'End-to-end personal invoice flow: create enrollment & grant on SSG, generate QuickBooks invoice, store in Google Drive, and record in billing history.',
     steps: [
       { title: '1. Create Enrollment and Grant', detail: 'Admin creates the enrollment and grant application on the SSG portal for the individual learner. The enrollment links the learner to the specific course run with their NRIC, sponsorship type, and fee details.', type: 'action' },
@@ -139,7 +139,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'receipt',
     title: 'Receipt Workflow',
     icon: '🧾',
-    color: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10',
+    color: 'border-emerald-500 bg-success-bg',
     description: 'Generate receipts for learners who have paid the net fee, store in Google Drive and billing history.',
     steps: [
       { title: '1. Payment Received', detail: 'The learner has paid the net fee (after SkillsFuture Credit and funding deductions). The payment is confirmed via bank transfer, PayNow, or other payment method.', type: 'logic' },
@@ -159,7 +159,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'billing-history',
     title: 'Billing History Workflow',
     icon: '💰',
-    color: 'border-orange-500 bg-orange-50 dark:bg-orange-900/10',
+    color: 'border-orange-500 bg-warning-bg',
     description: 'End-to-end billing journey from course enquiry to class-ready, covering proforma, enrollment, SkillsFuture, invoice, and receipt.',
     steps: [
       { title: '1. Learner Enquires About Course Fee', detail: 'Learner contacts the training provider to enquire about a course. Admin provides the course fee details: course fee (excl. GST), GST, total fee, applicable funding (SkillsFuture, MCES), and estimated net fee payable after subsidies.', type: 'action' },
@@ -196,7 +196,7 @@ const WORKFLOWS: Workflow[] = [
     id: 'assessment',
     title: 'Assessment Workflow',
     icon: '📝',
-    color: 'border-red-500 bg-red-50 dark:bg-red-900/10',
+    color: 'border-red-500 bg-danger-bg',
     description: 'Assessment creation, grading, and result management for trainers.',
     steps: [
       { title: '1. Assessment Setup', detail: 'Course developer creates assessments for each course with: title, category (Written/Practical/Portfolio), method, passing criteria, and rubric. Assessments are linked to the course record.', type: 'action' },
@@ -318,12 +318,12 @@ const WORKFLOWS: Workflow[] = [
 ];
 
 const stepColors: Record<StepType, { bg: string; border: string; icon: string; label: string }> = {
-  action: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', icon: '🚀', label: 'Action' },
+  action: { bg: 'bg-info-bg', border: 'border-blue-200 dark:border-blue-800', icon: '🚀', label: 'Action' },
   logic: { bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800', icon: '⚙️', label: 'Logic' },
   email: { bg: 'bg-cyan-50 dark:bg-cyan-900/20', border: 'border-cyan-200 dark:border-cyan-800', icon: '📧', label: 'Email' },
-  success: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800', icon: '✅', label: 'Complete' },
-  error: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', icon: '❌', label: 'Decline Path' },
-  warning: { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', icon: '⚠️', label: 'Edge Case' },
+  success: { bg: 'bg-success-bg', border: 'border-green-200 dark:border-green-800', icon: '✅', label: 'Complete' },
+  error: { bg: 'bg-danger-bg', border: 'border-red-200 dark:border-red-800', icon: '❌', label: 'Decline Path' },
+  warning: { bg: 'bg-warning-bg', border: 'border-amber-200 dark:border-amber-800', icon: '⚠️', label: 'Edge Case' },
   storage: { bg: 'bg-teal-50 dark:bg-teal-900/20', border: 'border-teal-200 dark:border-teal-800', icon: '💾', label: 'Storage' },
 };
 
@@ -353,7 +353,7 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold dark:text-white">Workflow Guides</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-muted mt-1">
             System workflow documentation with step-by-step logic, API endpoints, and email templates.
           </p>
         </div>
@@ -364,23 +364,23 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
               href={w.externalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`text-left p-5 rounded-xl border-l-4 ${w.color} border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 block`}
+              className={`text-left p-5 rounded-xl border-l-4 ${w.color} border border-default hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 block`}
             >
               <div className="text-3xl mb-3">{w.icon}</div>
-              <h3 className="font-bold text-gray-900 dark:text-white mb-1">{w.title}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{w.description}</p>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-3 font-medium">{w.steps.length} steps — Opens in new tab ↗</p>
+              <h3 className="font-bold text-on-surface mb-1">{w.title}</h3>
+              <p className="text-sm text-muted leading-relaxed">{w.description}</p>
+              <p className="text-xs text-primary mt-3 font-medium">{w.steps.length} steps — Opens in new tab ↗</p>
             </a>
           ) : (
             <button
               key={w.id}
               onClick={() => setSelectedWorkflow(w.id)}
-              className={`text-left p-5 rounded-xl border-l-4 ${w.color} border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200`}
+              className={`text-left p-5 rounded-xl border-l-4 ${w.color} border border-default hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200`}
             >
               <div className="text-3xl mb-3">{w.icon}</div>
-              <h3 className="font-bold text-gray-900 dark:text-white mb-1">{w.title}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{w.description}</p>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-3 font-medium">{w.steps.length} steps →</p>
+              <h3 className="font-bold text-on-surface mb-1">{w.title}</h3>
+              <p className="text-sm text-muted leading-relaxed">{w.description}</p>
+              <p className="text-xs text-primary mt-3 font-medium">{w.steps.length} steps →</p>
             </button>
           ))}
         </div>
@@ -392,7 +392,7 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => setSelectedWorkflow(null)} className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium">
+        <button onClick={() => setSelectedWorkflow(null)} className="text-primary hover:underline text-sm font-medium">
           ← Back to Workflows
         </button>
       </div>
@@ -403,18 +403,18 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold dark:text-white">{workflow.title}</h2>
             {workflow.externalUrl && (
-              <a href={workflow.externalUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium">
+              <a href={workflow.externalUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary text-sm font-medium">
                 ↗
               </a>
             )}
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{workflow.description}</p>
+          <p className="text-sm text-muted">{workflow.description}</p>
         </div>
       </div>
 
       {/* Steps */}
       <div>
-        <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Workflow Steps</h4>
+        <h4 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Workflow Steps</h4>
         <div className="space-y-3">
           {workflow.steps.map((step, i) => {
             const color = stepColors[step.type];
@@ -426,11 +426,11 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
                   <span className="text-lg flex-shrink-0 mt-0.5">{color.icon}</span>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h5 className="font-bold text-gray-900 dark:text-white text-sm">{step.title}</h5>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/60 dark:bg-black/20 text-gray-600 dark:text-gray-400">{color.label}</span>
-                      {step.url && <span className="text-xs text-blue-600 dark:text-blue-400 ml-auto">↗</span>}
+                      <h5 className="font-bold text-on-surface text-sm">{step.title}</h5>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/60 dark:bg-black/20 text-on-surface-secondary">{color.label}</span>
+                      {step.url && <span className="text-xs text-primary ml-auto">↗</span>}
                     </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">{step.detail}</p>
+                    <p className="text-sm text-on-surface-secondary whitespace-pre-line leading-relaxed">{step.detail}</p>
                   </div>
                 </div>
               </Wrapper>
@@ -442,14 +442,14 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
       {/* API Endpoints */}
       {workflow.endpoints && workflow.endpoints.length > 0 && (
         <div>
-          <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">API Endpoints</h4>
+          <h4 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">API Endpoints</h4>
           <div className="space-y-2">
             {workflow.endpoints.map((ep, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <span className={`px-2 py-0.5 rounded text-xs font-bold ${ep.method === 'GET' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>{ep.method}</span>
+              <div key={i} className="flex items-start gap-3 p-3 bg-surface-elevated rounded-lg border border-default">
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${ep.method === 'GET' ? 'bg-success-bg text-success' : 'bg-info-bg text-info'}`}>{ep.method}</span>
                 <div className="flex-1 min-w-0">
-                  <code className="text-xs font-mono text-gray-800 dark:text-gray-200 break-all">{ep.url}</code>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{ep.description}</p>
+                  <code className="text-xs font-mono text-on-surface break-all">{ep.url}</code>
+                  <p className="text-xs text-muted mt-1">{ep.description}</p>
                 </div>
               </div>
             ))}
@@ -460,15 +460,15 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
       {/* Email Templates */}
       {workflow.emailTemplates && workflow.emailTemplates.length > 0 && (
         <div>
-          <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Email Templates</h4>
+          <h4 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Email Templates</h4>
           <div className="space-y-2">
             {workflow.emailTemplates.map((t, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div key={i} className="flex items-start gap-3 p-3 bg-surface-elevated rounded-lg border border-default">
                 <Icon name={IconName.Mail} className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{t.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{t.description}</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Configure: {t.path}</p>
+                  <p className="text-sm font-semibold text-on-surface">{t.name}</p>
+                  <p className="text-xs text-muted">{t.description}</p>
+                  <p className="text-xs text-primary mt-1">Configure: {t.path}</p>
                 </div>
               </div>
             ))}
@@ -479,14 +479,14 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
       {/* Database Tables */}
       {workflow.dbTables && workflow.dbTables.length > 0 && (
         <div>
-          <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Database Tables</h4>
+          <h4 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Database Tables</h4>
           <div className="space-y-2">
             {workflow.dbTables.map((t, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <Icon name={IconName.FileText} className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+              <div key={i} className="flex items-start gap-3 p-3 bg-surface-elevated rounded-lg border border-default">
+                <Icon name={IconName.FileText} className="w-4 h-4 text-purple-700 dark:text-purple-300 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold font-mono text-gray-900 dark:text-white">{t.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{t.description}</p>
+                  <p className="text-sm font-semibold font-mono text-on-surface">{t.name}</p>
+                  <p className="text-xs text-muted">{t.description}</p>
                 </div>
               </div>
             ))}

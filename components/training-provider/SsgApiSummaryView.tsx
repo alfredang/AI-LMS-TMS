@@ -29,12 +29,12 @@ const CERT_CARDS = [
 ];
 
 const STATUS_CLASSES: Record<string, string> = {
-  'Active':         'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  'Pending':        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-  'Suspended':      'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-  'Rejected':       'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  'Not Subscribed': 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
-  'Inactive':       'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+  'Active':         'bg-success-bg text-success',
+  'Pending':        'bg-warning-bg text-warning',
+  'Suspended':      'bg-warning-bg text-orange-800 dark:text-orange-400',
+  'Rejected':       'bg-danger-bg text-danger',
+  'Not Subscribed': 'bg-surface-elevated text-muted',
+  'Inactive':       'bg-slate-100 text-muted dark:bg-slate-800',
 };
 
 const formatSgt = (isoStr: string | null): string => {
@@ -62,7 +62,7 @@ const toDatetimeLocal = (isoStr: string | null): string => {
 };
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
-  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_CLASSES[status] ?? 'bg-gray-100 text-gray-500'}`}>
+  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_CLASSES[status] ?? 'bg-gray-100 text-muted'}`}>
     {status || '—'}
   </span>
 );
@@ -72,7 +72,7 @@ const StatusSelect: React.FC<{ value: string; onChange: (v: string) => void; sav
     value={value}
     onChange={e => onChange(e.target.value)}
     disabled={saving}
-    className="text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+    className="text-xs rounded border border-strong bg-surface text-on-surface px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
   >
     {VALID_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
   </select>
@@ -201,10 +201,10 @@ const SsgApiSummaryView: React.FC = () => {
     <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">SSG API Summary</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <h1 className="text-2xl font-bold text-on-surface">SSG API Summary</h1>
+        <p className="text-sm text-muted mt-1">
           API subscription status across all apps.{' '}
-          <span className="font-medium text-gray-600 dark:text-gray-300">
+          <span className="font-medium text-on-surface-secondary">
             Last updated: {formatSgt(lastUpdated)}
           </span>
         </p>
@@ -224,11 +224,11 @@ const SsgApiSummaryView: React.FC = () => {
       {/* Cert expiry / secret rotation cards */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Certificate & Secret Dates</h2>
+          <h2 className="text-sm font-semibold text-on-surface-secondary">Certificate & Secret Dates</h2>
           {!certEditing ? (
             <button
               onClick={startCertEdit}
-              className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-xs font-medium"
+              className="px-3 py-1.5 rounded bg-surface-elevated hover:bg-gray-200 dark:hover:bg-slate-600 text-on-surface-secondary text-xs font-medium"
             >
               Edit Dates
             </button>
@@ -244,7 +244,7 @@ const SsgApiSummaryView: React.FC = () => {
               <button
                 onClick={cancelCertEdit}
                 disabled={certSaving}
-                className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-xs font-medium"
+                className="px-3 py-1.5 rounded bg-surface-elevated hover:bg-gray-200 dark:hover:bg-slate-600 text-on-surface-secondary text-xs font-medium"
               >
                 Cancel
               </button>
@@ -254,18 +254,18 @@ const SsgApiSummaryView: React.FC = () => {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {CERT_CARDS.map(({ key, app, label }) => (
-            <div key={key} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 px-4 py-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{app}</p>
-              <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1">{label}</p>
+            <div key={key} className="rounded-lg border border-default bg-surface px-4 py-3">
+              <p className="text-xs text-muted mb-1">{app}</p>
+              <p className="text-xs font-semibold text-on-surface-secondary mb-1">{label}</p>
               {certEditing && certDraft ? (
                 <input
                   type="datetime-local"
                   value={toDatetimeLocal(certDraft[key])}
                   onChange={e => setCertDraft(d => d ? { ...d, [key]: e.target.value ? new Date(e.target.value).toISOString() : null } : d)}
-                  className="w-full text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full text-xs rounded border border-strong bg-surface text-on-surface px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               ) : (
-                <p className="text-xs text-gray-500 dark:text-gray-400">{formatSgt(certExpiry[key])}</p>
+                <p className="text-xs text-muted">{formatSgt(certExpiry[key])}</p>
               )}
             </div>
           ))}
@@ -274,7 +274,7 @@ const SsgApiSummaryView: React.FC = () => {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Status:</span>
+        <span className="text-xs text-muted mr-1">Status:</span>
         {VALID_STATUSES.map(s => <StatusBadge key={s} status={s} />)}
       </div>
 
@@ -285,43 +285,43 @@ const SsgApiSummaryView: React.FC = () => {
           placeholder="Search API name…"
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          className="w-64 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-64 text-sm rounded-lg border border-strong bg-surface text-on-surface px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <span className="text-xs text-gray-400">{filtered.length} / {rows.length} APIs</span>
+        <span className="text-xs text-muted">{filtered.length} / {rows.length} APIs</span>
       </div>
 
       {/* Table */}
       {loading ? (
-        <p className="text-sm text-gray-500 py-8 text-center">Loading…</p>
+        <p className="text-sm text-muted py-8 text-center">Loading…</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="overflow-x-auto rounded-xl border border-default">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-50 dark:bg-slate-700/50">
+            <thead className="bg-surface-elevated">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">API Name</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">Version</th>
-                <th className="px-3 py-3 text-center font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                  App 1<br/><span className="font-normal text-gray-400">SKILLETO TERTIARY</span>
+                <th className="px-4 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">API Name</th>
+                <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Version</th>
+                <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">
+                  App 1<br/><span className="font-normal text-muted">SKILLETO TERTIARY</span>
                 </th>
-                <th className="px-3 py-3 text-center font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                  App 2<br/><span className="font-normal text-gray-400">Training Management System</span>
+                <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">
+                  App 2<br/><span className="font-normal text-muted">Training Management System</span>
                 </th>
-                <th className="px-3 py-3 text-center font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                  App 3<br/><span className="font-normal text-gray-400">Tertiary Infotech Academy</span>
+                <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">
+                  App 3<br/><span className="font-normal text-muted">Tertiary Infotech Academy</span>
                 </th>
-                <th className="px-3 py-3 text-center font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                  App 4<br/><span className="font-normal text-gray-400">TMS API (OAuth)</span>
+                <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">
+                  App 4<br/><span className="font-normal text-muted">TMS API (OAuth)</span>
                 </th>
-                <th className="px-3 py-3 text-center font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">Actions</th>
+                <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            <tbody className="divide-y divide-default">
               {paginated.map(row => {
                 const isEditing = editingId === row.id;
                 return (
-                  <tr key={row.id} className={`transition-colors ${isEditing ? 'bg-blue-50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-slate-700/30'}`}>
-                    <td className="px-4 py-2.5 text-gray-900 dark:text-gray-100 font-medium">{row.api_name}</td>
-                    <td className="px-3 py-2.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.version}</td>
+                  <tr key={row.id} className={`transition-colors ${isEditing ? 'bg-info-bg' : 'hover:bg-surface-hover'}`}>
+                    <td className="px-4 py-2.5 text-on-surface font-medium">{row.api_name}</td>
+                    <td className="px-3 py-2.5 text-muted whitespace-nowrap">{row.version}</td>
 
                     {(['app1_status', 'app2_status', 'app3_status', 'app4_status'] as AppKey[]).map(key => (
                       <td key={key} className="px-3 py-2.5 text-center">
@@ -350,7 +350,7 @@ const SsgApiSummaryView: React.FC = () => {
                           <button
                             onClick={cancelEdit}
                             disabled={saving}
-                            className="px-2.5 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-xs font-medium"
+                            className="px-2.5 py-1 rounded bg-surface-elevated hover:bg-gray-200 dark:hover:bg-slate-600 text-on-surface-secondary text-xs font-medium"
                           >
                             Cancel
                           </button>
@@ -358,7 +358,7 @@ const SsgApiSummaryView: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => startEdit(row)}
-                          className="px-2.5 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-xs font-medium"
+                          className="px-2.5 py-1 rounded bg-surface-elevated hover:bg-gray-200 dark:hover:bg-slate-600 text-on-surface-secondary text-xs font-medium"
                         >
                           Edit
                         </button>
@@ -369,7 +369,7 @@ const SsgApiSummaryView: React.FC = () => {
               })}
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted">
                     {rows.length === 0 ? 'No data — run the migration SQL to seed the table.' : 'No results match your search.'}
                   </td>
                 </tr>
@@ -382,21 +382,21 @@ const SsgApiSummaryView: React.FC = () => {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted">
             Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} APIs
           </p>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setPage(1)}
               disabled={page === 1}
-              className="px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
+              className="px-2 py-1 rounded text-xs font-medium bg-surface-elevated text-on-surface-secondary disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
             >
               «
             </button>
             <button
               onClick={() => setPage(p => p - 1)}
               disabled={page === 1}
-              className="px-2.5 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
+              className="px-2.5 py-1 rounded text-xs font-medium bg-surface-elevated text-on-surface-secondary disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
             >
               ‹
             </button>
@@ -409,7 +409,7 @@ const SsgApiSummaryView: React.FC = () => {
               }, [])
               .map((p, idx) =>
                 p === '...' ? (
-                  <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-gray-400">…</span>
+                  <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-muted">…</span>
                 ) : (
                   <button
                     key={p}
@@ -417,7 +417,7 @@ const SsgApiSummaryView: React.FC = () => {
                     className={`px-2.5 py-1 rounded text-xs font-medium ${
                       page === p
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                        : 'bg-surface-elevated text-on-surface-secondary hover:bg-gray-200 dark:hover:bg-slate-600'
                     }`}
                   >
                     {p}
@@ -427,14 +427,14 @@ const SsgApiSummaryView: React.FC = () => {
             <button
               onClick={() => setPage(p => p + 1)}
               disabled={page === totalPages}
-              className="px-2.5 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
+              className="px-2.5 py-1 rounded text-xs font-medium bg-surface-elevated text-on-surface-secondary disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
             >
               ›
             </button>
             <button
               onClick={() => setPage(totalPages)}
               disabled={page === totalPages}
-              className="px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
+              className="px-2 py-1 rounded text-xs font-medium bg-surface-elevated text-on-surface-secondary disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-slate-600"
             >
               »
             </button>

@@ -514,13 +514,12 @@ Use this as a single-page reference for what needs to be configured before handi
 | 20 | QuickBooks OAuth (Client ID, Secret, Realm ID, Refresh Token) | **Optional** | Env vars or Admin UI | Enables invoice / customer / payment sync to QuickBooks Online | [Step 6.4](#64-optional-enable-as-needed-later) |
 | 21 | Auto-send toggles (proforma invoices, confirmation emails, certificates) | **Recommended** | Company Settings → Feature Toggles | Controls which scheduled jobs actually fire — leave OFF until you've verified credentials work | [10.5](#105-feature-toggles) |
 | 22 | OTP login enable + Default OTP toggle | **Required** | Company Settings → Feature Toggles | Enable OTP login; **disable Default OTP** in production (it's a fixed-code testing aid) | [10.5](#105-feature-toggles) |
-| 23 | Leaderboard / Point System | **Optional** | Company Settings → Feature Toggles | Gamification — turn on if the client wants learner engagement features | [10.5](#105-feature-toggles) |
-| 24 | Scheduler tasks review | **Recommended** | Admin → Scheduler | Roughly 17 cron jobs (certificate generation, SSG sync, calendar sync, etc.). Disable any not relevant to this client to avoid noisy errors in logs | [CLAUDE.md → Scheduler](CLAUDE.md) |
-| 25 | Create initial user accounts (trainers, finance, training-provider users) | **Recommended** | Admin → User Management | Onboard the client's actual staff before handing over | — |
+| 23 | Scheduler tasks review | **Recommended** | Admin → Scheduler | Roughly 17 cron jobs (certificate generation, SSG sync, calendar sync, etc.). Disable any not relevant to this client to avoid noisy errors in logs | [CLAUDE.md → Scheduler](CLAUDE.md) |
+| 24 | Create initial user accounts (trainers, finance, training-provider users) | **Recommended** | Admin → User Management | Onboard the client's actual staff before handing over | — |
 
 > **Order matters.** Items 1–7 unblock day-1 use. 5 (Gmail OAuth) gates everything else — without it nothing else can be tested end-to-end because OTP emails don't arrive. 17–19 only apply to Singapore training providers using SkillsFuture; non-SG clients can skip the entire SSG block.
 
-> **Per-client variation.** Items 11 (Firecrawl), 17–19 (SSG), 20 (QuickBooks), and 23 (Leaderboard) are commercial integrations that depend on the client's contract. Confirm scope before configuring — and confirm the credentials belong to the **client's** accounts, not Tertiary's.
+> **Per-client variation.** Items 11 (Firecrawl), 17–19 (SSG), and 20 (QuickBooks) are commercial integrations that depend on the client's contract. Confirm scope before configuring — and confirm the credentials belong to the **client's** accounts, not Tertiary's.
 
 The detailed sections below cover each grouping in depth.
 
@@ -599,7 +598,6 @@ For existing deployments, apply `database/migrations/add_zoom_meeting_integratio
 | Enable Default OTP | Use a fixed OTP for testing (disable in production) |
 | Force First Password Change | Require new users to change default password |
 | Default Password | Password assigned to newly created user accounts |
-| Enable Leaderboard / Point System | Gamification features |
 | Auto-send toggles | Proforma invoices, confirmation emails, certificates, etc. |
 
 ### 10.6 SSG/TPGateway (Singapore training providers only)

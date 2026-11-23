@@ -1,4 +1,6 @@
 import { withAuth, type AuthedApiRequest } from '@lib/auth/withAuth';
+import { classMemberSql } from '../../../lib/enrolment/classMembership';
+import { ensureClassMembershipTables } from '../../../lib/enrolment/classMembershipTables';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
@@ -57,13 +59,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             || ['admin', 'trainingProvider', 'developer', 'trainer'].some(r => authUser?.roles.has(r));
 
         if (!isStaff) {
+            await ensureClassMembershipTables();
             const self = await pool.query(
                 `SELECT au.full_name
                    FROM enrollment e
                    JOIN app_user au ON au.id = e.user_id
                   WHERE e.user_id = $1
                     AND e.course_run_id::text = $2
-                    AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+                    AND ${classMemberSql('e')}
                   LIMIT 1`,
                 [authUser!.id, courseRunId]
             );

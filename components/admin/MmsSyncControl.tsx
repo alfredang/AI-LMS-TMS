@@ -83,13 +83,13 @@ export default function MmsSyncControl({ runUuid, masterlistClassId, courseCode,
         finally { setBusy(false); }
     };
     const target = status?.target_result;
-    return <div className="my-2 rounded border border-gray-200 dark:border-gray-700 p-3 text-xs" aria-busy={busy} onClick={e => e.stopPropagation()}>
+    return <div className="my-2 rounded border border-default p-3 text-xs" aria-busy={busy} onClick={e => e.stopPropagation()}>
     <div className="flex flex-wrap items-center gap-3">
       <button type="button" onClick={sync} disabled={busy || saving || status?.state === 'running'} className="min-h-11 cursor-pointer rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Syncing…' : 'Sync MMS now'}</button>
       <button type="button" onClick={() => accessAction()} disabled={busy || saving} className="min-h-11 rounded border px-3 py-1.5 disabled:opacity-50">Preview MMS access</button>
       {preview && <button type="button" onClick={() => accessAction('send_pending')} disabled={busy || saving || !preview.enabled || preview.context?.state !== 'ready'} className="min-h-11 rounded border px-3 py-1.5 disabled:opacity-50">Send pending MMS access</button>}
       <span aria-live="polite">{status?.state || 'Not linked'}{target ? ` · ${target.class_id} · ${target.readiness}` : ''}</span>
-      {target?.class_url && /^https?:\/\//i.test(target.class_url) && <a href={target.class_url} target="_blank" rel="noreferrer" className="text-blue-600 underline">Open MMS class</a>}
+      {target?.class_url && /^https?:\/\//i.test(target.class_url) && <a href={target.class_url} target="_blank" rel="noreferrer" className="text-primary underline">Open MMS class</a>}
       {status?.last_success_at && <span>Last sync: {new Date(status.last_success_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })} SGT</span>}
     </div>
     <p className="mt-2">Existing C-code Master List classes sync to MMS, including pending classes. Save learner, trainer and schedule changes here; no separate MMS approval is needed. Direct MMS registrations reconcile into this roster.</p>

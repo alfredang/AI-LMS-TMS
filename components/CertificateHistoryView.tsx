@@ -59,12 +59,12 @@ const CertificateHistoryView: React.FC = () => {
 
   const getStatusBadge = (status: string, certUrl: string | null) => {
     if (certUrl) {
-      return { label: 'Ready', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' };
+      return { label: 'Ready', className: 'bg-success-bg text-success' };
     }
     if (status === 'Competent') {
-      return { label: 'Generating', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' };
+      return { label: 'Generating', className: 'bg-warning-bg text-warning' };
     }
-    return { label: 'Pending', className: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400' };
+    return { label: 'Pending', className: 'bg-surface-elevated text-gray-800 dark:text-gray-400' };
   };
 
   const readyCount = records.filter(r => r.certificate_url).length;
@@ -73,8 +73,8 @@ const CertificateHistoryView: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Certificate History</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">View and download your course certificates</p>
+        <h2 className="text-2xl font-bold text-on-surface">Certificate History</h2>
+        <p className="text-sm text-muted mt-1">View and download your course certificates</p>
       </div>
 
       {/* Certificate Table */}
@@ -85,35 +85,35 @@ const CertificateHistoryView: React.FC = () => {
       ) : error ? (
         <Card className="p-8 text-center dark:bg-gray-800 dark:border-gray-700">
           <Icon name={IconName.InfoCircle} className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">{error}</p>
+          <p className="text-muted">{error}</p>
         </Card>
       ) : records.length === 0 ? (
         <Card className="p-8 text-center dark:bg-gray-800 dark:border-gray-700">
-          <Icon name={IconName.Award} className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">No course enrollments found</p>
+          <Icon name={IconName.Award} className="w-10 h-10 text-muted mx-auto mb-3" />
+          <p className="text-muted">No course enrollments found</p>
         </Card>
       ) : (
         <Card className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
+            <table className="min-w-full divide-y divide-default">
+              <thead className="bg-surface-elevated">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Title</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Ref Code</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Date</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">PDF Download</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Title</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Ref Code</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Run ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Date</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase tracking-wider">PDF Download</th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-surface divide-y divide-default">
                 {records.map((record) => {
                   const status = getStatusBadge(record.assessment_status, record.certificate_url);
                   return (
-                    <tr key={record.enrollment_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{record.course_title}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{record.course_code || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{record.course_run_id || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                    <tr key={record.enrollment_id} className="hover:bg-surface-hover">
+                      <td className="px-4 py-3 text-sm font-medium text-on-surface">{record.course_title}</td>
+                      <td className="px-4 py-3 text-sm text-on-surface-secondary">{record.course_code || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-on-surface-secondary">{record.course_run_id || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-on-surface-secondary">
                         {record.start_date ? `${formatDate(record.start_date)} - ${formatDate(record.end_date)}` : '-'}
                       </td>
                       <td className="px-4 py-3 text-center">

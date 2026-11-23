@@ -381,8 +381,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     });
 
     // Constants for form options
-    const inputClasses = "block w-full px-3 py-2 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-    const disabledInputClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const disabledInputClasses = "bg-surface-elevated text-muted cursor-not-allowed";
     const virtualMeetingProviderLabel = virtualMeetingProvider === 'zoom' ? 'Zoom' : virtualMeetingProvider === 'teams' ? 'Microsoft Teams' : 'Google Meet';
     const canGenerateZoomMeeting = classType === 'Virtual' || classType === 'Hybrid';
     const isZoomMeetingProvider = virtualMeetingProvider === 'zoom';
@@ -2435,7 +2435,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             </div>
 
             {isEditMode && (
-                <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+                <div className="border-b border-default mb-6">
                     <nav className="-mb-px flex space-x-8">
                         {(['courseRun', 'sessions', 'enrollments', 'trainer', 'assessment', 'rescheduling'] as const).map(tab => (
                             <button
@@ -2444,7 +2444,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                                     activeTab === tab
                                         ? 'border-blue-500 text-blue-500'
-                                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
+                                        : 'border-transparent text-muted hover:text-on-surface hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
                             >
                                 {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : tab === 'trainer' ? 'Trainer' : tab === 'assessment' ? 'Assessment' : 'Rescheduling'}
@@ -2459,15 +2459,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {(!isEditMode || activeTab === 'courseRun') && (
                     <>
                         {isEditMode && ssgDataPopulated && !ssgApiLoading && (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
-                                <p className="text-sm text-green-800 dark:text-green-300 flex-1">
+                            <div className="bg-success-bg border border-green-200 dark:border-green-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-success flex-1">
                                     <strong>✓ Form populated with SSG data</strong> - The form fields below have been automatically filled with data from the SSG API. You can modify any field as needed before updating.
                                 </p>
                                 <button
                                     type="button"
                                     onClick={() => fetchCourseRunData(courseRunId)}
                                     disabled={ssgApiLoading || !courseRunId}
-                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-green-300 dark:border-green-600 text-green-800 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 disabled:opacity-50"
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-green-300 dark:border-green-600 text-success hover:bg-green-100 dark:hover:bg-green-900/40 disabled:opacity-50"
                                     title="Re-fetch this course run from SSG and re-populate the form"
                                 >
                                     Refetch
@@ -2476,8 +2476,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         )}
 
                         {isEditMode && ssgApiError && !ssgApiLoading && (
-                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
-                                <p className="text-sm text-red-800 dark:text-red-300 flex-1">
+                            <div className="bg-danger-bg border border-red-200 dark:border-red-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-danger flex-1">
                                     <strong>Unable to load SSG course run</strong>
                                     {ssgApiError.status ? ` (HTTP ${ssgApiError.status})` : ''} - {ssgApiError.message}
                                 </p>
@@ -2485,7 +2485,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     type="button"
                                     onClick={() => fetchCourseRunData(courseRunId)}
                                     disabled={ssgApiLoading || !courseRunId}
-                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-red-300 dark:border-red-600 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-red-300 dark:border-red-600 text-danger hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
                                     title="Re-fetch this course run from SSG. Switch SSG App above if the selected certificate cannot access this run."
                                 >
                                     Refetch
@@ -2494,8 +2494,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         )}
 
                         {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && !ssgApiError && (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
-                                <p className="text-sm text-yellow-800 dark:text-yellow-300 flex-1">
+                            <div className="bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-warning flex-1">
                                     <strong>⚠ SSG data retrieved but form not populated</strong> - The SSG API returned data, but the form fields could not be filled. The response may have an unexpected structure.
                                 </p>
                                 <button
@@ -2511,10 +2511,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         )}
 
                         {isEditMode && ssgApiLoading && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-3 mb-4">
+                            <div className="bg-info-bg border border-blue-200 dark:border-blue-700 rounded-md p-3 mb-4">
                                 <div className="flex items-center">
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                                    <p className="text-sm text-info">
                                         <strong>Loading SSG data...</strong> Form fields will be populated automatically when data is retrieved.
                                     </p>
                                 </div>
@@ -2524,7 +2524,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         <FormSection title="Basic Class Information">
                             {isEditMode && courseToEdit?.courseTitle && (
                                 <div className="mb-4">
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                    <label className="block text-sm font-bold text-on-surface-secondary mb-1">Course Title</label>
                                     <input
                                         type="text"
                                         value={courseToEdit.courseTitle}
@@ -2536,7 +2536,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-bold text-on-surface-secondary mb-1">
                                         Course Run ID *
                                     </label>
                                     <input
@@ -2551,7 +2551,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 </div>
                                 {isEditMode && (
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">
                                             Course Reference Number *
                                         </label>
                                         <input
@@ -2591,10 +2591,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                         <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
                                     </label>
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <span className="text-sm font-medium text-on-surface-secondary">
                                         Disable Auto Courseware &amp; Attendance Email
                                     </span>
-                                    <span className="text-xs text-gray-400">
+                                    <span className="text-xs text-muted">
                                         {coursewareEmailDisabled
                                             ? 'Scheduled auto-send is skipped for this class only'
                                             : 'Scheduled auto-send will run for this class'}
@@ -2608,7 +2608,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Class Status & Type">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Status *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Class Status *</label>
                                         <select
                                             value={classStatus}
                                             onChange={async (e) => {
@@ -2633,7 +2633,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Type *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Class Type *</label>
                                         <select
                                             value={classType}
                                             onChange={async (e) => {
@@ -2667,7 +2667,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 <div>
                                     <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Provider</label>
+                                            <label className="block text-sm font-bold text-on-surface-secondary mb-1">Provider</label>
                                             <select
                                                 value={virtualMeetingProvider}
                                                 onChange={(e) => {
@@ -2697,7 +2697,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     </Button>
                                                 </div>
                                                 {!canGenerateZoomMeeting && (
-                                                    <p className="absolute left-0 top-full mt-1 w-max max-w-[min(28rem,90vw)] text-xs text-amber-600 dark:text-amber-400">
+                                                    <p className="absolute left-0 top-full mt-1 w-max max-w-[min(28rem,90vw)] text-xs text-warning">
                                                         Set Class Type to Virtual or Hybrid before generating a Zoom meeting.
                                                     </p>
                                                 )}
@@ -2707,7 +2707,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     {isZoomMeetingProvider ? (
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Zoom Start URL</label>
+                                                <label className="block text-sm font-bold text-on-surface-secondary mb-1">Trainer Zoom Start URL</label>
                                                 <input
                                                     type="url"
                                                     value={virtualMeetingHostLink}
@@ -2716,16 +2716,16 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     className={inputClasses}
                                                 />
                                                 {virtualMeetingHostLink && (
-                                                    <a href={virtualMeetingHostLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                    <a href={virtualMeetingHostLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-primary hover:underline">
                                                         Open trainer start URL
                                                     </a>
                                                 )}
-                                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                                <p className="mt-1 text-xs text-warning">
                                                     Sensitive trainer-only URL. This starts the Zoom meeting with host access and must not be shared with learners.
                                                 </p>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Join URL</label>
+                                                <label className="block text-sm font-bold text-on-surface-secondary mb-1">Learner Join URL</label>
                                                 <input
                                                     type="url"
                                                     value={virtualMeetingLink}
@@ -2734,11 +2734,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     className={inputClasses}
                                                 />
                                                 {virtualMeetingLink && (
-                                                    <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                    <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-primary hover:underline">
                                                         Open learner join URL
                                                     </a>
                                                 )}
-                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                <p className="mt-1 text-xs text-muted">
                                                     This URL is shown to learners. Trainers can also join with it, but may not have host/admin controls.
                                                 </p>
                                             </div>
@@ -2755,7 +2755,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </div>
                                     ) : (
                                         <>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
+                                            <label className="block text-sm font-bold text-on-surface-secondary mb-1">Virtual Meeting Link</label>
                                             <div className="flex gap-3">
                                                 <input
                                                     type="url"
@@ -2774,11 +2774,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                 </Button>
                                             </div>
                                             {virtualMeetingLink && (
-                                                <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-primary hover:underline">
                                                     Open {virtualMeetingProviderLabel}
                                                 </a>
                                             )}
-                                            <p className="mt-1 text-xs text-gray-400">
+                                            <p className="mt-1 text-xs text-muted">
                                                 Google Meet links are synced from Google Calendar; Teams links can be entered manually.
                                             </p>
                                         </>
@@ -2791,7 +2791,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         {isEditMode && (
                             <FormSection title="Course Vacancy Details">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Vacancy *</label>
+                                    <label className="block text-sm font-bold text-on-surface-secondary mb-1">Course Vacancy *</label>
                                     <select
                                         value={editFormData.courseVacancy?.code || ''}
                                         onChange={(e) => handleInputChange('courseVacancy', {
@@ -2816,7 +2816,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Registration Dates">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Opening Registration Date *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Opening Registration Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.openingRegistrationDate || ''}
@@ -2825,7 +2825,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Closing Registration Date *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Closing Registration Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.closingRegistrationDate || ''}
@@ -2842,7 +2842,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Course Dates">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Start Date *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Course Start Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.courseStartDate || startDate}
@@ -2854,7 +2854,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course End Date *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Course End Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.courseEndDate || endDate}
@@ -2874,7 +2874,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Venue Information">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Block *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Block *</label>
                                         <input
                                             type="text"
                                             value={editFormData.block || ''}
@@ -2885,7 +2885,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Street *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Street *</label>
                                         <input
                                             type="text"
                                             value={editFormData.street || ''}
@@ -2896,7 +2896,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Building *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Building *</label>
                                         <input
                                             type="text"
                                             value={editFormData.building || ''}
@@ -2907,7 +2907,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Floor *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Floor *</label>
                                         <input
                                             type="text"
                                             value={editFormData.floor || ''}
@@ -2918,7 +2918,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Unit *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Unit *</label>
                                         <input
                                             type="text"
                                             value={editFormData.unit || ''}
@@ -2929,7 +2929,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Postal Code *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Postal Code *</label>
                                         <input
                                             type="text"
                                             value={editFormData.postalCode || ''}
@@ -2940,7 +2940,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Room *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Room *</label>
                                         <input
                                             type="text"
                                             value={editFormData.room || ''}
@@ -2951,7 +2951,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Wheelchair Access *</label>
+                                        <label className="block text-sm font-bold text-on-surface-secondary mb-1">Wheelchair Access *</label>
                                         <select
                                             value={editFormData.wheelChairAccess || ''}
                                             onChange={(e) => handleInputChange('wheelChairAccess', e.target.value as OptionalSelector)}
@@ -2974,7 +2974,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         {isEditMode && (
                             <FormSection title="Course Administration">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Admin Email</label>
+                                    <label className="block text-sm font-bold text-on-surface-secondary mb-1">Course Admin Email</label>
                                     <input
                                         type="email"
                                         value={editFormData.courseAdminEmail || ''}
@@ -2994,7 +2994,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                     <FormSection title="Sessions Management">
                         <div className="space-y-4">
                             {sessionsLoading && (
-                                <div className="text-blue-600 mb-4">Loading existing sessions...</div>
+                                <div className="text-primary mb-4">Loading existing sessions...</div>
                             )}
 
                             {!sessionsLoading && (
@@ -3005,7 +3005,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             type="button"
                                             variant="primary"
                                             onClick={toggleNewSessionForm}
-                                            className="bg-green-600 text-white hover:bg-green-700"
+                                            className="bg-green-700 text-white hover:bg-green-800"
                                         >
                                             {showNewSessionForm ? 'Cancel Add Session' : 'Add New Session'}
                                         </Button>
@@ -3016,7 +3016,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             {/* Sessions Table */}
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm whitespace-nowrap">
-                                                    <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                                    <thead className="bg-surface-elevated">
                                                         <tr>
                                                             <th className="text-left py-3 px-3 font-semibold">Session</th>
                                                             <th className="text-left py-3 px-3 font-semibold">Date</th>
@@ -3038,13 +3038,13 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             });
                                                             return groups.map((group) => (
                                                                 <React.Fragment key={group.date}>
-                                                                    <tr className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                                                                    <tr className="bg-surface-elevated border-b border-default">
                                                                         <td colSpan={6} className="py-2 px-3">
                                                                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                                                                                <span className="font-medium text-gray-800 dark:text-gray-200">📅 {group.date} <span className="text-xs font-normal text-gray-500 dark:text-gray-400">· {group.items.length} session{group.items.length === 1 ? '' : 's'}</span></span>
+                                                                                <span className="font-medium text-on-surface">📅 {group.date} <span className="text-xs font-normal text-muted">· {group.items.length} session{group.items.length === 1 ? '' : 's'}</span></span>
                                                                                 {sessionDayEdit?.date === group.date ? (
                                                                                     <span className="flex items-center gap-1">
-                                                                                        <input type="date" value={sessionDayEdit.newDate} onChange={(e) => setSessionDayEdit({ date: group.date, newDate: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs dark:bg-gray-700 dark:text-white" />
+                                                                                        <input type="date" value={sessionDayEdit.newDate} onChange={(e) => setSessionDayEdit({ date: group.date, newDate: e.target.value })} className="border border-strong rounded px-2 py-1 text-xs dark:bg-gray-700 dark:text-white" />
                                                                                         <Button variant="primary" size="sm" onClick={() => void rescheduleEntireDay(group.date, group.items.map(x => x.session))}>Save day</Button>
                                                                                         <Button variant="ghost" size="sm" onClick={() => setSessionDayEdit(null)}>Cancel</Button>
                                                                                     </span>
@@ -3055,17 +3055,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         </td>
                                                                     </tr>
                                                                     {group.items.map(({ session, index }) => (
-                                                                        <tr key={session.id || index} className="border-b border-gray-100 dark:border-gray-800">
-                                                                            <td className="py-3 px-3 text-gray-500 font-medium">S{index + 1}</td>
+                                                                        <tr key={session.id || index} className="border-b border-default">
+                                                                            <td className="py-3 px-3 text-muted font-medium">S{index + 1}</td>
                                                                             <td className="py-3 px-3">{session.startDate ? formatDateForDisplay(session.startDate) : 'N/A'} - {session.endDate ? formatDateForDisplay(session.endDate) : 'N/A'}</td>
                                                                             <td className="py-3 px-3">{session.startTime || 'N/A'} - {session.endTime || 'N/A'}</td>
                                                                             <td className="py-3 px-3">{getModeLabel(session.modeOfTraining)}</td>
                                                                             <td className="py-3 px-3">
                                                                                 {(() => {
-                                                                                    if (!sessionCalChecked) return <span className="text-gray-400" title="Calendar not checked — Google Calendar wasn't reachable in this environment.">—</span>;
+                                                                                    if (!sessionCalChecked) return <span className="text-muted" title="Calendar not checked — Google Calendar wasn't reachable in this environment.">—</span>;
                                                                                     const m = sessionCalByDate[convertSsgDateToHtml(session.startDate)];
-                                                                                    if (m?.calendarMatched && m.calendarLink) return <a href={m.calendarLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" title={m.calendarEventDate ? `Calendar event on ${m.calendarEventDate}` : 'Open calendar event'}>View event ↗</a>;
-                                                                                    return <span className="text-amber-600 dark:text-amber-400" title="No calendar event matched on this date. Check the session date/time (from SSG) against Google Calendar, and that the event title still matches.">Not found</span>;
+                                                                                    if (m?.calendarMatched && m.calendarLink) return <a href={m.calendarLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" title={m.calendarEventDate ? `Calendar event on ${m.calendarEventDate}` : 'Open calendar event'}>View event ↗</a>;
+                                                                                    return <span className="text-warning" title="No calendar event matched on this date. Check the session date/time (from SSG) against Google Calendar, and that the event title still matches.">Not found</span>;
                                                                                 })()}
                                                                             </td>
                                                                             <td className="py-3 px-3 text-right">
@@ -3085,11 +3085,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                 const index = editingSessionIndex;
                                                 const session = existingSessions[index];
                                                 return (
-                                                <Card key={session.id || index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
+                                                <Card key={session.id || index} className="p-4 bg-surface-elevated">
                                                     {true ? (
                                                         // Editing mode for existing session
                                                         <div className="space-y-3">
-                                                            <h4 className="font-medium text-blue-600">Edit Session {index + 1}</h4>
+                                                            <h4 className="font-medium text-primary">Edit Session {index + 1}</h4>
                                                             <div className="grid grid-cols-2 gap-4">
                                                                 <div>
                                                                     <label className="block text-sm font-medium mb-1">Session ID</label>
@@ -3097,7 +3097,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         type="text"
                                                                         value={session.id || ''}
                                                                         readOnly
-                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                                                                        className="w-full px-3 py-2 border border-strong rounded-md bg-surface-elevated text-muted cursor-not-allowed"
                                                                         placeholder="Session ID (Read Only)"
                                                                     />
                                                                 </div>
@@ -3110,7 +3110,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = handleSessionFieldUpdate(updatedSessions[index], 'modeOfTraining', e.target.value);
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     >
                                                                         <option value="">Select mode of training</option>
                                                                         <option value="1">1 - Classroom</option>
@@ -3134,7 +3134,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = handleSessionFieldUpdate(updatedSessions[index], 'startDate', e.target.value);
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     />
                                                                 </div>
                                                                 <div>
@@ -3147,11 +3147,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = { ...updatedSessions[index], endDate: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? false : false}
                                                                     />
                                                                     {(session.modeOfTraining && session.modeOfTraining !== '2' && session.modeOfTraining !== '4') && (
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-filled from start date for this mode</p>
+                                                                        <p className="text-xs text-muted mt-1">Auto-filled from start date for this mode</p>
                                                                     )}
                                                                 </div>
                                                                 <div>
@@ -3164,11 +3164,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = { ...updatedSessions[index], startTime: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                                     />
                                                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 00:00 for this mode</p>
+                                                                        <p className="text-xs text-muted mt-1">Auto-set to 00:00 for this mode</p>
                                                                     )}
                                                                 </div>
                                                                 <div>
@@ -3181,18 +3181,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = { ...updatedSessions[index], endTime: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                                     />
                                                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 23:59 for this mode</p>
+                                                                        <p className="text-xs text-muted mt-1">Auto-set to 23:59 for this mode</p>
                                                                     )}
                                                                 </div>
                                                             </div>
 
                                                             {/* Session Venue Fields */}
                                                             <div className="border-t pt-4">
-                                                                <h5 className="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">Session Venue</h5>
+                                                                <h5 className="text-md font-medium text-on-surface-secondary mb-3">Session Venue</h5>
                                                                 <div className="grid grid-cols-2 gap-4">
                                                                     <div>
                                                                         <label className="block text-sm font-medium mb-1">Block</label>
@@ -3207,7 +3207,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter block"
                                                                         />
                                                                     </div>
@@ -3224,7 +3224,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter street"
                                                                         />
                                                                     </div>
@@ -3241,7 +3241,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter building"
                                                                         />
                                                                     </div>
@@ -3258,7 +3258,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter floor"
                                                                         />
                                                                     </div>
@@ -3275,7 +3275,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter unit"
                                                                         />
                                                                     </div>
@@ -3292,7 +3292,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter postal code"
                                                                         />
                                                                     </div>
@@ -3309,7 +3309,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter room"
                                                                         />
                                                                     </div>
@@ -3325,7 +3325,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         >
                                                                             <option value="">Select wheelchair access</option>
                                                                             <option value="true">Yes</option>
@@ -3336,12 +3336,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             </div>
 
                                                             <div className="flex items-center justify-between mt-4 gap-4">
-                                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                                                <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={syncCalendarOnSave}
                                                                         onChange={(e) => setSyncCalendarOnSave(e.target.checked)}
-                                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                        className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500"
                                                                     />
                                                                     <span>Also update Google Calendar (create/keep/remove the day's event to match)</span>
                                                                 </label>
@@ -3370,7 +3370,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </div>
                                     ) : (
                                         <div className="text-center py-8">
-                                            <p className="text-gray-500 dark:text-gray-400">No existing sessions found.</p>
+                                            <p className="text-muted">No existing sessions found.</p>
                                         </div>
                                     )}
 
@@ -3378,16 +3378,16 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     {showNewSessionForm && (
                                         <div className="space-y-4">
                                             {newSessions.map((session, index) => (
-                                                <Card key={index} className="p-4 bg-green-50 dark:bg-green-900/20 space-y-3 border-green-200 dark:border-green-700">
+                                                <Card key={index} className="p-4 bg-success-bg space-y-3 border-green-200 dark:border-green-700">
                                                     <div className="flex justify-between items-center">
-                                                        <h4 className="font-medium text-green-700 dark:text-green-400">
+                                                        <h4 className="font-medium text-success">
                                                             {index === 0 ? 'Add New Session' : `Add New Session ${index + 1}`}
                                                         </h4>
                                                         {index > 0 && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => removeSessionForm(index)}
-                                                                className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                                                                className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
                                                             >
                                                                 Remove
                                                             </button>
@@ -3399,7 +3399,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         <select
                                                             value={session.modeOfTraining}
                                                             onChange={(e) => updateNewSessionField(index, 'modeOfTraining', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         >
                                                             <option value="">Select mode of training</option>
                                                             {modeOfTrainingOptions.map(option => (
@@ -3418,7 +3418,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="date"
                                                                 value={session.startDate}
                                                                 onChange={(e) => updateNewSessionField(index, 'startDate', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                             />
                                                         </div>
                                                         <div>
@@ -3427,10 +3427,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="date"
                                                                 value={session.endDate}
                                                                 onChange={(e) => updateNewSessionField(index, 'endDate', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                             />
                                                             {(session.modeOfTraining && session.modeOfTraining !== '2' && session.modeOfTraining !== '4') && (
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-filled from start date for this mode</p>
+                                                                <p className="text-xs text-muted mt-1">Auto-filled from start date for this mode</p>
                                                             )}
                                                         </div>
                                                         <div>
@@ -3439,11 +3439,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="time"
                                                                 value={session.startTime}
                                                                 onChange={(e) => updateNewSessionField(index, 'startTime', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                 disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                             />
                                                             {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 00:00 for this mode</p>
+                                                                <p className="text-xs text-muted mt-1">Auto-set to 00:00 for this mode</p>
                                                             )}
                                                         </div>
                                                         <div>
@@ -3452,18 +3452,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="time"
                                                                 value={session.endTime}
                                                                 onChange={(e) => updateNewSessionField(index, 'endTime', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                 disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                             />
                                                             {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 23:59 for this mode</p>
+                                                                <p className="text-xs text-muted mt-1">Auto-set to 23:59 for this mode</p>
                                                             )}
                                                         </div>
                                                     </div>
 
                                                     {/* Session Venue Fields */}
                                                     <div className="border-t pt-4">
-                                                        <h5 className="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">Session Venue</h5>
+                                                        <h5 className="text-md font-medium text-on-surface-secondary mb-3">Session Venue</h5>
                                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                             <div>
                                                                 <label className="block text-sm font-medium mb-1">Floor *</label>
@@ -3471,7 +3471,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.floor || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'floor', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={3}
                                                                     placeholder="Enter floor"
                                                                 />
@@ -3482,7 +3482,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.unit || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'unit', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={5}
                                                                     placeholder="Enter unit"
                                                                 />
@@ -3493,7 +3493,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.postalCode || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'postalCode', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={6}
                                                                     placeholder="Enter postal code"
                                                                 />
@@ -3504,7 +3504,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.room || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'room', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    className="w-full px-3 py-2 border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={255}
                                                                     placeholder="Enter room"
                                                                 />
@@ -3522,7 +3522,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         type="button"
                                                         variant="primary"
                                                         onClick={addNewSessionForm}
-                                                        className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                                                        className="px-6 py-2 bg-green-700 text-white rounded hover:bg-green-800"
                                                     >
                                                         Add Session
                                                     </Button>
@@ -3570,15 +3570,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 Loading enrollments...
                             </div>
                         ) : enrolledLearners.length === 0 ? (
-                            <p className="text-gray-500 dark:text-gray-400 py-4">No learners enrolled in this course run.</p>
+                            <p className="text-muted py-4">No learners enrolled in this course run.</p>
                         ) : (
                             <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                <p className="text-sm text-muted mb-4">
                                     {enrolledLearners.length} learner{enrolledLearners.length !== 1 ? 's' : ''} enrolled
                                 </p>
                                 <div className="overflow-x-auto">
                                     <table className="text-sm whitespace-nowrap min-w-max w-full">
-                                        <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                        <thead className="bg-surface-elevated">
                                             <tr>
                                                 <th className="text-left py-3 px-3 font-semibold">#</th>
                                                 <th className="text-left py-3 px-3 font-semibold">Name</th>
@@ -3600,8 +3600,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     ? `${nric[0]}${'X'.repeat(nric.length - 5)}${nric.slice(-4)}`
                                                     : nric || '-';
                                                 return (
-                                                <tr key={`${learner.user_id}-${idx}`} className="border-b border-gray-100 dark:border-gray-800">
-                                                    <td className="py-3 px-3 text-gray-500">{idx + 1}</td>
+                                                <tr key={`${learner.user_id}-${idx}`} className="border-b border-default">
+                                                    <td className="py-3 px-3 text-muted">{idx + 1}</td>
                                                     <td className="py-3 px-3">{learner.full_name}</td>
                                                     <td className="py-3 px-3 font-mono">
                                                         <span className="inline-flex items-center gap-1.5">
@@ -3615,7 +3615,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         else next.add(learner.user_id);
                                                                         return next;
                                                                     })}
-                                                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                                                    className="text-muted hover:text-gray-600 dark:hover:text-gray-200"
                                                                     title={isVisible ? 'Hide NRIC' : 'Show NRIC'}
                                                                 >
                                                                     {isVisible ? (
@@ -3629,16 +3629,16 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     </td>
                                                     <td className="py-3 px-3">
                                                         <div>{learner.email}</div>
-                                                        {learner.secondary_email && <div className="text-xs text-gray-400 dark:text-gray-500">{learner.secondary_email}</div>}
+                                                        {learner.secondary_email && <div className="text-xs text-muted">{learner.secondary_email}</div>}
                                                     </td>
                                                     <td className="py-3 px-3">{learner.tel || '-'}</td>
                                                     <td className="py-3 px-3">
                                                         {learner.sponsorship_type === 'Employer' ? (
-                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Employer</span>
+                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-info-bg text-info">Employer</span>
                                                         ) : learner.sponsorship_type === 'Individual' ? (
-                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Self</span>
+                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-success-bg text-success">Self</span>
                                                         ) : (
-                                                            <span className="text-gray-400">-</span>
+                                                            <span className="text-muted">-</span>
                                                         )}
                                                     </td>
                                                     <td className="py-3 px-3 font-mono text-xs">{learner.enrolment_id || '-'}</td>
@@ -3664,8 +3664,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <div>
                                 <div className="flex items-center justify-between mb-3">
                                     <div>
-                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (Local)</h4>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Manually assigned by the system or admin.</p>
+                                        <h4 className="text-lg font-medium text-on-surface">Assigned Trainer (Local)</h4>
+                                        <p className="text-xs text-muted mt-0.5">Manually assigned by the system or admin.</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <select
@@ -3677,7 +3677,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                 if (td) { setSelectedDbTrainerId(td.user_id); setManualTrainerName(td.trainer_name); setManualTrainerEmail(td.email || ''); }
                                                 else { setSelectedDbTrainerId(''); setManualTrainerName(val); setManualTrainerEmail(''); }
                                             }}
-                                            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            className="px-2 py-1.5 text-sm border border-strong rounded-md bg-surface text-on-surface focus:ring-2 focus:ring-blue-500"
                                         >
                                             <option value="">-- Reassign Trainer --</option>
                                             {courseToEdit?.trainersList
@@ -3702,7 +3702,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         <Button
                                             type="button"
                                             onClick={() => setDbTrainerAssignMode(dbTrainerAssignMode === 'manual' ? '' as any : 'manual')}
-                                            className={`${dbTrainerAssignMode === 'manual' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-green-600 hover:bg-green-700'} text-white`}
+                                            className={`${dbTrainerAssignMode === 'manual' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-green-700 hover:bg-green-800'} text-white`}
                                             size="sm"
                                         >
                                             {dbTrainerAssignMode === 'manual' ? 'Cancel' : 'Add New Trainer'}
@@ -3857,7 +3857,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 </div>
                                 {(assignedTrainersList.length > 0 || localAssignedTrainerName) ? (
-                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                    <div className="bg-success-bg border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="space-y-2">
                                             {/* Display ALL locally assigned trainers — junction first, scalar fallback */}
                                             {(assignedTrainersList.length > 0 ? assignedTrainersList : [{
@@ -3870,28 +3870,28 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
                                                 );
                                                 return (
-                                                <div key={t.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
+                                                <div key={t.id} className="flex items-center justify-between bg-surface border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
                                                     <div className="flex flex-wrap gap-4 text-sm">
                                                         <div>
-                                                            <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                                            <span className="text-gray-900 dark:text-white">{t.trainer_name}</span>
+                                                            <span className="font-bold text-on-surface-secondary">Name:</span>{' '}
+                                                            <span className="text-on-surface">{t.trainer_name}</span>
                                                         </div>
                                                         {t.trainer_email && (
                                                             <div>
-                                                                <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                                <span className="text-gray-900 dark:text-white">{t.trainer_email}</span>
+                                                                <span className="font-bold text-on-surface-secondary">Email:</span>{' '}
+                                                                <span className="text-on-surface">{t.trainer_email}</span>
                                                             </div>
                                                         )}
                                                         {trainerDetail?.telephone && (
                                                             <div>
-                                                                <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
-                                                                <span className="text-gray-900 dark:text-white">{trainerDetail.telephone}</span>
+                                                                <span className="font-bold text-on-surface-secondary">Contact (HP):</span>{' '}
+                                                                <span className="text-on-surface">{trainerDetail.telephone}</span>
                                                             </div>
                                                         )}
                                                         <div>
-                                                            <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                            <span className="font-bold text-on-surface-secondary">NRIC:</span>{' '}
                                                             {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
-                                                                <span className="text-gray-900 dark:text-white font-mono">{trainerDetail.nric}</span>
+                                                                <span className="text-on-surface font-mono">{trainerDetail.nric}</span>
                                                             ) : (
                                                                 <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
                                                             )}
@@ -3901,7 +3901,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         type="button"
                                                         onClick={(e) => handleRemoveTrainerLocal(t.id, t.trainer_name, e)}
                                                         disabled={loading}
-                                                        className="ml-3 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                        className="ml-3 px-2.5 py-1 text-xs font-medium text-danger hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                                                         title={`Remove ${t.trainer_name}`}
                                                     >
                                                         ✕ Remove
@@ -3917,28 +3917,28 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         (at.trainer_name && at.trainer_name.toLowerCase() === localAssignedTrainerName.toLowerCase())
                                     );
                                     return (
-                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                    <div className="bg-success-bg border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="flex flex-wrap gap-6 text-sm">
                                             <div>
-                                                <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                                <span className="text-gray-900 dark:text-white">{localAssignedTrainerName}</span>
+                                                <span className="font-bold text-on-surface-secondary">Name:</span>{' '}
+                                                <span className="text-on-surface">{localAssignedTrainerName}</span>
                                             </div>
                                             {localAssignedTrainerEmail && (
                                                 <div>
-                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                    <span className="text-gray-900 dark:text-white">{localAssignedTrainerEmail}</span>
+                                                    <span className="font-bold text-on-surface-secondary">Email:</span>{' '}
+                                                    <span className="text-on-surface">{localAssignedTrainerEmail}</span>
                                                 </div>
                                             )}
                                             {trainerDetail?.telephone && (
                                                 <div>
-                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
-                                                    <span className="text-gray-900 dark:text-white">{trainerDetail.telephone}</span>
+                                                    <span className="font-bold text-on-surface-secondary">Contact (HP):</span>{' '}
+                                                    <span className="text-on-surface">{trainerDetail.telephone}</span>
                                                 </div>
                                             )}
                                             <div>
-                                                <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                <span className="font-bold text-on-surface-secondary">NRIC:</span>{' '}
                                                 {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
-                                                    <span className="text-gray-900 dark:text-white font-mono">{trainerDetail.nric}</span>
+                                                    <span className="text-on-surface font-mono">{trainerDetail.nric}</span>
                                                 ) : (
                                                     <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
                                                 )}
@@ -3947,7 +3947,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                     );
                                 })() : (
-                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="bg-surface-elevated border border-default rounded-md p-4 text-sm text-muted">
                                         No trainer has been locally assigned yet.
                                     </div>
                                 )}
@@ -3956,23 +3956,23 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 {/* Inline Add New Trainer form */}
                                 {dbTrainerAssignMode === 'manual' && (
                                     <div className="mt-4 border border-green-200 dark:border-green-700 rounded-lg p-4 bg-green-50/50 dark:bg-green-900/10">
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add a new trainer:</p>
+                                        <p className="text-sm font-medium text-on-surface-secondary mb-3">Add a new trainer:</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Name <span className="text-danger">*</span></label>
                                                 <input type="text" placeholder="Full name" value={manualTrainerName} onChange={e => setManualTrainerName(e.target.value)} className={inputClasses} />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Email</label>
                                                 <input type="email" placeholder="email@example.com" value={manualTrainerEmail} onChange={e => setManualTrainerEmail(e.target.value)} className={inputClasses} />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact (HP)</label>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Contact (HP)</label>
                                                 <input type="tel" placeholder="Phone number" value={manualTrainerContact || ''} onChange={e => setManualTrainerContact(e.target.value)} className={inputClasses} />
                                             </div>
                                         </div>
                                         <div className="flex justify-end mt-4">
-                                            <Button type="button" onClick={(e) => handleAssignTrainerLocal(e)} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white">
+                                            <Button type="button" onClick={(e) => handleAssignTrainerLocal(e)} disabled={loading} className="bg-green-700 hover:bg-green-800 text-white">
                                                 {loading ? 'Saving...' : 'Add & Assign Trainer'}
                                             </Button>
                                         </div>
@@ -3994,30 +3994,30 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="text-base">📋</span>
                                                 <div className="min-w-0">
-                                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-white">
+                                                    <h4 className="text-sm font-semibold text-on-surface">
                                                         Per-Session Trainer Assignment
                                                     </h4>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <p className="text-xs text-muted">
                                                         {sessionTrainerList.length} session{sessionTrainerList.length === 1 ? '' : 's'} ·
                                                         {' '}{sessionTrainerList.filter(s => s.hasOverride).length} overridden ·
                                                         {' '}{sessionTrainerList.filter(s => !s.hasOverride).length} using default
                                                     </p>
                                                 </div>
                                             </div>
-                                            <span className="text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
+                                            <span className="text-xs text-primary flex-shrink-0">
                                                 {sessionTrainerExpanded ? 'Hide ▲' : 'Show ▼'}
                                             </span>
                                         </button>
                                         {sessionTrainerExpanded && (
                                             <div className="px-4 pb-4 border-t border-blue-200 dark:border-blue-800">
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 py-3">
+                                                <p className="text-xs text-on-surface-secondary py-3">
                                                     Every session below uses the <strong>run-level trainer</strong> by default.
                                                     Use the dropdown to assign a different trainer to specific sessions —
                                                     choose a trainer from the Assigned Trainer (Local) list above. Select
                                                     "Use default" to revert a session back to the run-level trainer.
                                                 </p>
                                                 {sessionTrainerLoading ? (
-                                                    <p className="text-xs text-gray-500 italic">Loading sessions…</p>
+                                                    <p className="text-xs text-muted italic">Loading sessions…</p>
                                                 ) : (
                                                     <div className="space-y-2">
                                                         {sessionTrainerList.map((s: any) => {
@@ -4036,30 +4036,30 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     key={s.id}
                                                                     className={`flex items-center gap-3 px-3 py-2 rounded border ${
                                                                         s.hasOverride
-                                                                            ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-gray-800'
-                                                                            : 'border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/60'
+                                                                            ? 'border-blue-400 dark:border-blue-600 bg-surface'
+                                                                            : 'border-default bg-white/70 dark:bg-gray-800/60'
                                                                     }`}
                                                                 >
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                                                                            <span className="text-xs font-bold text-primary">
                                                                                 {s.sessionNumber || 'S?'}
                                                                             </span>
-                                                                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                                                                            <span className="text-xs text-on-surface-secondary">
                                                                                 {formatDate(s.startDate)}
                                                                                 {s.startTime && s.endTime && ` · ${s.startTime}–${s.endTime}`}
                                                                             </span>
                                                                             {s.hasOverride ? (
-                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-info-bg text-primary font-semibold">
                                                                                     Override
                                                                                 </span>
                                                                             ) : (
-                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-elevated text-on-surface-secondary">
                                                                                     Default
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <div className="text-xs text-gray-700 dark:text-gray-200 mt-0.5 truncate">
+                                                                        <div className="text-xs text-on-surface-secondary mt-0.5 truncate">
                                                                             {effectiveName}
                                                                         </div>
                                                                     </div>
@@ -4077,7 +4077,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 updateSessionTrainer(s.id, chosen.trainer_id, chosen.trainer_name, chosen.trainer_email);
                                                                             }
                                                                         }}
-                                                                        className="flex-shrink-0 text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        className="flex-shrink-0 text-xs px-2 py-1 rounded border border-strong bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     >
                                                                         <option value="">Use default</option>
                                                                         {assignedTrainersList.map((t: any) => (
@@ -4179,14 +4179,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 return (
                                 <div>
                                     <div className="mb-3">
-                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API. Use "Reassign TPG" or "Assign to TPG" to change.</p>
+                                        <h4 className="text-lg font-medium text-on-surface">Assigned Trainer (TPG)</h4>
+                                        <p className="text-xs text-muted mt-0.5">Auto-pulled from the SSG/TPG API. Use "Reassign TPG" or "Assign to TPG" to change.</p>
                                     </div>
                                     {/* Quick Reassign TPG Trainer */}
                                     <div className="flex items-center gap-2 mb-3">
                                         <select
                                             id="tpg-reassign-select"
-                                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                                            className="flex-1 px-2 py-1.5 text-sm border border-strong rounded-md bg-surface text-on-surface focus:ring-2 focus:ring-purple-500"
                                             defaultValue=""
                                         >
                                             <option value="">-- Reassign TPG Trainer --</option>
@@ -4272,28 +4272,28 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </Button>
                                     </div>
                                     {tpgName ? (
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4">
+                                        <div className="bg-info-bg border border-blue-200 dark:border-blue-700 rounded-md p-4">
                                             <div className="flex flex-wrap gap-6 text-sm">
                                                 <div>
-                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                                    <span className="text-gray-900 dark:text-white">{tpgName}</span>
+                                                    <span className="font-bold text-on-surface-secondary">Name:</span>{' '}
+                                                    <span className="text-on-surface">{tpgName}</span>
                                                 </div>
                                                 {tpgEmail && (
                                                     <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                        <span className="text-gray-900 dark:text-white">{tpgEmail}</span>
+                                                        <span className="font-bold text-on-surface-secondary">Email:</span>{' '}
+                                                        <span className="text-on-surface">{tpgEmail}</span>
                                                     </div>
                                                 )}
                                                 {tpgId && (
                                                     <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
-                                                        <span className="text-gray-900 dark:text-white font-mono">{tpgId}</span>
+                                                        <span className="font-bold text-on-surface-secondary">NRIC:</span>{' '}
+                                                        <span className="text-on-surface font-mono">{tpgId}</span>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        <div className="bg-surface-elevated border border-default rounded-md p-4 text-sm text-muted">
                                             No TPG trainer assigned. Data will appear after SSG/TPG sync or after clicking "Assign to TPG".
                                         </div>
                                     )}
@@ -4304,40 +4304,40 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             {/* Next Available Trainer — hidden when a local trainer is already assigned */}
                             {!assignedTrainersList.length && !localAssignedTrainerName ? (
                             <div>
-                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Next Available Trainer</h4>
+                                <h4 className="text-lg font-medium text-on-surface mb-3">Next Available Trainer</h4>
                                 {courseToEdit?.nextAvailableTrainer ? (() => {
                                     const nextDetail = availableTrainers.find((at: any) =>
                                         (at.email && courseToEdit.nextAvailableTrainerEmail && at.email.toLowerCase() === courseToEdit.nextAvailableTrainerEmail.toLowerCase()) ||
                                         (at.trainer_name && at.trainer_name.toLowerCase() === courseToEdit.nextAvailableTrainer.toLowerCase())
                                     );
                                     return (
-                                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-md p-4">
+                                    <div className="bg-warning-bg border border-orange-200 dark:border-orange-700 rounded-md p-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex flex-wrap gap-6 text-sm">
                                                 <div>
-                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                                    <span className="text-gray-900 dark:text-white">{courseToEdit.nextAvailableTrainer}</span>
+                                                    <span className="font-bold text-on-surface-secondary">Name:</span>{' '}
+                                                    <span className="text-on-surface">{courseToEdit.nextAvailableTrainer}</span>
                                                 </div>
                                                 {(courseToEdit.nextAvailableTrainerEmail || nextDetail?.email) && (
                                                     <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                        <span className="text-gray-900 dark:text-white">{courseToEdit.nextAvailableTrainerEmail || nextDetail?.email}</span>
+                                                        <span className="font-bold text-on-surface-secondary">Email:</span>{' '}
+                                                        <span className="text-on-surface">{courseToEdit.nextAvailableTrainerEmail || nextDetail?.email}</span>
                                                     </div>
                                                 )}
                                                 {nextDetail?.telephone && (
                                                     <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
-                                                        <span className="text-gray-900 dark:text-white">{nextDetail.telephone}</span>
+                                                        <span className="font-bold text-on-surface-secondary">Contact (HP):</span>{' '}
+                                                        <span className="text-on-surface">{nextDetail.telephone}</span>
                                                     </div>
                                                 )}
                                                 {courseToEdit.latestInvitationStatus && (
                                                     <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Invitation Status:</span>{' '}
+                                                        <span className="font-bold text-on-surface-secondary">Invitation Status:</span>{' '}
                                                         <span className={`font-medium ${
-                                                            courseToEdit.latestInvitationStatus === 'accepted' ? 'text-green-600 dark:text-green-400' :
-                                                            courseToEdit.latestInvitationStatus === 'declined' ? 'text-red-600 dark:text-red-400' :
-                                                            courseToEdit.latestInvitationStatus === 'pending' ? 'text-yellow-600 dark:text-yellow-400' :
-                                                            'text-gray-900 dark:text-white'
+                                                            courseToEdit.latestInvitationStatus === 'accepted' ? 'text-success' :
+                                                            courseToEdit.latestInvitationStatus === 'declined' ? 'text-danger' :
+                                                            courseToEdit.latestInvitationStatus === 'pending' ? 'text-warning' :
+                                                            'text-on-surface'
                                                         }`}>{courseToEdit.latestInvitationStatus}</span>
                                                     </div>
                                                 )}
@@ -4365,7 +4365,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     }
                                                 }}
                                                 disabled={loading}
-                                                className="bg-orange-600 hover:bg-orange-700 text-white ml-4 whitespace-nowrap"
+                                                className="bg-orange-700 hover:bg-orange-800 text-white ml-4 whitespace-nowrap"
                                             >
                                                 {loading ? 'Sending...' : 'Send Invitation'}
                                             </Button>
@@ -4373,14 +4373,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                     );
                                 })() : (
-                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="bg-surface-elevated border border-default rounded-md p-4 text-sm text-muted">
                                         No next available trainer in the approved list.
                                     </div>
                                 )}
 
                                 {/* Reset cascade — restart invitations from the FIRST approved trainer */}
                                 <div className="mt-3 flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md p-3">
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="text-xs text-muted">
                                         Stuck without a trainer? Reset clears every previous invitation for this class (pending links stop working) and immediately re-invites the <span className="font-semibold">first</span> trainer in the approved list.
                                     </p>
                                     <Button
@@ -4440,10 +4440,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     />
                                     <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
                                 </label>
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <span className="text-sm font-medium text-on-surface-secondary">
                                     Pause Invitations
                                 </span>
-                                <span className="text-xs text-gray-400">
+                                <span className="text-xs text-muted">
                                     {invitationPaused ? 'Scheduler and cascade invitations are blocked for this course run' : 'Invitations are active'}
                                 </span>
                             </div>
@@ -4471,18 +4471,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     />
                                     <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500" />
                                 </label>
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <span className="text-sm font-medium text-on-surface-secondary">
                                     Block Replies
                                 </span>
-                                <span className="text-xs text-gray-400">
+                                <span className="text-xs text-muted">
                                     {repliesBlocked ? 'All accept/decline responses are blocked — trainers see "Already Assigned"' : 'Trainers can respond to pending invitations'}
                                 </span>
                             </div>
 
                             {/* Approved Trainers List */}
                             <div>
-                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Approved Trainers for This Course</h4>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Trainers approved to teach this course (from course record). The next available trainer follows the assigned local trainer in this order.</p>
+                                <h4 className="text-lg font-medium text-on-surface mb-3">Approved Trainers for This Course</h4>
+                                <p className="text-xs text-muted mb-3">Trainers approved to teach this course (from course record). The next available trainer follows the assigned local trainer in this order.</p>
                                 {courseToEdit?.trainersList ? (() => {
                                     const approvedTrainers = (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean);
                                     const nextName = courseToEdit.nextAvailableTrainer;
@@ -4550,18 +4550,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                                     const statusBadge = (status: string) => {
                                         switch (status) {
-                                            case 'accepted': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</span>;
-                                            case 'declined': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Declined</span>;
-                                            case 'pending': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>;
-                                            case 'resent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Resent</span>;
-                                            case 'not_sent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Not Sent</span>;
-                                            case 'manual': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Manually Added</span>;
-                                            default: return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{status}</span>;
+                                            case 'accepted': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-success-bg text-success">Accepted</span>;
+                                            case 'declined': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-danger-bg text-danger">Declined</span>;
+                                            case 'pending': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-warning-bg text-warning">Pending</span>;
+                                            case 'resent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-surface-elevated text-muted">Resent</span>;
+                                            case 'not_sent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-muted dark:bg-slate-800">Not Sent</span>;
+                                            case 'manual': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-info-bg text-primary">Manually Added</span>;
+                                            default: return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-surface-elevated text-muted">{status}</span>;
                                         }
                                     };
 
                                     return (
-                                        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                        <div className="bg-surface-elevated border border-default rounded-md p-4">
                                             <div className="space-y-2">
                                                 {approvedTrainers.map((trainerName: string, idx: number) => {
                                                     const isLocal = isLocallyAssigned(trainerName);
@@ -4571,31 +4571,31 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                                                     return (
                                                         <div key={idx} className={`text-sm rounded border ${
-                                                            isLocal ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
-                                                            isNext ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700' :
-                                                            'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                                            isLocal ? 'bg-success-bg border-green-300 dark:border-green-700' :
+                                                            isNext ? 'bg-warning-bg border-orange-300 dark:border-orange-700' :
+                                                            'bg-surface border-default'
                                                         }`}>
                                                             <div className="flex items-center justify-between py-1.5 px-3">
                                                                 <div className="flex items-center">
-                                                                    <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
-                                                                    <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                                    <span className="text-muted mr-3 w-6 text-right">{idx + 1}.</span>
+                                                                    <span className="text-on-surface">{trainerName}</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
                                                                     {/* Latest status badge — "Manually Added" when local but no invitation, else default to "Not Sent" */}
                                                                     {statusBadge(isLocal && !trainerInvs?.[0] ? 'manual' : (trainerInvs?.[0]?.status || 'not_sent'))}
                                                                     {isLocal && (
-                                                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Assigned (Local)</span>
+                                                                        <span className="text-xs font-medium text-success">Assigned (Local)</span>
                                                                     )}
                                                                     {isNext && !isLocal && (
-                                                                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Next Available</span>
+                                                                        <span className="text-xs font-medium text-warning">Next Available</span>
                                                                     )}
                                                                 </div>
                                                             </div>
                                                             {/* Detailed view: full invitation history with timestamps */}
                                                             {isDetailedView && trainerInvs && trainerInvs.length > 0 && (
-                                                                <div className="px-3 pb-2 pt-0.5 ml-9 border-t border-gray-100 dark:border-gray-700/50">
+                                                                <div className="px-3 pb-2 pt-0.5 ml-9 border-t border-default">
                                                                     {trainerInvs.map((inv: any, i: number) => (
-                                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 py-0.5">
+                                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-muted py-0.5">
                                                                             {statusBadge(inv.status)}
                                                                             <span>Sent: {formatDt(inv.sent_at)}</span>
                                                                             {inv.responded_at && (
@@ -4612,7 +4612,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </div>
                                     );
                                 })() : (
-                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="bg-surface-elevated border border-default rounded-md p-4 text-sm text-muted">
                                         No approved trainers list available for this course.
                                     </div>
                                 )}
@@ -4626,19 +4626,19 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {/* Assessment Tab */}
                 {isEditMode && activeTab === 'assessment' && (
                     <FormSection title="Assessment Resources">
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        <p className="text-sm text-muted mb-4">
                             Quick access to the Assessment folder and Assessment Record folder configured on the parent course.
                         </p>
 
                         {assessmentLinksLoading && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center gap-2 text-sm text-on-surface-secondary">
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                                 Loading…
                             </div>
                         )}
 
                         {!assessmentLinksLoading && assessmentLinksError && (
-                            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-3 text-sm text-red-800 dark:text-red-300">
+                            <div className="bg-danger-bg border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-3 text-sm text-danger">
                                 {assessmentLinksError}
                             </div>
                         )}
@@ -4650,22 +4650,22 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     { label: 'Assessment Record Folder', url: assessmentLinks.assessmentRecordFolderUrl, hint: 'Folder where graded assessment records are stored.' },
                                     { label: 'Assessment Summary Record', url: assessmentLinks.assessmentSummaryRecordUrl, hint: 'Optional — link to the consolidated ASR document or folder.' },
                                 ].map(item => (
-                                    <div key={item.label} className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                                    <div key={item.label} className="rounded-md border border-default bg-surface p-4">
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="min-w-0">
-                                                <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.label}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.hint}</p>
+                                                <p className="text-sm font-semibold text-on-surface">{item.label}</p>
+                                                <p className="text-xs text-muted mt-0.5">{item.hint}</p>
                                                 {item.url ? (
                                                     <a
                                                         href={item.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                                                        className="block mt-2 text-sm text-primary hover:underline break-all"
                                                     >
                                                         {item.url}
                                                     </a>
                                                 ) : (
-                                                    <p className="mt-2 text-sm text-gray-400 italic">Not configured on the course.</p>
+                                                    <p className="mt-2 text-sm text-muted italic">Not configured on the course.</p>
                                                 )}
                                             </div>
                                             {item.url && (
@@ -4681,7 +4681,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </div>
                                     </div>
                                 ))}
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                <p className="text-xs text-muted mt-2">
                                     These links are configured on the course (not the run). Update them in <strong>Course Management → Edit Course</strong>.
                                 </p>
                             </div>
@@ -4693,14 +4693,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {isEditMode && activeTab === 'rescheduling' && (
                     <FormSection title="Reschedule Class — move to another run">
                         {/* Manual-TPG reminder — the move is LOCAL ONLY (no SSG/TPG enrolment integration yet) */}
-                        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+                        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-warning-bg p-3 text-sm text-warning">
                             <span aria-hidden className="mt-0.5">⚠️</span>
                             <span>
                                 <strong>This moves learners + trainer in the LMS only</strong> (local enrolment{reschedSyncCalendar ? ' + Google Calendar' : ''}). It does <strong>not</strong> update SSG/TPGateway. You must still <strong>move each learner's enrolment and the trainer assignment on TPGateway manually</strong> for the new run.
                             </span>
                         </div>
                         {reschedLoading && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center gap-2 text-sm text-on-surface-secondary">
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                                 Loading…
                             </div>
@@ -4709,17 +4709,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                           <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                                     <input readOnly disabled value={courseToEdit?.courseTitle || ''} className={`${inputClasses} ${disabledInputClasses}`} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Code</label>
                                     <input readOnly disabled value={courseToEdit?.courseCode || ''} className={`${inputClasses} ${disabledInputClasses}`} />
                                 </div>
                             </div>
 
                             <div className="mt-4">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Move to Course Run *</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Move to Course Run *</label>
                                 <select value={reschedTargetRunId} onChange={(e) => setReschedTargetRunId(e.target.value)} className={inputClasses}>
                                     <option value="">Select a target run…</option>
                                     {siblingRuns.map(r => (
@@ -4729,23 +4729,23 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     ))}
                                 </select>
                                 {siblingRuns.length === 0 && (
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    <p className="text-sm text-muted mt-1">
                                         No {reschedIncludeHistorical ? '' : 'upcoming '}runs exist for this course{reschedIncludeHistorical ? '' : ' — tick "Include past runs" to see historical ones'}.
                                     </p>
                                 )}
-                                <label className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+                                <label className="mt-2 flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
                                     <input
                                         type="checkbox"
                                         checked={reschedIncludeHistorical}
                                         onChange={(e) => { setReschedIncludeHistorical(e.target.checked); void loadRescheduleData(e.target.checked); }}
-                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500"
                                     />
                                     <span>Include past (historical) runs</span>
                                 </label>
                             </div>
 
                             <div className="mt-4">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer (set on target run)</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer (set on target run)</label>
                                 <select value={reschedTrainerName} onChange={(e) => setReschedTrainerName(e.target.value)} className={inputClasses}>
                                     <option value="">— No trainer —</option>
                                     {availableTrainers.map((t: any, i: number) => (
@@ -4755,12 +4755,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             </div>
 
                             <div className="mt-4">
-                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer select-none">
                                     <input
                                         type="checkbox"
                                         checked={reschedSyncCalendar}
                                         onChange={(e) => setReschedSyncCalendar(e.target.checked)}
-                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500"
                                     />
                                     <span>Also migrate Google Calendar — move learners + trainer onto the target run's events, drop them from this run's</span>
                                 </label>
@@ -4768,43 +4768,43 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                             {/* Live linked-calendar-events preview (only when calendar sync is on) */}
                             {reschedSyncCalendar && (
-                                <div className="mt-4 rounded-md border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/40">
+                                <div className="mt-4 rounded-md border border-default p-3 bg-surface-elevated">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <h5 className="text-sm font-semibold text-gray-900 dark:text-white">Linked Google Calendar events (live)</h5>
+                                        <h5 className="text-sm font-semibold text-on-surface">Linked Google Calendar events (live)</h5>
                                         {reschedSessionsLoading && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-500" />}
                                     </div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                                        Each session is matched live against Google Calendar (no stale cache). <strong className="text-gray-700 dark:text-gray-300">Ticking this box approves removing the old events.</strong> On save: the target run's events are created/adopted (never duplicated) with the moved learners + trainer; and if this run is left empty, its now-stale old events are deleted.
+                                    <p className="text-xs text-muted mb-3">
+                                        Each session is matched live against Google Calendar (no stale cache). <strong className="text-on-surface-secondary">Ticking this box approves removing the old events.</strong> On save: the target run's events are created/adopted (never duplicated) with the moved learners + trainer; and if this run is left empty, its now-stale old events are deleted.
                                     </p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {[
-                                            { label: 'This run — old events removed', sub: 'deleted if emptied, else moved-out attendees dropped', tone: 'text-red-600 dark:text-red-400', data: reschedSrcSessions },
-                                            { label: 'Target run — new events created', sub: 'created/adopted with moved learners + trainer', tone: 'text-green-600 dark:text-green-400', data: reschedTgtSessions, placeholder: !reschedTargetRunId },
+                                            { label: 'This run — old events removed', sub: 'deleted if emptied, else moved-out attendees dropped', tone: 'text-danger', data: reschedSrcSessions },
+                                            { label: 'Target run — new events created', sub: 'created/adopted with moved learners + trainer', tone: 'text-success', data: reschedTgtSessions, placeholder: !reschedTargetRunId },
                                         ].map((col, ci) => (
-                                            <div key={ci} className="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-                                                <div className="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
+                                            <div key={ci} className="rounded border border-default bg-surface">
+                                                <div className="px-3 py-1.5 border-b border-default">
                                                     <div className={`text-xs font-semibold ${col.tone}`}>{col.label}</div>
-                                                    <div className="text-[11px] text-gray-400">{col.sub}</div>
+                                                    <div className="text-[11px] text-muted">{col.sub}</div>
                                                 </div>
                                                 {col.placeholder ? (
-                                                    <div className="px-3 py-3 text-xs text-gray-400">Select a target run to preview its events.</div>
+                                                    <div className="px-3 py-3 text-xs text-muted">Select a target run to preview its events.</div>
                                                 ) : !col.data ? (
-                                                    <div className="px-3 py-3 text-xs text-gray-400">{reschedSessionsLoading ? 'Loading…' : 'No session data.'}</div>
+                                                    <div className="px-3 py-3 text-xs text-muted">{reschedSessionsLoading ? 'Loading…' : 'No session data.'}</div>
                                                 ) : col.data.sessions.length === 0 ? (
-                                                    <div className="px-3 py-3 text-xs text-gray-400">No sessions found.</div>
+                                                    <div className="px-3 py-3 text-xs text-muted">No sessions found.</div>
                                                 ) : (
-                                                    <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                                                    <ul className="divide-y divide-default">
                                                         {col.data!.sessions.map((s, si) => (
                                                             <li key={si} className="px-3 py-1.5 flex items-center justify-between text-xs">
-                                                                <span className="text-gray-700 dark:text-gray-300">
+                                                                <span className="text-on-surface-secondary">
                                                                     {s.startDate || '—'}{s.startTime ? ` · ${s.startTime}${s.endTime ? `–${s.endTime}` : ''}` : ''}
                                                                 </span>
                                                                 {!col.data!.calendarChecked ? (
-                                                                    <span className="text-gray-400" title="Google Calendar wasn't reachable in this environment.">not checked</span>
+                                                                    <span className="text-muted" title="Google Calendar wasn't reachable in this environment.">not checked</span>
                                                                 ) : s.calendarMatched && s.calendarLink ? (
-                                                                    <a href={s.calendarLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">event ↗</a>
+                                                                    <a href={s.calendarLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">event ↗</a>
                                                                 ) : (
-                                                                    <span className="text-amber-600 dark:text-amber-400" title="No matching calendar event — one will be created/adopted on save if needed.">no event</span>
+                                                                    <span className="text-warning" title="No matching calendar event — one will be created/adopted on save if needed.">no event</span>
                                                                 )}
                                                             </li>
                                                         ))}
@@ -4817,30 +4817,30 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             )}
 
                             <div className="mt-6">
-                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Learners ({reschedLearners.length})</h4>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Click ✕ to exclude a learner (last-minute pull-out). Excluded learners are not moved and are excluded on save.</p>
-                                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-md">
-                                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                <h4 className="text-sm font-semibold text-on-surface mb-1">Learners ({reschedLearners.length})</h4>
+                                <p className="text-xs text-muted mb-2">Click ✕ to exclude a learner (last-minute pull-out). Excluded learners are not moved and are excluded on save.</p>
+                                <div className="overflow-x-auto border border-default rounded-md">
+                                  <table className="min-w-full divide-y divide-default text-sm">
+                                    <thead className="bg-surface-elevated">
                                         <tr>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Learner</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Company</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Sponsorship</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Payment</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Assessment</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Grant ID</th>
-                                            <th className="px-3 py-2 text-center font-medium text-gray-500 dark:text-gray-400">Action</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted">Learner</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted">Company</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted">Sponsorship</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted">Payment</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted">Assessment</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted">Grant ID</th>
+                                            <th className="px-3 py-2 text-center font-medium text-muted">Action</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    <tbody className="divide-y divide-default">
                                         {reschedLearners.map((l, i) => {
                                             const flagged = reschedFlagged.has(String(l.learnerEmail).toLowerCase());
                                             return (
-                                                <tr key={i} className={flagged ? 'bg-red-50 dark:bg-red-900/20 opacity-60' : ''}>
+                                                <tr key={i} className={flagged ? 'bg-danger-bg opacity-60' : ''}>
                                                     <td className="px-3 py-2">
-                                                        <div className="font-medium text-gray-900 dark:text-white">{l.learnerName}{flagged && <span className="ml-2 text-red-600 dark:text-red-400 font-semibold">(Excluded)</span>}</div>
-                                                        <div className="text-gray-500 dark:text-gray-400">{l.learnerEmail}</div>
-                                                        {l.learnerTel && <div className="text-gray-500 dark:text-gray-400">{l.learnerTel}</div>}
+                                                        <div className="font-medium text-on-surface">{l.learnerName}{flagged && <span className="ml-2 text-danger font-semibold">(Excluded)</span>}</div>
+                                                        <div className="text-muted">{l.learnerEmail}</div>
+                                                        {l.learnerTel && <div className="text-muted">{l.learnerTel}</div>}
                                                     </td>
                                                     <td className="px-3 py-2">{l.company || 'N/A'}</td>
                                                     <td className="px-3 py-2">{l.sponsorship || 'N/A'}</td>
@@ -4848,7 +4848,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     <td className="px-3 py-2">{l.assessment || 'Pending'}</td>
                                                     <td className="px-3 py-2 font-mono">{l.grantId || 'N/A'}</td>
                                                     <td className="px-3 py-2 text-center">
-                                                        <button type="button" onClick={() => toggleReschedRemoval(l.learnerEmail)} title={flagged ? 'Undo removal' : 'Flag for removal'} className={flagged ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-700 font-bold'}>
+                                                        <button type="button" onClick={() => toggleReschedRemoval(l.learnerEmail)} title={flagged ? 'Undo removal' : 'Flag for removal'} className={flagged ? 'text-muted hover:text-on-surface' : 'text-danger hover:text-red-700 font-bold'}>
                                                             {flagged ? '↺' : '✕'}
                                                         </button>
                                                     </td>
@@ -4856,14 +4856,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             );
                                         })}
                                         {reschedLearners.length === 0 && (
-                                            <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">No learners enrolled.</td></tr>
+                                            <tr><td colSpan={7} className="px-3 py-4 text-center text-muted">No learners enrolled.</td></tr>
                                         )}
                                     </tbody>
                                   </table>
                                 </div>
                             </div>
 
-                            {reschedError && <div className="mt-3 text-sm text-red-600 dark:text-red-400">{reschedError}</div>}
+                            {reschedError && <div className="mt-3 text-sm text-danger">{reschedError}</div>}
                           </>
                         )}
                     </FormSection>
@@ -4877,35 +4877,35 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             {/* Popup Modal */}
             {showPopup && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto border dark:border-gray-700">
+                    <div className="bg-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto border dark:border-gray-700">
                         <div className="p-6">
                             <div className="flex items-center mb-4">
                                 <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3">
                                     {popupConfig.type === 'success' && (
-                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <svg className="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
                                     )}
                                     {popupConfig.type === 'error' && (
-                                        <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <svg className="w-5 h-5 text-danger" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                                         </svg>
                                     )}
                                     {popupConfig.type === 'warning' && (
-                                        <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <svg className="w-5 h-5 text-warning" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                         </svg>
                                     )}
                                     {(popupConfig.type === 'info' || popupConfig.type === 'confirm') && (
-                                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                         </svg>
                                     )}
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{popupConfig.title}</h3>
+                                <h3 className="text-lg font-semibold text-on-surface">{popupConfig.title}</h3>
                             </div>
 
-                            <p className="text-gray-600 dark:text-gray-300 mb-6 whitespace-pre-line">{popupConfig.message}</p>
+                            <p className="text-on-surface-secondary mb-6 whitespace-pre-line">{popupConfig.message}</p>
 
                             <div className="flex justify-end space-x-3">
                                 {popupConfig.type === 'confirm' ? (
@@ -4929,7 +4929,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                 }
                                                 setShowPopup(false);
                                             }}
-                                            className="bg-orange-600 hover:bg-orange-700 text-white"
+                                            className="bg-orange-700 hover:bg-orange-800 text-white"
                                         >
                                             {popupConfig.confirmText || 'Confirm'}
                                         </Button>
@@ -4938,9 +4938,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     <Button
                                         variant="primary"
                                         onClick={closePopup}
-                                        className={`${popupConfig.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                                        className={`${popupConfig.type === 'success' ? 'bg-green-700 hover:bg-green-800' :
                                                 popupConfig.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
-                                                    popupConfig.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                                    popupConfig.type === 'warning' ? 'bg-yellow-700 hover:bg-yellow-800' :
                                                         'bg-blue-600 hover:bg-blue-700'
                                             } text-white`}
                                     >
@@ -4970,9 +4970,9 @@ export const EnrollLearnersView: React.FC = () => {
 
             <Card className="p-6">
                 <div className="text-center py-8">
-                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Enroll Learners Feature</h3>
-                    <p className="text-gray-500 dark:text-gray-400">This feature will allow bulk enrollment of learners to classes.</p>
-                    <p className="text-sm text-gray-400 mt-2">Coming soon...</p>
+                    <h3 className="text-xl font-semibold text-on-surface-secondary mb-2">Enroll Learners Feature</h3>
+                    <p className="text-muted">This feature will allow bulk enrollment of learners to classes.</p>
+                    <p className="text-sm text-muted mt-2">Coming soon...</p>
                 </div>
             </Card>
         </div>
@@ -5039,6 +5039,41 @@ export const AssignTrainerView: React.FC = () => {
             /* silent */
         } finally {
             setLoadingTrainers(false);
+        }
+    };
+
+    // Star a trainer: make them the course's default trainer (course.default_trainer_id).
+    // Every new class of the course, and the upcoming classes that have no trainer yet, are
+    // assigned to them and confirmed; no invitation is sent. Starring the current default clears it.
+    const handleToggleDefaultTrainer = async (run: any, trainerId: string, trainerName: string) => {
+        if (!run?.courseId) return;
+        const clearing = run.defaultTrainerId === trainerId;
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/course/default-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId: run.courseId, trainerId: clearing ? null : trainerId, applyToUpcoming: !clearing }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                setMessage({ type: 'error', text: json.error || 'Could not update the default trainer' });
+                return;
+            }
+            const applied: any[] = json.applied || [];
+            setCourseRuns(prev => prev.map(r => r.courseId === run.courseId ? { ...r, defaultTrainerId: clearing ? null : trainerId } : r));
+            setMessage({
+                type: 'success',
+                text: clearing
+                    ? `${trainerName} is no longer the default trainer for ${run.courseTitle}.`
+                    : `${trainerName} is now the default trainer for ${run.courseTitle}${applied.length ? ` and was assigned to ${applied.length} upcoming class${applied.length === 1 ? '' : 'es'}` : ''}.`,
+            });
+            if (applied.length) fetchCourseRuns(search);
+        } catch {
+            setMessage({ type: 'error', text: 'Request failed. Please try again.' });
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -5231,7 +5266,7 @@ export const AssignTrainerView: React.FC = () => {
     }).length;
     const missingTrainers = totalClasses - trainersAssigned;
 
-    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+    const inputClasses = 'w-full border border-strong rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
         <div>
@@ -5245,22 +5280,22 @@ export const AssignTrainerView: React.FC = () => {
             {/* KPI Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-blue-600">{totalClasses}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1 capitalize">{classFilter} Classes</p>
+                    <p className="text-4xl font-bold text-primary">{totalClasses}</p>
+                    <p className="text-on-surface-secondary mt-1 capitalize">{classFilter} Classes</p>
                 </Card>
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-green-600">{trainersAssigned}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Trainers Assigned</p>
+                    <p className="text-4xl font-bold text-success">{trainersAssigned}</p>
+                    <p className="text-on-surface-secondary mt-1">Trainers Assigned</p>
                 </Card>
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-red-600">{missingTrainers}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Missing Trainers</p>
+                    <p className="text-4xl font-bold text-danger">{missingTrainers}</p>
+                    <p className="text-on-surface-secondary mt-1">Missing Trainers</p>
                 </Card>
             </div>
 
             {/* Feedback banner */}
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-success-bg border border-green-200 dark:border-green-700 text-success' : 'bg-danger-bg border border-red-200 dark:border-red-700 text-danger'}`}>
                     {message.text}
                 </div>
             )}
@@ -5268,7 +5303,7 @@ export const AssignTrainerView: React.FC = () => {
             {/* Search & Filters */}
             <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
                 {/* Filter tabs */}
-                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-1 mb-4">
+                <div className="inline-flex rounded-lg bg-surface-elevated p-1 mb-4">
                     {(['upcoming', 'ongoing', 'completed'] as const).map(f => (
                         <button
                             key={f}
@@ -5279,8 +5314,8 @@ export const AssignTrainerView: React.FC = () => {
                             }}
                             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
                                 classFilter === f
-                                    ? 'bg-white dark:bg-gray-900 text-blue-600 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                    ? 'bg-surface text-primary shadow-sm'
+                                    : 'text-muted hover:text-gray-700 dark:hover:text-gray-300'
                             }`}
                         >
                             {f}
@@ -5303,7 +5338,7 @@ export const AssignTrainerView: React.FC = () => {
                     </Button>
                 </form>
                 <div className="flex flex-wrap items-center gap-4">
-                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm text-on-surface-secondary cursor-pointer">
                         <input
                             type="checkbox"
                             checked={filterNoTrainer}
@@ -5311,19 +5346,19 @@ export const AssignTrainerView: React.FC = () => {
                                 setFilterNoTrainer(e.target.checked);
                                 if (e.target.checked) setFilterTrainerName('');
                             }}
-                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-strong text-primary focus:ring-blue-500"
                         />
                         Show only classes with no trainer
                     </label>
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">Filter by trainer:</label>
+                        <label className="text-sm text-on-surface-secondary whitespace-nowrap">Filter by trainer:</label>
                         <select
                             value={filterTrainerName}
                             onChange={e => {
                                 setFilterTrainerName(e.target.value);
                                 if (e.target.value) setFilterNoTrainer(false);
                             }}
-                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            className="border border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                         >
                             <option value="">All trainers</option>
                             {uniqueTrainerNames.map(name => (
@@ -5332,11 +5367,11 @@ export const AssignTrainerView: React.FC = () => {
                         </select>
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">Filter by course:</label>
+                        <label className="text-sm text-on-surface-secondary whitespace-nowrap">Filter by course:</label>
                         <select
                             value={filterCourse}
                             onChange={e => setFilterCourse(e.target.value)}
-                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-xs"
+                            className="border border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-xs"
                         >
                             <option value="">All courses</option>
                             {uniqueCourseNames.map(name => (
@@ -5344,7 +5379,7 @@ export const AssignTrainerView: React.FC = () => {
                             ))}
                         </select>
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-muted">
                         Showing {filteredRuns.length} of {courseRuns.length} <span className="capitalize">{classFilter}</span> classes
                     </span>
                 </div>
@@ -5355,27 +5390,27 @@ export const AssignTrainerView: React.FC = () => {
                 {loadingRuns ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-500 dark:text-gray-400 text-lg capitalize">Loading {classFilter} classes...</p>
+                        <p className="text-muted text-lg capitalize">Loading {classFilter} classes...</p>
                     </div>
                 ) : filteredRuns.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <div className="p-8 text-center text-sm text-muted">
                         {courseRuns.length === 0 ? `No ${classFilter} classes found.` : 'No classes match the current filters.'}
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <table className="min-w-full divide-y divide-default">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Class Status</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Start Date</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Run ID</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Title</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Class Status</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Trainer</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {paginatedRuns.map(run => {
                                     const local = localAssignments[run.id];
                                     const currentName = local?.name ?? run.primaryAssignedTrainerName;
@@ -5384,40 +5419,40 @@ export const AssignTrainerView: React.FC = () => {
 
                                     return (
                                         <React.Fragment key={run.id}>
-                                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                            <tr className="hover:bg-surface-hover">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-on-surface-secondary">
                                                     {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-primary">
                                                     {run.courseRunId || '—'}
                                                 </td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-xs truncate">
+                                                <td className="px-4 py-3 text-sm text-on-surface max-w-xs truncate">
                                                     {run.courseTitle}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-on-surface-secondary">
                                                     {run.courseCode || '—'}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                     {run.classStatus ? (
                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                            run.classStatus === 'Confirmed'  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                                                            run.classStatus === 'Cancelled'  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                                                            run.classStatus === 'Pending'    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                            run.classStatus === 'Confirmed'  ? 'bg-success-bg text-success' :
+                                                            run.classStatus === 'Cancelled'  ? 'bg-danger-bg text-danger' :
+                                                            run.classStatus === 'Pending'    ? 'bg-warning-bg text-warning' :
+                                                            'bg-surface-elevated text-on-surface-secondary'
                                                         }`}>
                                                             {run.classStatus}
                                                         </span>
                                                     ) : (
-                                                        <span className="text-gray-400">—</span>
+                                                        <span className="text-muted">—</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                     {currentName ? (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-bg text-success">
                                                             {currentName}
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-elevated text-muted">
                                                             No trainer
                                                         </span>
                                                     )}
@@ -5434,10 +5469,10 @@ export const AssignTrainerView: React.FC = () => {
                                                         }}
                                                         className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                                             isExpanded
-                                                                ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200'
+                                                                ? 'bg-gray-200 text-on-surface-secondary dark:bg-gray-600'
                                                                 : currentName
-                                                                    ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/50'
-                                                                    : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900/50'
+                                                                    ? 'bg-info-bg text-primary hover:bg-blue-100 border border-blue-200 dark:border-blue-700 dark:hover:bg-blue-900/50'
+                                                                    : 'bg-success-bg text-success hover:bg-green-100 border border-green-200 dark:border-green-700 dark:hover:bg-green-900/50'
                                                         }`}
                                                     >
                                                         {isExpanded ? 'Close' : currentName ? 'Edit Trainer' : 'Assign Trainer'}
@@ -5448,12 +5483,12 @@ export const AssignTrainerView: React.FC = () => {
                                             {/* Expanded assignment form row */}
                                             {isExpanded && (
                                                 <tr>
-                                                    <td colSpan={7} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                    <td colSpan={7} className="px-4 py-4 bg-surface-elevated border-t border-default">
                                                         <div className="max-w-2xl space-y-4">
                                                             {/* Detailed Trainers List (Multi-Trainer) */}
-                                                            <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                                            <div className="bg-surface p-4 border border-default rounded-lg">
                                                                 <div className="flex justify-between items-center mb-3">
-                                                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                                                    <h4 className="text-sm font-semibold text-on-surface">
                                                                         Currently Assigned ({expandedRunTrainers.length})
                                                                     </h4>
                                                                     {expandedRunTrainers.length > 0 && (
@@ -5461,40 +5496,56 @@ export const AssignTrainerView: React.FC = () => {
                                                                             type="button"
                                                                             onClick={() => handleRemoveAllTrainers(run.id)}
                                                                             disabled={saving}
-                                                                            className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
+                                                                            className="text-xs text-danger hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
                                                                         >
                                                                             Remove All
                                                                         </button>
                                                                     )}
                                                                 </div>
                                                                 {loadingExpandedTrainers ? (
-                                                                    <div className="text-sm text-gray-500 animate-pulse">Loading trainers...</div>
+                                                                    <div className="text-sm text-muted animate-pulse">Loading trainers...</div>
                                                                 ) : expandedRunTrainers.length > 0 ? (
                                                                     <div className="space-y-2">
                                                                         {expandedRunTrainers.map(t => (
-                                                                            <div key={t.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-100 dark:border-gray-600">
+                                                                            <div key={t.id} className="flex justify-between items-center bg-surface-elevated p-2 rounded border border-default">
                                                                                 <div className="text-sm">
-                                                                                    <span className="font-medium text-gray-900 dark:text-white">{t.trainer_name}</span>
-                                                                                    {t.trainer_email && <span className="text-gray-500 dark:text-gray-400 ml-2">({t.trainer_email})</span>}
+                                                                                    <span className="font-medium text-on-surface">{t.trainer_name}</span>
+                                                                                    {t.trainer_email && <span className="text-muted ml-2">({t.trainer_email})</span>}
                                                                                 </div>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => handleRemoveSpecificTrainer(run.id, t.id, t.trainer_name)}
-                                                                                    disabled={saving}
-                                                                                    className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
-                                                                                >
-                                                                                    ✕ Remove
-                                                                                </button>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    {t.trainer_id && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleToggleDefaultTrainer(run, t.trainer_id, t.trainer_name)}
+                                                                                            disabled={saving}
+                                                                                            title={run.defaultTrainerId === t.trainer_id
+                                                                                                ? `${t.trainer_name} is the default trainer for ${run.courseTitle}. Click to remove the default.`
+                                                                                                : `Make ${t.trainer_name} the default trainer for ${run.courseTitle}: every new class, and the upcoming classes without a trainer, are assigned to them and confirmed without an invitation.`}
+                                                                                            aria-pressed={run.defaultTrainerId === t.trainer_id}
+                                                                                            className={`text-sm px-2 py-1 rounded transition-colors ${run.defaultTrainerId === t.trainer_id ? 'text-warning' : 'text-muted hover:text-warning'}`}
+                                                                                        >
+                                                                                            {run.defaultTrainerId === t.trainer_id ? '★ Default' : '☆'}
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleRemoveSpecificTrainer(run.id, t.id, t.trainer_name)}
+                                                                                        disabled={saving}
+                                                                                        className="text-xs text-danger hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
+                                                                                    >
+                                                                                        ✕ Remove
+                                                                                    </button>
+                                                                                </div>
                                                                             </div>
                                                                         ))}
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="text-sm text-gray-500 italic">No trainers assigned. Add one below.</div>
+                                                                    <div className="text-sm text-muted italic">No trainers assigned. Add one below.</div>
                                                                 )}
                                                             </div>
 
-                                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                                                                <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Add New Trainer</h4>
+                                                            <div className="border-t border-default pt-4 mt-4">
+                                                                <h4 className="text-sm font-semibold text-on-surface mb-3">Add New Trainer</h4>
                                                                 
                                                                 {/* Mode toggle */}
                                                                 <div className="flex gap-2 mb-4">
@@ -5503,7 +5554,7 @@ export const AssignTrainerView: React.FC = () => {
                                                                             key={mode}
                                                                             type="button"
                                                                             onClick={() => setAssignMode(mode)}
-                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-strong text-on-surface-secondary hover:bg-surface-hover'}`}
                                                                         >
                                                                             {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
                                                                         </button>
@@ -5512,11 +5563,11 @@ export const AssignTrainerView: React.FC = () => {
 
                                                                 {assignMode === 'dropdown' ? (
                                                                     <div>
-                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                            Trainer <span className="text-red-500">*</span>
+                                                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                                                            Trainer <span className="text-danger">*</span>
                                                                         </label>
                                                                         {loadingTrainers ? (
-                                                                            <p className="text-sm text-gray-500 italic">Loading trainers...</p>
+                                                                            <p className="text-sm text-muted italic">Loading trainers...</p>
                                                                         ) : (
                                                                             <SearchableSelect
                                                                                 options={availableTrainers.map(t => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
@@ -5530,8 +5581,8 @@ export const AssignTrainerView: React.FC = () => {
                                                                 ) : (
                                                                     <div className="space-y-2">
                                                                         <div>
-                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                                Trainer Name <span className="text-red-500">*</span>
+                                                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                                                                Trainer Name <span className="text-danger">*</span>
                                                                             </label>
                                                                             <input
                                                                                 type="text"
@@ -5542,7 +5593,7 @@ export const AssignTrainerView: React.FC = () => {
                                                                             />
                                                                         </div>
                                                                         <div>
-                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                                                 Trainer Email
                                                                             </label>
                                                                             <input
@@ -5561,7 +5612,7 @@ export const AssignTrainerView: React.FC = () => {
                                                                         type="button"
                                                                         onClick={(e) => handleAssign(e, run)}
                                                                         disabled={saving}
-                                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                                        className="bg-green-700 hover:bg-green-800 text-white"
                                                                     >
                                                                         {saving ? 'Adding...' : 'Add Trainer'}
                                                                     </Button>
@@ -5580,15 +5631,15 @@ export const AssignTrainerView: React.FC = () => {
                 )}
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-default">
+                        <span className="text-sm text-muted">
                             Page {currentPage} of {totalPages} ({filteredRuns.length} classes)
                         </span>
                         <div className="flex items-center gap-1">
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:cursor-not-allowed"
+                                className="px-3 py-1.5 text-sm rounded-md border border-strong disabled:opacity-40 hover:bg-surface-hover disabled:cursor-not-allowed"
                             >
                                 Prev
                             </button>
@@ -5599,7 +5650,7 @@ export const AssignTrainerView: React.FC = () => {
                                     className={`px-3 py-1.5 text-sm rounded-md border ${
                                         p === currentPage
                                             ? 'bg-blue-600 text-white border-blue-600'
-                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            : 'border-strong hover:bg-surface-hover'
                                     }`}
                                 >
                                     {p}
@@ -5608,7 +5659,7 @@ export const AssignTrainerView: React.FC = () => {
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:cursor-not-allowed"
+                                className="px-3 py-1.5 text-sm rounded-md border border-strong disabled:opacity-40 hover:bg-surface-hover disabled:cursor-not-allowed"
                             >
                                 Next
                             </button>
@@ -5869,7 +5920,7 @@ export const AssignStudentView: React.FC = () => {
     const paginatedRuns = courseRuns.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
     const totalPages = Math.ceil(courseRuns.length / PAGE_SIZE);
 
-    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+    const inputClasses = 'w-full border border-strong rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
         <div>
@@ -5881,7 +5932,7 @@ export const AssignStudentView: React.FC = () => {
             </div>
 
             {/* Manual-TPG reminder — assignment is LOCAL ONLY (no SSG/TPG enrolment integration yet) */}
-            <div className="mb-6 flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+            <div className="mb-6 flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-warning-bg p-3 text-sm text-warning">
                 <span aria-hidden className="mt-0.5">⚠️</span>
                 <span>
                     <strong>Adding a learner here does not create an SSG/TPG enrolment.</strong> It only records the learner in the LMS (local enrolment, attendance, proforma, calendar). You must still <strong>enrol the trainee on TPGateway manually</strong>.
@@ -5891,22 +5942,22 @@ export const AssignStudentView: React.FC = () => {
             {/* KPI Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-blue-600">{totalUpcoming}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                    <p className="text-4xl font-bold text-primary">{totalUpcoming}</p>
+                    <p className="text-on-surface-secondary mt-1">Upcoming Classes</p>
                 </Card>
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-green-600">{totalTrainees}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">No. of Trainees</p>
+                    <p className="text-4xl font-bold text-success">{totalTrainees}</p>
+                    <p className="text-on-surface-secondary mt-1">No. of Trainees</p>
                 </Card>
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-red-600">{classesWithNoTrainee}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Classes with No Trainee</p>
+                    <p className="text-4xl font-bold text-danger">{classesWithNoTrainee}</p>
+                    <p className="text-on-surface-secondary mt-1">Classes with No Trainee</p>
                 </Card>
             </div>
 
             {/* Feedback banner */}
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-success-bg border border-green-200 dark:border-green-700 text-success' : 'bg-danger-bg border border-red-200 dark:border-red-700 text-danger'}`}>
                     {message.text}
                 </div>
             )}
@@ -5914,7 +5965,7 @@ export const AssignStudentView: React.FC = () => {
             {/* Filter + Search */}
             <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
                 {/* Class status toggle */}
-                <div className="flex gap-1 mb-3 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit">
+                <div className="flex gap-1 mb-3 p-1 bg-surface-elevated rounded-lg w-fit">
                     {(['upcoming', 'ongoing', 'completed'] as const).map(f => (
                         <button
                             key={f}
@@ -5926,8 +5977,8 @@ export const AssignStudentView: React.FC = () => {
                             }}
                             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
                                 classFilter === f
-                                    ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                    ? 'bg-surface text-primary shadow-sm'
+                                    : 'text-muted hover:text-on-surface'
                             }`}
                         >
                             {f}
@@ -5956,50 +6007,50 @@ export const AssignStudentView: React.FC = () => {
                 {loadingRuns ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading {classFilter} classes...</p>
+                        <p className="text-muted text-lg">Loading {classFilter} classes...</p>
                     </div>
                 ) : courseRuns.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">No {classFilter} classes found.</div>
+                    <div className="p-8 text-center text-sm text-muted">No {classFilter} classes found.</div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <table className="min-w-full divide-y divide-default">
+                            <thead className="bg-surface-elevated">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainees</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Start Date</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Run ID</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Title</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Trainees</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                            <tbody className="bg-surface divide-y divide-default">
                                 {paginatedRuns.map(run => {
                                     const isExpanded = selectedRunId === run.id;
                                     const enrollCount = getEnrollmentCount(run);
 
                                     return (
                                         <React.Fragment key={run.id}>
-                                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                            <tr className="hover:bg-surface-hover">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-on-surface-secondary">
                                                     {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-primary">
                                                     {run.courseRunId || '—'}
                                                 </td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-xs truncate">
+                                                <td className="px-4 py-3 text-sm text-on-surface max-w-xs truncate">
                                                     {run.courseTitle}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-on-surface-secondary">
                                                     {run.courseCode || '—'}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                     {enrollCount > 0 ? (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-bg text-success">
                                                             {enrollCount} enrolled
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-elevated text-muted">
                                                             No trainees
                                                         </span>
                                                     )}
@@ -6009,8 +6060,8 @@ export const AssignStudentView: React.FC = () => {
                                                         onClick={() => handleExpandRun(run)}
                                                         className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                                             isExpanded
-                                                                ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200'
-                                                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/50'
+                                                                ? 'bg-gray-200 text-on-surface-secondary dark:bg-gray-600'
+                                                                : 'bg-info-bg text-primary hover:bg-blue-100 border border-blue-200 dark:border-blue-700 dark:hover:bg-blue-900/50'
                                                         }`}
                                                     >
                                                         {isExpanded ? 'Close' : 'Add / Edit Learners'}
@@ -6021,17 +6072,17 @@ export const AssignStudentView: React.FC = () => {
                                             {/* Expanded panel */}
                                             {isExpanded && (
                                                 <tr>
-                                                    <td colSpan={6} className="px-4 py-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                    <td colSpan={6} className="px-4 py-0 bg-surface-elevated border-t border-default">
                                                         {/* Tabs */}
-                                                        <div className="flex border-b border-gray-200 dark:border-gray-700">
+                                                        <div className="flex border-b border-default">
                                                             <button
-                                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'assign' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'assign' ? 'border-blue-500 text-primary' : 'border-transparent text-muted hover:text-on-surface'}`}
                                                                 onClick={() => handleTabChange('assign', run.id)}
                                                             >
                                                                 Add Learner
                                                             </button>
                                                             <button
-                                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'unassign' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'unassign' ? 'border-red-500 text-danger' : 'border-transparent text-muted hover:text-on-surface'}`}
                                                                 onClick={() => handleTabChange('unassign', run.id)}
                                                             >
                                                                 View / Remove Learners ({enrollCount})
@@ -6048,7 +6099,7 @@ export const AssignStudentView: React.FC = () => {
                                                                             key={mode}
                                                                             type="button"
                                                                             onClick={() => setLearnerAssignMode(mode)}
-                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${learnerAssignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${learnerAssignMode === mode ? 'bg-blue-600 text-white' : 'border border-strong text-on-surface-secondary hover:bg-surface-hover'}`}
                                                                         >
                                                                             {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
                                                                         </button>
@@ -6057,11 +6108,11 @@ export const AssignStudentView: React.FC = () => {
 
                                                                 {learnerAssignMode === 'dropdown' ? (
                                                                     <div>
-                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                            Learner <span className="text-red-500">*</span>
+                                                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                                                            Learner <span className="text-danger">*</span>
                                                                         </label>
                                                                         {loadingLearners ? (
-                                                                            <p className="text-sm text-gray-500 italic">Loading learners...</p>
+                                                                            <p className="text-sm text-muted italic">Loading learners...</p>
                                                                         ) : (
                                                                             <SearchableSelect
                                                                                 options={availableLearners.map(l => ({ value: l.user_id, label: `${l.full_name} (${l.email})` }))}
@@ -6075,8 +6126,8 @@ export const AssignStudentView: React.FC = () => {
                                                                 ) : (
                                                                     <div className="space-y-3">
                                                                         <div>
-                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                                Learner Name <span className="text-red-500">*</span>
+                                                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                                                                Learner Name <span className="text-danger">*</span>
                                                                             </label>
                                                                             <input
                                                                                 type="text"
@@ -6087,7 +6138,7 @@ export const AssignStudentView: React.FC = () => {
                                                                             />
                                                                         </div>
                                                                         <div>
-                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                                                 Learner Email
                                                                             </label>
                                                                             <input
@@ -6102,16 +6153,16 @@ export const AssignStudentView: React.FC = () => {
                                                                 )}
 
                                                                 {pendingAssign?.run?.id === run.id ? (
-                                                                    <div className="rounded-md border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-3">
-                                                                        <p className="text-sm text-gray-800 dark:text-gray-100 mb-2">Also add this learner to the class's <strong>Google Calendar</strong> event(s)? No email notification is sent.</p>
-                                                                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 mb-2 cursor-pointer select-none">
-                                                                            <input type="checkbox" checked={enrolTpgOnAssign} onChange={e => setEnrolTpgOnAssign(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                                    <div className="rounded-md border border-blue-300 dark:border-blue-700 bg-info-bg p-3">
+                                                                        <p className="text-sm text-on-surface mb-2">Also add this learner to the class's <strong>Google Calendar</strong> event(s)? No email notification is sent.</p>
+                                                                        <label className="flex items-center gap-2 text-sm text-on-surface-secondary mb-2 cursor-pointer select-none">
+                                                                            <input type="checkbox" checked={enrolTpgOnAssign} onChange={e => setEnrolTpgOnAssign(e.target.checked)} className="h-4 w-4 rounded border-strong text-primary focus:ring-blue-500" />
                                                                             <span>Also enrol on <strong>TPGateway</strong> (creates the SSG enrolment — needs the learner's NRIC). Off by default.</span>
                                                                         </label>
                                                                         <div className="flex justify-end gap-2 flex-wrap">
-                                                                            <Button onClick={() => setPendingAssign(null)} disabled={saving} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">Cancel</Button>
+                                                                            <Button onClick={() => setPendingAssign(null)} disabled={saving} className="bg-gray-200 hover:bg-gray-300 text-on-surface dark:bg-gray-700 dark:hover:bg-gray-600">Cancel</Button>
                                                                             <Button onClick={() => handleAssign(run, false)} disabled={saving} className="bg-gray-600 hover:bg-gray-700 text-white">{saving ? 'Adding…' : 'Add learner only'}</Button>
-                                                                            <Button onClick={() => handleAssign(run, true)} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">{saving ? 'Adding…' : 'Add learner + update calendar'}</Button>
+                                                                            <Button onClick={() => handleAssign(run, true)} disabled={saving} className="bg-green-700 hover:bg-green-800 text-white">{saving ? 'Adding…' : 'Add learner + update calendar'}</Button>
                                                                         </div>
                                                                     </div>
                                                                 ) : (
@@ -6119,7 +6170,7 @@ export const AssignStudentView: React.FC = () => {
                                                                         <Button
                                                                             onClick={() => requestAssign(run)}
                                                                             disabled={saving}
-                                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                                            className="bg-green-700 hover:bg-green-800 text-white"
                                                                         >
                                                                             {saving ? 'Adding...' : 'Add Learner'}
                                                                         </Button>
@@ -6132,16 +6183,16 @@ export const AssignStudentView: React.FC = () => {
                                                         {activeTab === 'unassign' && (
                                                             <div className="py-4">
                                                                 {loadingEnrolled ? (
-                                                                    <p className="text-sm text-gray-500 italic">Loading enrolled learners...</p>
+                                                                    <p className="text-sm text-muted italic">Loading enrolled learners...</p>
                                                                 ) : enrolledLearners.length === 0 ? (
-                                                                    <p className="text-sm text-gray-500 dark:text-gray-400 italic">No learners enrolled in this course run.</p>
+                                                                    <p className="text-sm text-muted italic">No learners enrolled in this course run.</p>
                                                                 ) : (
-                                                                    <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden max-w-2xl">
+                                                                    <div className="divide-y divide-default rounded-md border border-default overflow-hidden max-w-2xl">
                                                                         {enrolledLearners.map(learner => (
-                                                                            <div key={learner.user_id} className="flex items-center justify-between gap-3 px-3 py-2 bg-white dark:bg-gray-800">
+                                                                            <div key={learner.user_id} className="flex items-center justify-between gap-3 px-3 py-2 bg-surface">
                                                                                 <div className="min-w-0 flex-1">
-                                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{learner.full_name}</p>
-                                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{learner.email}</p>
+                                                                                    <p className="text-sm font-medium text-on-surface">{learner.full_name}</p>
+                                                                                    <p className="text-xs text-muted">{learner.email}</p>
                                                                                     {editingLoginEmailFor === learner.user_id ? (
                                                                                         <div className="mt-1 flex flex-wrap items-center gap-2">
                                                                                             <input
@@ -6151,7 +6202,7 @@ export const AssignStudentView: React.FC = () => {
                                                                                                 onKeyDown={e => { if (e.key === 'Enter') handleSaveLoginEmail(learner, run); if (e.key === 'Escape') setEditingLoginEmailFor(null); }}
                                                                                                 placeholder="personal@gmail.com (blank = remove)"
                                                                                                 autoFocus
-                                                                                                className="w-64 max-w-full border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                                                                                className="w-64 max-w-full border border-strong rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                                                                                             />
                                                                                             <Button onClick={() => handleSaveLoginEmail(learner, run)} disabled={savingLoginEmail} className="text-xs px-2 py-1">
                                                                                                 {savingLoginEmail ? 'Saving…' : 'Save'}
@@ -6159,14 +6210,14 @@ export const AssignStudentView: React.FC = () => {
                                                                                             <Button variant="ghost" onClick={() => setEditingLoginEmailFor(null)} disabled={savingLoginEmail} className="text-xs px-2 py-1">Cancel</Button>
                                                                                         </div>
                                                                                     ) : (
-                                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                                        <p className="text-xs text-muted">
                                                                                             {learner.secondary_email
-                                                                                                ? <>Also logs in with <span className="text-gray-700 dark:text-gray-300">{learner.secondary_email}</span> · </>
+                                                                                                ? <>Also logs in with <span className="text-on-surface-secondary">{learner.secondary_email}</span> · </>
                                                                                                 : null}
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={() => { setEditingLoginEmailFor(learner.user_id); setLoginEmailDraft(learner.secondary_email || ''); setMessage(null); }}
-                                                                                                className="text-blue-600 dark:text-blue-400 hover:underline"
+                                                                                                className="text-primary hover:underline"
                                                                                             >
                                                                                                 {learner.secondary_email ? 'Edit login email' : '+ Personal login email'}
                                                                                             </button>
@@ -6177,7 +6228,7 @@ export const AssignStudentView: React.FC = () => {
                                                                                     variant="ghost"
                                                                                     onClick={() => handleUnassign(learner, run)}
                                                                                     disabled={unassigning === learner.user_id}
-                                                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs"
+                                                                                    className="text-danger hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs"
                                                                                 >
                                                                                     {unassigning === learner.user_id ? 'Removing...' : 'Remove'}
                                                                                 </Button>
@@ -6199,15 +6250,15 @@ export const AssignStudentView: React.FC = () => {
                 )}
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-default">
+                        <p className="text-xs text-muted">
                             Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, courseRuns.length)} of {courseRuns.length} classes
                         </p>
                         <div className="flex items-center gap-1">
                             <button
                                 onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setSelectedRunId(null); }}
                                 disabled={currentPage === 1}
-                                className="px-2.5 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                className="px-2.5 py-1.5 text-xs border border-strong rounded text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                                 ‹ Prev
                             </button>
@@ -6215,7 +6266,7 @@ export const AssignStudentView: React.FC = () => {
                                 <button
                                     key={p}
                                     onClick={() => { setCurrentPage(p); setSelectedRunId(null); }}
-                                    className={`px-2.5 py-1.5 text-xs border rounded transition-colors ${p === currentPage ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                    className={`px-2.5 py-1.5 text-xs border rounded transition-colors ${p === currentPage ? 'bg-blue-600 text-white border-blue-600' : 'border-strong text-on-surface-secondary hover:bg-surface-hover'}`}
                                 >
                                     {p}
                                 </button>
@@ -6223,7 +6274,7 @@ export const AssignStudentView: React.FC = () => {
                             <button
                                 onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setSelectedRunId(null); }}
                                 disabled={currentPage === totalPages}
-                                className="px-2.5 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                className="px-2.5 py-1.5 text-xs border border-strong rounded text-on-surface-secondary hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                                 Next ›
                             </button>
@@ -6240,7 +6291,7 @@ export const AddCourseView: React.FC = () => {
     const [form, setForm] = useState({ title: '', courseCode: '', courseType: 'Non-WSQ', tscTitle: '', tscCode: '', trainingHours: '', assessmentHours: '' });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+    const inputClasses = 'w-full border border-strong rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -6270,7 +6321,7 @@ export const AddCourseView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-success-bg border border-green-200 dark:border-green-700 text-success' : 'bg-danger-bg border border-red-200 dark:border-red-700 text-danger'}`}>
                     {message.text}
                 </div>
             )}
@@ -6278,15 +6329,15 @@ export const AddCourseView: React.FC = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Title <span className="text-danger">*</span></label>
                             <input type="text" required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} className={inputClasses} placeholder="Course title" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Code <span className="text-danger">*</span></label>
                             <input type="text" required value={form.courseCode} onChange={e => setForm(p => ({ ...p, courseCode: e.target.value }))} className={inputClasses} placeholder="e.g. TGS-2025054613" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Type</label>
                             <select value={form.courseType} onChange={e => setForm(p => ({ ...p, courseType: e.target.value }))} className={inputClasses}>
                                 <option value="Non-WSQ">Non-WSQ</option>
                                 <option value="WSQ">WSQ</option>
@@ -6294,19 +6345,19 @@ export const AddCourseView: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TSC Title</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">TSC Title</label>
                             <input type="text" value={form.tscTitle} onChange={e => setForm(p => ({ ...p, tscTitle: e.target.value }))} className={inputClasses} placeholder="Optional" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TSC Code</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">TSC Code</label>
                             <input type="text" value={form.tscCode} onChange={e => setForm(p => ({ ...p, tscCode: e.target.value }))} className={inputClasses} placeholder="Optional" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Training Hours</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Training Hours</label>
                             <input type="number" min="0" step="0.5" value={form.trainingHours} onChange={e => setForm(p => ({ ...p, trainingHours: e.target.value }))} className={inputClasses} placeholder="0" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assessment Hours</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Assessment Hours</label>
                             <input type="number" min="0" step="0.5" value={form.assessmentHours} onChange={e => setForm(p => ({ ...p, assessmentHours: e.target.value }))} className={inputClasses} placeholder="0" />
                         </div>
                     </div>
@@ -6329,7 +6380,7 @@ export const AddCourseRunView: React.FC = () => {
     const [fetching, setFetching] = useState(false);
     const [fetchedTitle, setFetchedTitle] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+    const inputClasses = 'w-full border border-strong rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
     const readonlyClasses = `${inputClasses} bg-gray-50 dark:bg-gray-600 cursor-default`;
 
     const formatDateNum = (dateNum: number): string => {
@@ -6400,7 +6451,7 @@ export const AddCourseRunView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-success-bg border border-green-200 dark:border-green-700 text-success' : 'bg-danger-bg border border-red-200 dark:border-red-700 text-danger'}`}>
                     {message.text}
                 </div>
             )}
@@ -6408,11 +6459,11 @@ export const AddCourseRunView: React.FC = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Code <span className="text-danger">*</span></label>
                             <input type="text" required value={form.courseCode} onChange={e => setForm(p => ({ ...p, courseCode: e.target.value }))} className={inputClasses} placeholder="e.g. TGS-2025054613" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Run ID <span className="text-danger">*</span></label>
                             <div className="flex gap-2">
                                 <input type="text" required value={form.courseRunId} onChange={e => { setForm(p => ({ ...p, courseRunId: e.target.value })); setFetchedTitle(null); }} className={inputClasses} placeholder="e.g. 1293908" />
                                 <Button type="button" onClick={handleFetch} disabled={fetching} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3">
@@ -6422,25 +6473,25 @@ export const AddCourseRunView: React.FC = () => {
                         </div>
                     </div>
                     {fetchedTitle && (
-                        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md text-sm text-blue-800 dark:text-blue-200">
+                        <div className="p-3 bg-info-bg border border-blue-200 dark:border-blue-700 rounded-md text-sm text-info">
                             <span className="font-medium">Fetched:</span> {fetchedTitle}
                         </div>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Start Date</label>
                             <input type="date" readOnly value={form.startDate} className={readonlyClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">End Date</label>
                             <input type="date" readOnly value={form.endDate} className={readonlyClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Digital Attendance ID</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Digital Attendance ID</label>
                             <input type="text" readOnly value={form.digitalAttendanceId} className={readonlyClasses} placeholder="Auto-filled from fetch" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Class Status</label>
                             <select value={form.classStatus} onChange={e => setForm(p => ({ ...p, classStatus: e.target.value }))} className={inputClasses}>
                                 <option value="Confirmed">Confirmed</option>
                                 <option value="Pending">Pending</option>
@@ -6553,10 +6604,10 @@ export const AutomationLogsView: React.FC = () => {
 
     const statusBadge = (status: AutomationLogRow['status']) => {
         const map: Record<string, string> = {
-            success: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-            partial: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-            error: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-            pending: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+            success: 'bg-success-bg text-success',
+            partial: 'bg-warning-bg text-warning',
+            error: 'bg-danger-bg text-danger',
+            pending: 'bg-surface-elevated text-on-surface-secondary',
         };
         return (
             <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${map[status] ?? map.pending}`}>
@@ -6586,7 +6637,7 @@ export const AutomationLogsView: React.FC = () => {
                 </div>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted mb-4">
                 Daily automation (6 PM SGT): searches SSG enrollments for classes starting tomorrow and auto-creates learner accounts.
                 Use <strong>Run Now</strong> to trigger manually.
             </p>
@@ -6594,17 +6645,17 @@ export const AutomationLogsView: React.FC = () => {
             {message && (
                 <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
                     message.type === 'success'
-                        ? 'bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
-                        : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                        ? 'bg-success-bg text-success border border-green-200 dark:border-green-800'
+                        : 'bg-danger-bg text-danger border border-red-200 dark:border-red-800'
                 }`}>
                     {message.text}
                 </div>
             )}
 
             {loading ? (
-                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+                <div className="text-center py-12 text-muted">Loading logs…</div>
             ) : batches.length === 0 ? (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <Card className="p-8 text-center text-muted">
                     No automation runs yet. Click <strong>Run Now</strong> to trigger the first run.
                 </Card>
             ) : (
@@ -6613,62 +6664,62 @@ export const AutomationLogsView: React.FC = () => {
                         <Card key={batch.run_id} className="overflow-hidden">
                             {/* Batch header row */}
                             <button
-                                className="w-full text-left px-5 py-4 flex flex-wrap items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+                                className="w-full text-left px-5 py-4 flex flex-wrap items-center gap-3 hover:bg-surface-hover transition-colors"
                                 onClick={() => setExpandedBatch(expandedBatch === batch.run_id ? null : batch.run_id)}
                             >
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                                    <span className="text-sm font-medium text-on-surface-secondary whitespace-nowrap">
                                         {new Date(batch.created_at).toLocaleString('en-SG', {
                                             day: '2-digit', month: 'short', year: 'numeric',
                                             hour: '2-digit', minute: '2-digit', hour12: false,
                                         })}
                                     </span>
-                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded hidden sm:inline">
+                                    <span className="text-xs text-muted font-mono bg-surface-elevated px-2 py-0.5 rounded hidden sm:inline">
                                         {batch.run_id}
                                     </span>
                                 </div>
                                 <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
                                     {statusBadge(batch.overallStatus)}
-                                    <span className="text-xs text-gray-400 dark:text-gray-500">{batch.rows.length} run{batch.rows.length !== 1 ? 's' : ''}</span>
+                                    <span className="text-xs text-muted">{batch.rows.length} run{batch.rows.length !== 1 ? 's' : ''}</span>
                                     <div className="flex items-center gap-2 text-sm">
-                                        <span className="text-gray-600 dark:text-gray-300 font-semibold">{batch.total_enrolled}</span>
-                                        <span className="text-gray-400 text-xs">enrolled</span>
+                                        <span className="text-on-surface-secondary font-semibold">{batch.total_enrolled}</span>
+                                        <span className="text-muted text-xs">enrolled</span>
                                     </div>
                                     <div className="flex items-center gap-1.5 text-sm">
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">✓ {batch.created_count} new</span>
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold">↩ {batch.existing_count} existing</span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-bg text-success text-xs font-semibold">✓ {batch.created_count} new</span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg text-primary text-xs font-semibold">↩ {batch.existing_count} existing</span>
                                         {batch.error_count > 0 && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold">✕ {batch.error_count} errors</span>
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger-bg text-danger text-xs font-semibold">✕ {batch.error_count} errors</span>
                                         )}
                                     </div>
-                                    <span className="text-gray-400 text-xs ml-1">{expandedBatch === batch.run_id ? '▲' : '▼'}</span>
+                                    <span className="text-muted text-xs ml-1">{expandedBatch === batch.run_id ? '▲' : '▼'}</span>
                                 </div>
                             </button>
 
                             {/* Expanded: per-course-run table */}
                             {expandedBatch === batch.run_id && (
-                                <div className="border-t border-gray-100 dark:border-gray-700">
+                                <div className="border-t border-default">
                                     <table className="w-full text-sm">
-                                        <thead className="bg-gray-50 dark:bg-gray-800/80 text-left">
+                                        <thead className="bg-surface-elevated text-left">
                                             <tr>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Run ID</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Enrolled</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Created</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Existing</th>
-                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Errors</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course Title</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course Code</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">SSG Run ID</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Start Date</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">End Date</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Status</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Enrolled</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Created</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Existing</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Errors</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {batch.rows.map(log => (
                                                 <React.Fragment key={log.id}>
-                                                    <tr className="border-t border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                                                    <tr className="border-t border-default hover:bg-surface-hover transition-colors">
                                                         <td className="px-4 py-3 max-w-[220px]">
-                                                            <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{log.course_title || '—'}</div>
+                                                            <div className="font-medium text-on-surface truncate">{log.course_title || '—'}</div>
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">
@@ -6676,48 +6727,48 @@ export const AutomationLogsView: React.FC = () => {
                                                             </span>
                                                         </td>
                                                         <td className="px-4 py-3">
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                            <span className="text-xs text-muted font-mono bg-surface-elevated px-1.5 py-0.5 rounded">
                                                                 {log.course_run_id || '—'}
                                                             </span>
                                                             {log.error_message && (
-                                                                <span className="text-red-500 ml-1.5 text-xs" title={log.error_message}>⚠ {log.error_message.slice(0, 40)}{log.error_message.length > 40 ? '…' : ''}</span>
+                                                                <span className="text-danger ml-1.5 text-xs" title={log.error_message}>⚠ {log.error_message.slice(0, 40)}{log.error_message.length > 40 ? '…' : ''}</span>
                                                             )}
                                                         </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                        <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                                                             {log.start_date ? new Date(log.start_date).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                                         </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                        <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                                                             {log.end_date ? new Date(log.end_date).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">{statusBadge(log.status)}</td>
-                                                        <td className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-gray-300">{log.total_enrolled}</td>
+                                                        <td className="px-4 py-3 text-center font-semibold text-on-surface-secondary">{log.total_enrolled}</td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{log.created_count}</span>
+                                                            <span className="font-semibold text-success">{log.created_count}</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className="font-semibold text-blue-600 dark:text-blue-400">{log.existing_count}</span>
+                                                            <span className="font-semibold text-primary">{log.existing_count}</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className={`font-semibold ${log.error_count > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}`}>{log.error_count}</span>
+                                                            <span className={`font-semibold ${log.error_count > 0 ? 'text-danger' : 'text-muted'}`}>{log.error_count}</span>
                                                         </td>
                                                     </tr>
                                                     {/* Learner rows — always shown when there are details */}
                                                     {log.details && log.details.length > 0 && (
                                                         <tr key={`${log.id}-detail`}>
                                                             <td colSpan={10} className="px-5 pb-4 pt-1 bg-gray-50/80 dark:bg-gray-900/40">
-                                                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                <div className="rounded-lg border border-default overflow-hidden">
                                                                     <table className="w-full text-xs">
-                                                                        <thead className="bg-gray-100 dark:bg-gray-800">
+                                                                        <thead className="bg-surface-elevated">
                                                                             <tr>
-                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Enrolment ID</th>
-                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Email</th>
-                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Name</th>
-                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Account</th>
-                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Result</th>
-                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Reason</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-muted uppercase tracking-wide text-[10px]">Enrolment ID</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-muted uppercase tracking-wide text-[10px]">Email</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-muted uppercase tracking-wide text-[10px]">Name</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-muted uppercase tracking-wide text-[10px]">Account</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-muted uppercase tracking-wide text-[10px]">Result</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-muted uppercase tracking-wide text-[10px]">Reason</th>
                                                                             </tr>
                                                                         </thead>
-                                                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                                                                        <tbody className="divide-y divide-default">
                                                                             {log.details.map((d, i) => (
                                                                                 <tr key={i} className={`transition-colors ${
                                                                                     d.status === 'error'     ? 'bg-red-50/60 dark:bg-red-900/10' :
@@ -6725,31 +6776,31 @@ export const AutomationLogsView: React.FC = () => {
                                                                                     d.status === 'cancelled' ? 'bg-orange-50/40 dark:bg-orange-900/10' :
                                                                                     'hover:bg-white dark:hover:bg-gray-800/50'
                                                                                 }`}>
-                                                                                    <td className="px-3 py-2 font-mono text-gray-400 dark:text-gray-500">{d.enrolmentRef || '—'}</td>
-                                                                                    <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300">{d.email}</td>
-                                                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{d.name || '—'}</td>
+                                                                                    <td className="px-3 py-2 font-mono text-muted">{d.enrolmentRef || '—'}</td>
+                                                                                    <td className="px-3 py-2 font-mono text-on-surface-secondary">{d.email}</td>
+                                                                                    <td className="px-3 py-2 text-on-surface-secondary">{d.name || '—'}</td>
                                                                                     <td className="px-3 py-2">
                                                                                         {d.accountExists === undefined ? (
-                                                                                            <span className="text-gray-400 text-[10px]">—</span>
+                                                                                            <span className="text-muted text-[10px]">—</span>
                                                                                         ) : d.accountExists ? (
-                                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">✓ Exists</span>
+                                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-on-surface-secondary">✓ Exists</span>
                                                                                         ) : (
-                                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">✕ Not Found</span>
+                                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-bg text-warning">✕ Not Found</span>
                                                                                         )}
                                                                                     </td>
                                                                                     <td className="px-3 py-2">
                                                                                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                                                                            d.status === 'created'   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :
-                                                                                            d.status === 'existing'  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
-                                                                                            d.status === 'cancelled' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' :
-                                                                                            d.status === 'error'     ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                                                                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                                                            d.status === 'created'   ? 'bg-success-bg text-success' :
+                                                                                            d.status === 'existing'  ? 'bg-info-bg text-primary' :
+                                                                                            d.status === 'cancelled' ? 'bg-warning-bg text-warning' :
+                                                                                            d.status === 'error'     ? 'bg-danger-bg text-danger' :
+                                                                                            'bg-surface-elevated text-on-surface-secondary'
                                                                                         }`}>
                                                                                             {d.status === 'created' ? '✓' : d.status === 'existing' ? '↩' : d.status === 'cancelled' ? '⊘' : d.status === 'error' ? '✕' : ''}
                                                                                             {d.status}
                                                                                         </span>
                                                                                     </td>
-                                                                                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400 max-w-[300px]">
+                                                                                    <td className="px-3 py-2 text-muted max-w-[300px]">
                                                                                         {d.reason ? (
                                                                                             <span className="text-red-500 dark:text-red-400">{d.reason}</span>
                                                                                         ) : '—'}
@@ -6848,8 +6899,8 @@ export const BackfillEnrollmentsView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                Finds enrollments with a missing <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">raw_data</code> field and fetches the full SSG data for each one.
+            <p className="text-sm text-muted mb-6">
+                Finds enrollments with a missing <code className="bg-surface-elevated px-1 rounded">raw_data</code> field and fetches the full SSG data for each one.
                 Preview first to verify, then run the backfill.
             </p>
 
@@ -6857,13 +6908,13 @@ export const BackfillEnrollmentsView: React.FC = () => {
             <Card className="p-5 mb-6">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limit</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Limit</label>
                         <input
                             type="number"
                             min={1} max={200}
                             value={limit}
                             onChange={e => setLimit(Math.min(200, Math.max(1, Number(e.target.value))))}
-                            className="w-24 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                            className="w-24 px-3 py-2 text-sm border border-strong rounded-md bg-surface text-on-surface"
                         />
                     </div>
                     <Button onClick={fetchPreview} disabled={previewing || running} variant="secondary">
@@ -6875,14 +6926,14 @@ export const BackfillEnrollmentsView: React.FC = () => {
                         </Button>
                     )}
                 </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                <p className="text-xs text-muted mt-3">
                     Note: Backfill calls the SSG webhook once per enrollment with a 4-second delay between each call.
                 </p>
             </Card>
 
             {/* Error */}
             {error && (
-                <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                <div className="mb-4 p-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg text-sm text-danger">
                     {error}
                 </div>
             )}
@@ -6890,36 +6941,36 @@ export const BackfillEnrollmentsView: React.FC = () => {
             {/* Run result summary */}
             {runResult && (
                 <Card className="p-5 mb-6">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Backfill Complete</h3>
+                    <h3 className="font-semibold text-on-surface mb-3">Backfill Complete</h3>
                     <div className="flex flex-wrap gap-4 mb-4 text-sm">
-                        <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">Total: <strong>{runResult.total}</strong></span>
-                        <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Updated: <strong>{runResult.updated}</strong></span>
-                        <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Skipped: <strong>{runResult.skipped}</strong></span>
-                        <span className="px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Errors: <strong>{runResult.errors}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-surface-elevated text-on-surface-secondary">Total: <strong>{runResult.total}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-success-bg text-success">Updated: <strong>{runResult.updated}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-surface-elevated text-on-surface-secondary">Skipped: <strong>{runResult.skipped}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-danger-bg text-danger">Errors: <strong>{runResult.errors}</strong></span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                            <thead className="bg-surface-elevated text-left">
                                 <tr>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Status</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Result</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Detail</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Enrolment ID</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">SSG Status</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Result</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Detail</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            <tbody className="divide-y divide-default">
                                 {(runResult.results ?? []).map((r: any, i: number) => (
-                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                        <td className="px-4 py-2 font-mono text-xs text-gray-700 dark:text-gray-300">{r.enrolmentId}</td>
-                                        <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{r.status}</td>
+                                    <tr key={i} className="hover:bg-surface-hover">
+                                        <td className="px-4 py-2 font-mono text-xs text-on-surface-secondary">{r.enrolmentId}</td>
+                                        <td className="px-4 py-2 text-xs text-muted">{r.status}</td>
                                         <td className="px-4 py-2">
                                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                r.result === 'updated' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                                : r.result === 'skipped' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                                r.result === 'updated' ? 'bg-success-bg text-success'
+                                                : r.result === 'skipped' ? 'bg-surface-elevated text-on-surface-secondary'
+                                                : 'bg-danger-bg text-danger'
                                             }`}>{r.result}</span>
                                         </td>
-                                        <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{r.detail ?? '—'}</td>
+                                        <td className="px-4 py-2 text-xs text-muted">{r.detail ?? '—'}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -6931,36 +6982,36 @@ export const BackfillEnrollmentsView: React.FC = () => {
             {/* Preview table */}
             {preview.length > 0 && !runResult && (
                 <Card className="overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                        <span className="font-semibold text-gray-900 dark:text-white">{preview.length} enrollment{preview.length !== 1 ? 's' : ''} missing raw data</span>
-                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Review below, then click Run Backfill</span>
+                    <div className="px-5 py-3 border-b border-default flex items-center justify-between">
+                        <span className="font-semibold text-on-surface">{preview.length} enrollment{preview.length !== 1 ? 's' : ''} missing raw data</span>
+                        <span className="text-xs text-warning font-medium">Review below, then click Run Backfill</span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                            <thead className="bg-surface-elevated text-left">
                                 <tr>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">NRIC</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Created</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Enrolment ID</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course Run ID</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Email</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">NRIC</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Status</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Created</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            <tbody className="divide-y divide-default">
                                 {preview.map(row => (
-                                    <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <tr key={row.id} className="hover:bg-surface-hover">
                                         <td className="px-4 py-3 font-mono text-xs text-indigo-600 dark:text-indigo-400">{row.enrolment_id}</td>
                                         <td className="px-4 py-3 max-w-[200px]">
-                                            <div className="font-medium text-gray-900 dark:text-gray-100 text-xs whitespace-normal">{row.course_title || '—'}</div>
-                                            {row.course_code && <span className="text-xs text-gray-400 font-mono">{row.course_code}</span>}
+                                            <div className="font-medium text-on-surface text-xs whitespace-normal">{row.course_title || '—'}</div>
+                                            {row.course_code && <span className="text-xs text-muted font-mono">{row.course_code}</span>}
                                         </td>
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.ssg_run_id || '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.email || '—'}</td>
-                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400">{row.nric || '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.enrolment_status || '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                        <td className="px-4 py-3 font-mono text-xs text-muted">{row.ssg_run_id || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-muted">{row.email || '—'}</td>
+                                        <td className="px-4 py-3 text-xs font-mono text-muted">{row.nric || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-muted">{row.enrolment_status || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                                             {new Date(row.created_at).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </td>
                                     </tr>
@@ -6972,7 +7023,7 @@ export const BackfillEnrollmentsView: React.FC = () => {
             )}
 
             {preview.length === 0 && !previewing && !runResult && !error && (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <Card className="p-8 text-center text-muted">
                     Click <strong>Fetch Preview</strong> to see which enrollments are missing raw data.
                 </Card>
             )}
@@ -7070,7 +7121,7 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            <p className="text-sm text-muted mb-6">
                 For each upcoming course run, calls the SSG view-enrolment webhook, upserts all returned enrolments into the database, and corrects any mismatched start/end dates.
                 Preview first to verify, then run.
             </p>
@@ -7079,13 +7130,13 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
             <Card className="p-5 mb-6">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limit</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Limit</label>
                         <input
                             type="number"
                             min={1} max={100}
                             value={limit}
                             onChange={e => setLimit(Math.min(100, Math.max(1, Number(e.target.value))))}
-                            className="w-24 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                            className="w-24 px-3 py-2 text-sm border border-strong rounded-md bg-surface text-on-surface"
                         />
                     </div>
                     <Button onClick={fetchPreview} disabled={previewing || running} variant="secondary">
@@ -7097,14 +7148,14 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
                         </Button>
                     )}
                 </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                <p className="text-xs text-muted mt-3">
                     Note: Calls the SSG webhook once per course run with a 4-second delay between each call.
                 </p>
             </Card>
 
             {/* Error */}
             {error && (
-                <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                <div className="mb-4 p-4 bg-danger-bg border border-red-200 dark:border-red-800 rounded-lg text-sm text-danger">
                     {error}
                 </div>
             )}
@@ -7112,46 +7163,46 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
             {/* Run result summary */}
             {runResult && (
                 <Card className="p-5 mb-6">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Fetch Complete</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{runResult.message}</p>
+                    <h3 className="font-semibold text-on-surface mb-3">Fetch Complete</h3>
+                    <p className="text-sm text-muted mb-4">{runResult.message}</p>
                     <div className="flex flex-wrap gap-4 mb-4 text-sm">
-                        <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">Runs: <strong>{runResult.total}</strong></span>
-                        <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Inserted: <strong>{runResult.totalInserted}</strong></span>
-                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Dates Fixed: <strong>{runResult.totalFixed}</strong></span>
-                        <span className="px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Errors: <strong>{runResult.totalErrors}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-surface-elevated text-on-surface-secondary">Runs: <strong>{runResult.total}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-success-bg text-success">Inserted: <strong>{runResult.totalInserted}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-info-bg text-primary">Dates Fixed: <strong>{runResult.totalFixed}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-danger-bg text-danger">Errors: <strong>{runResult.totalErrors}</strong></span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                            <thead className="bg-surface-elevated text-left">
                                 <tr>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Inserted</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Skipped</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Date Fix</th>
-                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Detail</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Course Run ID</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Course</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Inserted</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Skipped</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Date Fix</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-muted">Detail</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            <tbody className="divide-y divide-default">
                                 {(runResult.results ?? []).map((r: FetchUpcomingRunResult, i: number) => (
-                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <tr key={i} className="hover:bg-surface-hover">
                                         <td className="px-4 py-2 font-mono text-xs text-indigo-600 dark:text-indigo-400">{r.ssgRunId}</td>
-                                        <td className="px-4 py-2 text-xs text-gray-700 dark:text-gray-300 max-w-[180px] whitespace-normal">{r.courseTitle}</td>
+                                        <td className="px-4 py-2 text-xs text-on-surface-secondary max-w-[180px] whitespace-normal">{r.courseTitle}</td>
                                         <td className="px-4 py-2 text-xs text-center">
-                                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-semibold">{r.enrollmentsInserted}</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-success-bg text-success font-semibold">{r.enrollmentsInserted}</span>
                                         </td>
-                                        <td className="px-4 py-2 text-xs text-center text-gray-500 dark:text-gray-400">{r.enrollmentsSkipped}</td>
+                                        <td className="px-4 py-2 text-xs text-center text-muted">{r.enrollmentsSkipped}</td>
                                         <td className="px-4 py-2 text-xs text-center">
                                             {r.dateFixed
-                                                ? <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold">Fixed</span>
-                                                : <span className="text-gray-400">—</span>
+                                                ? <span className="px-2 py-0.5 rounded-full bg-info-bg text-primary font-semibold">Fixed</span>
+                                                : <span className="text-muted">—</span>
                                             }
                                         </td>
-                                        <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <td className="px-4 py-2 text-xs text-muted">
                                             {r.error
-                                                ? <span className="text-red-600 dark:text-red-400">{r.error}</span>
+                                                ? <span className="text-danger">{r.error}</span>
                                                 : r.dateMismatch
-                                                    ? <span className="text-blue-600 dark:text-blue-400">{r.dateMismatch}</span>
+                                                    ? <span className="text-primary">{r.dateMismatch}</span>
                                                     : '—'
                                             }
                                         </td>
@@ -7166,34 +7217,34 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
             {/* Preview table */}
             {preview.length > 0 && !runResult && (
                 <Card className="overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                        <span className="font-semibold text-gray-900 dark:text-white">{preview.length} upcoming course run{preview.length !== 1 ? 's' : ''}</span>
-                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Review below, then click Run Fetch</span>
+                    <div className="px-5 py-3 border-b border-default flex items-center justify-between">
+                        <span className="font-semibold text-on-surface">{preview.length} upcoming course run{preview.length !== 1 ? 's' : ''}</span>
+                        <span className="text-xs text-warning font-medium">Review below, then click Run Fetch</span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                            <thead className="bg-surface-elevated text-left">
                                 <tr>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</th>
-                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolments</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course Run ID</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Start Date</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">End Date</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Status</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Enrolments</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            <tbody className="divide-y divide-default">
                                 {preview.map(row => (
-                                    <tr key={row.uuid} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <tr key={row.uuid} className="hover:bg-surface-hover">
                                         <td className="px-4 py-3 font-mono text-xs text-indigo-600 dark:text-indigo-400">{row.ssg_run_id || '—'}</td>
                                         <td className="px-4 py-3 max-w-[200px]">
-                                            <div className="font-medium text-gray-900 dark:text-gray-100 text-xs whitespace-normal">{row.course_title || '—'}</div>
-                                            {row.course_code && <span className="text-xs text-gray-400 font-mono">{row.course_code}</span>}
+                                            <div className="font-medium text-on-surface text-xs whitespace-normal">{row.course_title || '—'}</div>
+                                            {row.course_code && <span className="text-xs text-muted font-mono">{row.course_code}</span>}
                                         </td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.end_date)}</td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.class_status || '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-center font-semibold text-gray-700 dark:text-gray-300">{row.enrolment_count}</td>
+                                        <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{fmt(row.start_date)}</td>
+                                        <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{fmt(row.end_date)}</td>
+                                        <td className="px-4 py-3 text-xs text-muted">{row.class_status || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-center font-semibold text-on-surface-secondary">{row.enrolment_count}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -7203,7 +7254,7 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
             )}
 
             {preview.length === 0 && !previewing && !runResult && !error && (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <Card className="p-8 text-center text-muted">
                     Click <strong>Fetch Preview</strong> to see upcoming course runs.
                 </Card>
             )}
@@ -7340,7 +7391,7 @@ const EnrolmentTable: React.FC<{
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-3xl font-bold">{title}</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+                    <p className="text-sm text-muted mt-1">{description}</p>
                 </div>
                 <div className="flex items-center gap-2">
                     {onSync && <Button onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : syncLabel || 'Sync'}</Button>}
@@ -7351,10 +7402,10 @@ const EnrolmentTable: React.FC<{
             {/* KPI Cards */}
             {total > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-blue-600">{total}</p><p className="text-xs text-gray-500 mt-1">Total Enrolments</p></Card>
-                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-green-600">{enrolled}</p><p className="text-xs text-gray-500 mt-1">Enrolled (SSG)</p></Card>
-                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-indigo-600">{calAdded}</p><p className="text-xs text-gray-500 mt-1">Added to Calendar</p></Card>
-                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-amber-600">{invoiced}</p><p className="text-xs text-gray-500 mt-1">Invoice Created</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-primary">{total}</p><p className="text-xs text-muted mt-1">Total Enrolments</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-success">{enrolled}</p><p className="text-xs text-muted mt-1">Enrolled (SSG)</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-indigo-700 dark:text-indigo-300">{calAdded}</p><p className="text-xs text-muted mt-1">Added to Calendar</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-warning">{invoiced}</p><p className="text-xs text-muted mt-1">Invoice Created</p></Card>
                 </div>
             )}
 
@@ -7364,18 +7415,18 @@ const EnrolmentTable: React.FC<{
                     {showDateRange && (
                         <>
                             <div className="space-y-1">
-                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
-                                <input type="text" placeholder="DD/MM/YYYY" value={startDate} onChange={e => onStartDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-muted">Start Date</label>
+                                <input type="text" placeholder="DD/MM/YYYY" value={startDate} onChange={e => onStartDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-strong rounded-md bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 outline-none" />
                             </div>
                             <div className="space-y-1">
-                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
-                                <input type="text" placeholder="DD/MM/YYYY" value={endDate} onChange={e => onEndDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-muted">End Date</label>
+                                <input type="text" placeholder="DD/MM/YYYY" value={endDate} onChange={e => onEndDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-strong rounded-md bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 outline-none" />
                             </div>
                         </>
                     )}
                     <div className="flex-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Search</label>
-                        <input type="text" placeholder="Search name, NRIC, email, course..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Search</label>
+                        <input type="text" placeholder="Search name, NRIC, email, course..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-3 py-2 text-sm border border-strong rounded-md bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                     <Button onClick={onRefresh} disabled={loading}>{loading ? 'Loading...' : 'Refresh'}</Button>
                 </div>
@@ -7385,7 +7436,7 @@ const EnrolmentTable: React.FC<{
             <div className="flex flex-wrap items-center gap-2">
                 <button onClick={handleAddToCal} disabled={isAddingToCal || selectedIds.size === 0} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">{isAddingToCal ? 'Adding...' : 'Add to Calendar'}</button>
                 <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
-                <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50">{isSyncingGrants ? 'Syncing...' : 'Sync Grants'}</button>
+                <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-success hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50">{isSyncingGrants ? 'Syncing...' : 'Sync Grants'}</button>
                 <button onClick={handleSyncCal} disabled={isSyncingCal} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50">{isSyncingCal ? 'Syncing...' : 'Sync Calendar'}</button>
             </div>
 
@@ -7393,76 +7444,76 @@ const EnrolmentTable: React.FC<{
             <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left">
-                        <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                        <thead className="bg-surface-elevated border-b border-default">
                             <tr>
                                 <th className="px-2 py-2 w-8"><input type="checkbox" checked={filteredData.length > 0 && filteredData.every(r => selectedIds.has(r.id))} onChange={toggleSelectAll} className="w-3.5 h-3.5" /></th>
-                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="SSG Enrolled">Enrol</th>
-                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="In Calendar">Cal</th>
-                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="Invoice">Inv</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrolment ID</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol Date</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Title</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Ref No.</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Start Date</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Run ID</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Fee</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">GST</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Sponsor</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Sub</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Cr</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payable</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Claim ID</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payment</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Status</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant ID</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant Amt</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Invoice #</th>
-                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Not In Cal</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="SSG Enrolled">Enrol</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="In Calendar">Cal</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase whitespace-nowrap" title="Invoice">Inv</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Enrolment ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Enrol Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Name</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-muted hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-muted hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Email</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Course Title</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Course Ref No.</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Start Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Run ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Fee</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">GST</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Sponsor</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">SF Sub</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">SF Cr</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Payable</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">SF Claim ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Payment</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Status</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Grant ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Grant Amt</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Invoice #</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase whitespace-nowrap">Not In Cal</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        <tbody className="divide-y divide-default">
                             {loading ? (
-                                <tr><td colSpan={27} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
+                                <tr><td colSpan={27} className="px-3 py-8 text-center text-muted italic">Loading...</td></tr>
                             ) : filteredData.length === 0 ? (
-                                <tr><td colSpan={27} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
+                                <tr><td colSpan={27} className="px-3 py-8 text-center text-muted italic">No enrolments found.</td></tr>
                             ) : filteredData.map((row, idx) => (
-                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <tr key={row.id || idx} className="hover:bg-surface-hover">
                                     <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} className="w-3.5 h-3.5" /></td>
-                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.enrolment_id && String(row.enrolment_id).trim())} readOnly className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${row.enrolment_id ? 'text-green-600 accent-green-600' : ''}`} title={row.enrolment_id || 'Not enrolled'} /></td>
-                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!row.calendar_added} onChange={e => toggleField(row.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} /></td>
-                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.invoice_id && String(row.invoice_id).trim())} onChange={e => toggleField(row.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`} /></td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-700 dark:text-gray-200">{row.enrolment_id || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.enrolment_date)}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200 max-w-[140px] truncate" title={row.learner_name}>{row.learner_name || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300" title={showPii ? row.nric : undefined}>{row.nric ? (showPii ? row.nric : `${row.nric.charAt(0)}****${row.nric.slice(-3)}`) : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.date_of_birth ? (showPii ? fmt(row.date_of_birth) : `**/**/${new Date(row.date_of_birth).getFullYear()}`) : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={row.email}>{row.email || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-300 max-w-[180px] truncate" title={row.course_title || row.title}>{row.course_title || row.title || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.course_code || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.start_date)}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_run_id || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.fee != null ? `$${parseFloat(row.fee || 0).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.gst != null ? `$${parseFloat(row.gst || 0).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_sponsorship || row.sponsorship_type || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.sf_subsidy != null ? `$${parseFloat(row.sf_subsidy || 0).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.sf_credit != null ? `$${parseFloat(row.sf_credit || 0).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payable != null ? `$${parseFloat(row.payable || 0).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.sf_claim_id || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payment_status || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${(row.enrolment_status || row.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{row.enrolment_status || row.class_status || '—'}</span></td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.grant_id || '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.grant_amount ? `$${parseFloat(row.grant_amount).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.invoice_id || '—'}</td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.enrolment_id && String(row.enrolment_id).trim())} readOnly className={`w-3.5 h-3.5 rounded border-strong cursor-default ${row.enrolment_id ? 'text-success accent-green-600' : ''}`} title={row.enrolment_id || 'Not enrolled'} /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!row.calendar_added} onChange={e => toggleField(row.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-strong cursor-pointer ${row.calendar_added ? 'text-primary accent-blue-600' : ''}`} /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.invoice_id && String(row.invoice_id).trim())} onChange={e => toggleField(row.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-strong cursor-pointer ${row.invoice_id ? 'text-warning accent-amber-600' : ''}`} /></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-on-surface-secondary">{row.enrolment_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{fmt(row.enrolment_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-on-surface-secondary max-w-[140px] truncate" title={row.learner_name}>{row.learner_name || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-muted" title={showPii ? row.nric : undefined}>{row.nric ? (showPii ? row.nric : `${row.nric.charAt(0)}****${row.nric.slice(-3)}`) : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.date_of_birth ? (showPii ? fmt(row.date_of_birth) : `**/**/${new Date(row.date_of_birth).getFullYear()}`) : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted max-w-[160px] truncate" title={row.email}>{row.email || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-on-surface-secondary max-w-[180px] truncate" title={row.course_title || row.title}>{row.course_title || row.title || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-muted">{row.course_code || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{fmt(row.start_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.course_run_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.fee != null ? `$${parseFloat(row.fee || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.gst != null ? `$${parseFloat(row.gst || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.course_sponsorship || row.sponsorship_type || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.sf_subsidy != null ? `$${parseFloat(row.sf_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.sf_credit != null ? `$${parseFloat(row.sf_credit || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.payable != null ? `$${parseFloat(row.payable || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-muted">{row.sf_claim_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.payment_status || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${(row.enrolment_status || row.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-on-surface-secondary'}`}>{row.enrolment_status || row.class_status || '—'}</span></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-muted">{row.grant_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-muted">{row.grant_amount ? `$${parseFloat(row.grant_amount).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-muted">{row.invoice_id || '—'}</td>
                                     <td className="px-2 py-1.5 text-center whitespace-nowrap">
                                         {row.match ? (
                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold" title={row.matchDetail}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>In Cal</span>
                                         ) : row.reason ? (
                                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'Not in Cal' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
-                                        ) : <span className="text-gray-400">—</span>}
+                                        ) : <span className="text-muted">—</span>}
                                     </td>
                                 </tr>
                             ))}
@@ -7598,9 +7649,9 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
 
     const statusBadge = (status: string, updated: boolean) => {
         const map: Record<string, string> = {
-            updated:   'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-            no_change: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-            error:     'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+            updated:   'bg-info-bg text-primary',
+            no_change: 'bg-surface-elevated text-on-surface-secondary',
+            error:     'bg-danger-bg text-danger',
         };
         const label = updated ? 'updated' : status;
         return (
@@ -7627,12 +7678,12 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
                 </div>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted mb-4">
                 Daily automation (1 AM SGT): compares SSG course run start/end dates against the local database for classes starting today, and updates any mismatches automatically. Capped at 3 runs/day. Use <strong>Run Now</strong> to trigger manually.
             </p>
 
             {runResult && (
-                <div className="mb-4 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 text-sm text-emerald-800 dark:text-emerald-300">
+                <div className="mb-4 p-4 rounded-lg bg-success-bg border border-emerald-200 dark:border-emerald-700 text-sm text-success">
                     Sync complete — <strong>{runResult.processed}</strong> run{runResult.processed !== 1 ? 's' : ''} checked,{' '}
                     <strong>{runResult.updated}</strong> updated,{' '}
                     <strong>{runResult.noChange}</strong> no change,{' '}
@@ -7640,15 +7691,15 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
                 </div>
             )}
             {runError && (
-                <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-sm text-red-700 dark:text-red-400">
+                <div className="mb-4 p-4 rounded-lg bg-danger-bg border border-red-200 dark:border-red-700 text-sm text-danger">
                     {runError}
                 </div>
             )}
 
             {loading ? (
-                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+                <div className="text-center py-12 text-muted">Loading logs…</div>
             ) : batches.length === 0 ? (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No date sync logs yet.</Card>
+                <Card className="p-8 text-center text-muted">No date sync logs yet.</Card>
             ) : (
                 <div className="space-y-4">
                     {batches.map(([dateKey, rows]) => {
@@ -7660,87 +7711,87 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
                             <Card key={dateKey} className="overflow-hidden">
                                 <button
                                     onClick={() => toggleDate(dateKey)}
-                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-hover transition-colors text-left"
                                 >
                                     <div className="flex items-center gap-4 flex-wrap">
-                                        <span className="font-semibold text-gray-900 dark:text-white">{dateKey}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} run{rows.length !== 1 ? 's' : ''}</span>
+                                        <span className="font-semibold text-on-surface">{dateKey}</span>
+                                        <span className="text-sm text-muted">{rows.length} run{rows.length !== 1 ? 's' : ''}</span>
                                         {updatedCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-info-bg text-primary">
                                                 {updatedCount} updated
                                             </span>
                                         )}
                                         {noChangeCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-surface-elevated text-on-surface-secondary">
                                                 {noChangeCount} no change
                                             </span>
                                         )}
                                         {errorCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-danger-bg text-danger">
                                                 {errorCount} error{errorCount !== 1 ? 's' : ''}
                                             </span>
                                         )}
                                     </div>
-                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    <svg className={`w-5 h-5 text-muted transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                 </button>
 
                                 {isOpen && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
+                                    <div className="border-t border-default overflow-x-auto">
                                         <table className="w-full text-sm">
-                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                            <thead className="bg-surface-elevated text-left">
                                                 <tr>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Run ID</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">DB Start</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">DB End</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Start</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG End</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Time</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course Title</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Run ID</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">DB Start</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">DB End</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">SSG Start</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">SSG End</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Status</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                            <tbody className="divide-y divide-default">
                                                 {rows.map(log => {
                                                     const startMismatch = log.ssg_start_date && log.ssg_start_date !== log.db_start_date;
                                                     const endMismatch   = log.ssg_end_date   && log.ssg_end_date   !== log.db_end_date;
                                                     return (
-                                                        <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                            <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
+                                                        <tr key={log.id} className="hover:bg-surface-hover transition-colors">
+                                                            <td className="px-4 py-3 whitespace-nowrap text-muted text-xs">
                                                                 {new Date(log.created_at).toLocaleTimeString('en-SG', {
                                                                     timeZone: 'Asia/Singapore',
                                                                     hour: '2-digit', minute: '2-digit', hour12: false,
                                                                 })}
                                                             </td>
                                                             <td className="px-4 py-3 max-w-[240px]">
-                                                                <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
+                                                                <div className="font-medium text-on-surface whitespace-normal break-words">{log.course_title || '—'}</div>
                                                             </td>
                                                             <td className="px-4 py-3 whitespace-nowrap">
                                                                 {log.course_code
                                                                     ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
-                                                                    : <span className="text-gray-400">—</span>}
+                                                                    : <span className="text-muted">—</span>}
                                                             </td>
                                                             <td className="px-4 py-3 whitespace-nowrap">
-                                                                <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                <span className="text-xs text-muted font-mono bg-surface-elevated px-1.5 py-0.5 rounded">
                                                                     {log.course_run_id || '—'}
                                                                 </span>
                                                             </td>
-                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${startMismatch ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${startMismatch ? 'text-warning font-semibold' : 'text-muted'}`}>
                                                                 {log.db_start_date || '—'}
                                                             </td>
-                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${endMismatch ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${endMismatch ? 'text-warning font-semibold' : 'text-muted'}`}>
                                                                 {log.db_end_date || '—'}
                                                             </td>
-                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${startMismatch ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${startMismatch ? 'text-primary font-semibold' : 'text-muted'}`}>
                                                                 {log.ssg_start_date || '—'}
                                                             </td>
-                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${endMismatch ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${endMismatch ? 'text-primary font-semibold' : 'text-muted'}`}>
                                                                 {log.ssg_end_date || '—'}
                                                             </td>
                                                             <td className="px-4 py-3 text-center">
                                                                 {statusBadge(log.status, log.updated)}
                                                                 {log.error_message && (
-                                                                    <div className="text-xs text-red-500 mt-1 text-left">{log.error_message}</div>
+                                                                    <div className="text-xs text-danger mt-1 text-left">{log.error_message}</div>
                                                                 )}
                                                             </td>
                                                         </tr>
@@ -7852,10 +7903,10 @@ export const TrainerFolderLogsView: React.FC = () => {
 
     const actionBadge = (action: string | null) => {
         const map: Record<string, string> = {
-            created: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-            existing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-            pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-            error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+            created: 'bg-success-bg text-success',
+            existing: 'bg-info-bg text-primary',
+            pending: 'bg-surface-elevated text-on-surface-secondary',
+            error:   'bg-danger-bg text-danger',
         };
         const key = action ?? 'pending';
         return (
@@ -7886,24 +7937,24 @@ export const TrainerFolderLogsView: React.FC = () => {
                 </div>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted mb-4">
                 Records daily automation runs for creating trainer folders in Google Drive for today&apos;s classes.
             </p>
 
             {message && (
                 <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
                     message.type === 'success'
-                        ? 'bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
-                        : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                        ? 'bg-success-bg text-success border border-green-200 dark:border-green-800'
+                        : 'bg-danger-bg text-danger border border-red-200 dark:border-red-800'
                 }`}>
                     {message.text}
                 </div>
             )}
 
             {loading ? (
-                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+                <div className="text-center py-12 text-muted">Loading logs…</div>
             ) : batches.length === 0 ? (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No trainer folder logs yet.</Card>
+                <Card className="p-8 text-center text-muted">No trainer folder logs yet.</Card>
             ) : (
                 <div className="space-y-3">
                     {batches.map(([batchKey, rows]) => {
@@ -7922,70 +7973,70 @@ export const TrainerFolderLogsView: React.FC = () => {
                                 {/* Batch header */}
                                 <button
                                     onClick={() => toggleDate(batchKey)}
-                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-hover transition-colors text-left"
                                 >
                                     <div className="flex items-center gap-4 flex-wrap">
-                                        <span className="font-semibold text-gray-900 dark:text-white font-mono">{runTime}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} course{rows.length !== 1 ? 's' : ''} checked</span>
+                                        <span className="font-semibold text-on-surface font-mono">{runTime}</span>
+                                        <span className="text-sm text-muted">{rows.length} course{rows.length !== 1 ? 's' : ''} checked</span>
                                         {createdCount > 0 && (
-                                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
+                                            <span className="inline-flex items-center gap-1 font-semibold text-success text-xs">
                                                 ✓ {createdCount} created
                                             </span>
                                         )}
                                         {existingCount > 0 && (
-                                            <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 text-xs">
+                                            <span className="inline-flex items-center gap-1 font-semibold text-primary text-xs">
                                                 ↩ {existingCount} existing
                                             </span>
                                         )}
                                         {errorCount > 0 && (
-                                            <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400 text-xs">
+                                            <span className="inline-flex items-center gap-1 font-semibold text-danger text-xs">
                                                 ✕ {errorCount} errors
                                             </span>
                                         )}
                                     </div>
-                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    <svg className={`w-5 h-5 text-muted transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                 </button>
 
                                 {/* Rows table */}
                                 {isOpen && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
+                                    <div className="border-t border-default overflow-x-auto">
                                         <table className="w-full text-sm">
-                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                            <thead className="bg-surface-elevated text-left">
                                                 <tr>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course / Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Run ID</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Folder Path</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Course / Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Run ID</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Trainer</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted">Folder Path</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-muted text-center">Status</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                            <tbody className="divide-y divide-default">
                                                 {sortedRows.map((log, idx) => (
-                                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                    <tr key={idx} className="hover:bg-surface-hover transition-colors">
                                                         <td className="px-4 py-3">
-                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words max-w-[260px]">{log.course_title || '—'}</div>
+                                                            <div className="font-medium text-on-surface whitespace-normal break-words max-w-[260px]">{log.course_title || '—'}</div>
                                                             <div className="mt-1">
                                                                 {log.course_code
                                                                     ? <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
-                                                                    : <span className="text-gray-400">—</span>}
+                                                                    : <span className="text-muted">—</span>}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                            <span className="text-xs text-muted font-mono bg-surface-elevated px-1.5 py-0.5 rounded">
                                                                 {log.course_run_id || '—'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">
+                                                        <td className="px-4 py-3 text-xs text-on-surface-secondary">
                                                             {log.trainer_name || '—'}
-                                                            {log.trainer_source && <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{log.trainer_source}</div>}
+                                                            {log.trainer_source && <div className="text-[10px] text-muted mt-0.5 truncate max-w-[150px]">{log.trainer_source}</div>}
                                                         </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                                                        <td className="px-4 py-3 text-xs text-muted">
                                                            {log.folder_name || '—'}
                                                         </td>
                                                         <td className="px-4 py-3 text-center flex flex-col items-center">
                                                             {actionBadge(log.status)}
                                                             {log.error_message && (
-                                                                <div className="text-[10px] text-red-500 mt-1 max-w-[200px] whitespace-normal text-left" title={log.error_message}>{log.error_message}</div>
+                                                                <div className="text-[10px] text-danger mt-1 max-w-[200px] whitespace-normal text-left" title={log.error_message}>{log.error_message}</div>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -8066,10 +8117,10 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
   };
 
   const statusBadge = (status: string) => {
-    const cls = status === 'created' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-      : status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-      : status === 'skipped' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
-      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    const cls = status === 'created' ? 'bg-success-bg text-success'
+      : status === 'error' ? 'bg-danger-bg text-danger'
+      : status === 'skipped' ? 'bg-warning-bg text-warning'
+      : 'bg-surface-elevated text-on-surface-secondary';
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
         {status}
@@ -8094,25 +8145,25 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Daily at 6:30 PM SGT. Generates certificates for learners who meet attendance thresholds in recently-ended course runs, and emails them. Use <strong>Run Now</strong> to trigger manually.
       </p>
 
       {runResult && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+        <div className="mb-4 p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-sm text-success">
           ✅ Done — {runResult.totalGenerated} generated, {runResult.totalSkipped} skipped, {runResult.totalErrors} error(s).
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -8126,52 +8177,52 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
         const errorCount   = rows.filter((r: any) => r.status === 'error').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
-                {createdCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{createdCount} created</span>}
-                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
-                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} row(s)</span>
+                {createdCount > 0 && <span className="text-xs text-success">{createdCount} created</span>}
+                {skippedCount > 0 && <span className="text-xs text-warning">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-muted text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {['Course Run ID', 'Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'NRIC', 'Status', 'Certificate', 'Error'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map((row: any) => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                      <tr key={row.id} className="hover:bg-surface-hover">
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_code ?? '—'}</td>
                         <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.learner_email ?? '—'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-500">{row.nric ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-muted">{row.nric ?? '—'}</td>
                         <td className="px-3 py-2">{statusBadge(row.status)}</td>
                         <td className="px-3 py-2">
                           {row.certificate_url ? (
-                            <a href={row.certificate_url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs inline-flex items-center gap-1">
+                            <a href={row.certificate_url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono text-xs inline-flex items-center gap-1">
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
                               View
                             </a>
-                          ) : <span className="text-gray-400">—</span>}
+                          ) : <span className="text-muted">—</span>}
                         </td>
-                        <td className="px-3 py-2 max-w-[320px] truncate text-red-600 dark:text-red-400" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate text-danger" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -8267,12 +8318,12 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      success:  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-      error:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-      pending:  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      success:  'bg-success-bg text-success',
+      error:    'bg-danger-bg text-danger',
+      pending:  'bg-warning-bg text-warning',
     };
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-on-surface-secondary'}`}>
         {status}
       </span>
     );
@@ -8295,25 +8346,25 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Daily automation (2 AM SGT): for each upcoming TGS- course run within the configured threshold window, searches SSG for enrolments and assigns trainers accordingly. Use <strong>Run Now</strong> to trigger manually.
       </p>
 
       {runResult && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+        <div className="mb-4 p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-sm text-success">
           ✅ Done — processed <strong>{runResult.processed}</strong> run(s) within <strong>{runResult.thresholdDays}</strong>-day window: {runResult.success} succeeded, {runResult.errors} error(s).
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to fetch TGS enrolments and assign trainers.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Now</strong> to fetch TGS enrolments and assign trainers.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -8326,34 +8377,34 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
         const errorCount   = rows.filter(r => r.status === 'error').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} run(s)</span>
-                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} ok</span>}
-                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} run(s)</span>
+                {successCount > 0 && <span className="text-xs text-success">{successCount} ok</span>}
+                {errorCount   > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-muted text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {['Course Run ID', 'Course Code', 'Title', 'DB Start', 'SSG Start', 'SSG End', 'Mode', 'Vacancy', 'Status', 'Error'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id}</td>
+                      <tr key={row.id} className="hover:bg-surface-hover">
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_run_id}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.course_code}</td>
                         <td className="px-3 py-2 max-w-[200px] truncate">{row.course_title}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.db_start_date ?? '—'}</td>
@@ -8362,7 +8413,7 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
                         <td className="px-3 py-2 whitespace-nowrap">{row.mode_of_learning ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.vacancy_code ?? '—'}</td>
                         <td className="px-3 py-2">{statusBadge(row.status)}</td>
-                        <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[180px] truncate">{row.error_message ?? ''}</td>
+                        <td className="px-3 py-2 text-danger max-w-[180px] truncate">{row.error_message ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -8437,10 +8488,10 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      sent:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-      summary: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+      sent:    'bg-success-bg text-success',
+      skipped: 'bg-warning-bg text-warning',
+      error:   'bg-danger-bg text-danger',
+      summary: 'bg-info-bg text-primary',
     };
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? map.error}`}>
@@ -8467,14 +8518,14 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
         <div className="flex justify-center py-16">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading logs...</p>
+            <p className="mt-4 text-on-surface-secondary">Loading logs...</p>
           </div>
         </div>
       )}
 
       {!loading && logs.length === 0 && (
         <Card className="p-10">
-          <div className="text-center text-gray-500 dark:text-gray-400">
+          <div className="text-center text-muted">
             <p className="text-lg font-medium">No confirmation email logs yet</p>
             <p className="text-sm mt-1">Logs will appear here after the scheduled task runs.</p>
           </div>
@@ -8492,16 +8543,16 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
 
         return (
           <div key={runId} className="mb-3">
-            <button onClick={() => toggleDate(runId)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+            <button onClick={() => toggleDate(runId)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated rounded-lg hover:bg-surface-hover transition-colors">
               <div className="flex items-center gap-3">
                 <span className={`transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{date}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">({entries.length} records)</span>
+                <span className="font-semibold text-on-surface">{date}</span>
+                <span className="text-xs text-muted">({entries.length} records)</span>
               </div>
               <div className="flex items-center gap-2 text-xs">
-                {sentCount > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold">{sentCount} sent</span>}
-                {skippedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 font-semibold">{skippedCount} skipped</span>}
-                {errorCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold">{errorCount} errors</span>}
+                {sentCount > 0 && <span className="px-2 py-0.5 rounded-full bg-success-bg text-success font-semibold">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-warning-bg text-warning font-semibold">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="px-2 py-0.5 rounded-full bg-danger-bg text-danger font-semibold">{errorCount} errors</span>}
               </div>
             </button>
 
@@ -8509,7 +8560,7 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
               <div className="mt-1 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase">
+                    <tr className="text-left text-xs text-muted uppercase">
                       <th className="px-3 py-2">Status</th>
                       <th className="px-3 py-2">Learner</th>
                       <th className="px-3 py-2">Email</th>
@@ -8518,15 +8569,15 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
                       <th className="px-3 py-2">Error</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {entries.map(entry => (
-                      <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                      <tr key={entry.id} className="hover:bg-surface-hover">
                         <td className="px-3 py-2">{statusBadge(entry.status)}</td>
-                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.learner_name || '—'}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs">{entry.learner_email || '—'}</td>
-                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.course_title || '—'}</td>
-                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400 font-mono text-xs">{entry.course_run_id || '—'}</td>
-                        <td className="px-3 py-2 text-red-600 dark:text-red-400 text-xs max-w-xs truncate" title={entry.error_message || ''}>{entry.error_message || '—'}</td>
+                        <td className="px-3 py-2 text-on-surface">{entry.learner_name || '—'}</td>
+                        <td className="px-3 py-2 text-on-surface-secondary font-mono text-xs">{entry.learner_email || '—'}</td>
+                        <td className="px-3 py-2 text-on-surface">{entry.course_title || '—'}</td>
+                        <td className="px-3 py-2 text-muted font-mono text-xs">{entry.course_run_id || '—'}</td>
+                        <td className="px-3 py-2 text-danger text-xs max-w-xs truncate" title={entry.error_message || ''}>{entry.error_message || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -8620,13 +8671,13 @@ export const SyncTrainerTpgLogsView: React.FC = () => {
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-      pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+      success: 'bg-success-bg text-success',
+      error:   'bg-danger-bg text-danger',
+      skipped: 'bg-warning-bg text-warning',
+      pending: 'bg-surface-elevated text-on-surface-secondary',
     };
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-on-surface-secondary'}`}>
         {status}
       </span>
     );
@@ -8649,25 +8700,25 @@ export const SyncTrainerTpgLogsView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Daily automation: for each upcoming confirmed course run with an assigned trainer (no TPG trainer yet), resolves the trainer's NRIC and syncs to SSG. Use <strong>Run Now</strong> to trigger manually.
       </p>
 
       {runResult && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+        <div className="mb-4 p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-sm text-success">
           ✅ Done — {runResult.total} run(s) within {runResult.thresholdDays}-day window: {runResult.successCount} synced, {runResult.skipped} skipped, {runResult.errors} error(s).
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to sync trainers to TPG.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Now</strong> to sync trainers to TPG.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -8681,44 +8732,44 @@ export const SyncTrainerTpgLogsView: React.FC = () => {
         const skippedCount = rows.filter(r => r.status === 'skipped').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} run(s)</span>
-                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} synced</span>}
-                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
-                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} run(s)</span>
+                {successCount > 0 && <span className="text-xs text-success">{successCount} synced</span>}
+                {skippedCount > 0 && <span className="text-xs text-warning">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-muted text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {['Course Run ID', 'Course Code', 'Trainer Name', 'Trainer Email', 'NRIC', 'SSG Status', 'Status', 'Error'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                      <tr key={row.id} className="hover:bg-surface-hover">
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_run_id ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.course_code ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap font-mono">
-                          {row.nric_present ? (row.nric_masked ?? '✓') : <span className="text-red-500">Not in database</span>}
+                          {row.nric_present ? (row.nric_masked ?? '✓') : <span className="text-danger">Not in database</span>}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.ssg_status ?? '—'}</td>
                         <td className="px-3 py-2">{statusBadge(row.status)}</td>
-                        <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[200px] truncate">{row.error_message ?? ''}</td>
+                        <td className="px-3 py-2 text-danger max-w-[200px] truncate">{row.error_message ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -8817,10 +8868,10 @@ export const AutoSendTrainerInvitationLogView: React.FC = () => {
   // grouped header counts (sent / skipped / error) stay readable at a glance.
   const statusBadge = (status: string) => {
     let cls: string;
-    if (status === 'sent') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-    else if (status.startsWith('skipped')) cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
-    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    if (status === 'sent') cls = 'bg-success-bg text-success';
+    else if (status === 'error') cls = 'bg-danger-bg text-danger';
+    else if (status.startsWith('skipped')) cls = 'bg-warning-bg text-warning';
+    else cls = 'bg-surface-elevated text-on-surface-secondary';
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
         {status}
@@ -8845,25 +8896,25 @@ export const AutoSendTrainerInvitationLogView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Scheduled sweep (default Mon &amp; Thu 10:00 AM SGT): scans upcoming course runs within the lookahead window and, for every class missing a locally-assigned trainer, invites the next approved trainer who hasn't already been invited, declined, or assigned. Use <strong>Run Now</strong> to trigger manually.
       </p>
 
       {runResult && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+        <div className="mb-4 p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-sm text-success">
           ✅ Done — {runResult.totalEligible} eligible run(s) within {runResult.windowDays}-day window: {runResult.sent} sent, {runResult.skipped} skipped, {runResult.errors} error(s).
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to invite trainers for upcoming classes.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Now</strong> to invite trainers for upcoming classes.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -8877,35 +8928,35 @@ export const AutoSendTrainerInvitationLogView: React.FC = () => {
         const errorCount   = rows.filter(r => r.status === 'error').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
-                {sentCount    > 0 && <span className="text-xs text-green-600 dark:text-green-400">{sentCount} sent</span>}
-                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
-                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} row(s)</span>
+                {sentCount    > 0 && <span className="text-xs text-success">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="text-xs text-warning">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-muted text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {['Course Run ID', 'Course Title', 'Trainer Name', 'Trainer Email', 'Status', 'Message'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                      <tr key={row.id} className="hover:bg-surface-hover">
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_run_id ?? '—'}</td>
                         <td className="px-3 py-2 max-w-[220px] truncate">{row.course_title ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
@@ -9006,10 +9057,10 @@ export const AutoSanitiseDataLogView: React.FC = () => {
 
   const statusBadge = (status: string) => {
     let cls: string;
-    if (status === 'success') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-    else if (status === 'skipped') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
-    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    if (status === 'success') cls = 'bg-success-bg text-success';
+    else if (status === 'error') cls = 'bg-danger-bg text-danger';
+    else if (status === 'skipped') cls = 'bg-warning-bg text-warning';
+    else cls = 'bg-surface-elevated text-on-surface-secondary';
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
         {status}
@@ -9034,14 +9085,14 @@ export const AutoSanitiseDataLogView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Weekly sweep (default Sunday 02:00 SGT): redacts NRIC and phone digits on rows older than the retention window configured in <strong>Company Settings → Security Setting → Auto Sanitise Data</strong>. Honours the master toggle (off → skipped). Use <strong>Run Once</strong> to trigger manually.
       </p>
 
       {runResult && (
         <div className={`mb-4 p-3 rounded-lg border text-sm ${runResult.enabled
-          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
+          ? 'bg-success-bg border-green-200 dark:border-green-800 text-success'
+          : 'bg-warning-bg border-yellow-200 dark:border-yellow-800 text-warning'}`}>
           {runResult.enabled
             ? <>✅ Done — scanned <strong>{runResult.totalScanned}</strong>, sanitised <strong>{runResult.totalUpdated}</strong> row(s) older than {runResult.cutoffDate} (retention {runResult.retentionMonths} months).</>
             : <>⚠️ Skipped — Auto Sanitise Data is currently <strong>disabled</strong>. Enable it in Company Settings → Security Setting.</>
@@ -9049,15 +9100,15 @@ export const AutoSanitiseDataLogView: React.FC = () => {
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Once</strong> to sanitise old PII now.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Once</strong> to sanitise old PII now.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -9072,36 +9123,36 @@ export const AutoSanitiseDataLogView: React.FC = () => {
         const skippedCount = rows.filter(r => r.status === 'skipped').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} table(s)</span>
-                {totalUpdated > 0 && <span className="text-xs text-green-600 dark:text-green-400">{totalUpdated} sanitised / {totalScanned} scanned</span>}
-                {totalUpdated === 0 && totalScanned > 0 && <span className="text-xs text-gray-500 dark:text-gray-400">{totalScanned} scanned</span>}
-                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
-                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} table(s)</span>
+                {totalUpdated > 0 && <span className="text-xs text-success">{totalUpdated} sanitised / {totalScanned} scanned</span>}
+                {totalUpdated === 0 && totalScanned > 0 && <span className="text-xs text-muted">{totalScanned} scanned</span>}
+                {skippedCount > 0 && <span className="text-xs text-warning">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-muted text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {['Table', 'Scanned', 'Updated', 'Cutoff Date', 'Status', 'Message'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.table_name}</td>
+                      <tr key={row.id} className="hover:bg-surface-hover">
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.table_name}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.rows_scanned}</td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.rows_updated}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.cutoff_date ?? '—'}</td>
@@ -9183,10 +9234,10 @@ export const MailerliteSyncLogView: React.FC = () => {
 
   const statusBadge = (status: string) => {
     let cls: string;
-    if (status === 'success') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-    else if (status === 'skipped') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
-    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    if (status === 'success') cls = 'bg-success-bg text-success';
+    else if (status === 'error') cls = 'bg-danger-bg text-danger';
+    else if (status === 'skipped') cls = 'bg-warning-bg text-warning';
+    else cls = 'bg-surface-elevated text-on-surface-secondary';
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
         {status}
@@ -9211,14 +9262,14 @@ export const MailerliteSyncLogView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Daily sync (default 3:00 AM SGT): submits <strong>new</strong> learner emails to the configured MailerLite subscriber group. Government (<strong>gov.sg</strong>) addresses are always excluded, and already-submitted emails are skipped. Use <strong>Run Once</strong> to trigger manually.
       </p>
 
       {runResult && (
         <div className={`mb-4 p-3 rounded-lg border text-sm ${runResult.enabled
-          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
+          ? 'bg-success-bg border-green-200 dark:border-green-800 text-success'
+          : 'bg-warning-bg border-yellow-200 dark:border-yellow-800 text-warning'}`}>
           {runResult.enabled
             ? <>✅ Done — <strong>{runResult.submitted}</strong> of <strong>{runResult.totalCandidates}</strong> new learner email(s) submitted{runResult.failed > 0 && <>, <strong>{runResult.failed}</strong> failed</>}.</>
             : <>⚠️ Skipped — MailerLite is not configured. Set the API Key and Group ID under <strong>Company Settings → Integrations → MailerLite</strong>.</>
@@ -9226,31 +9277,31 @@ export const MailerliteSyncLogView: React.FC = () => {
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && logs.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No sync runs yet. Click <strong>Run Once</strong> to submit new learner emails now.</p>
+        <p className="text-sm text-muted py-6 text-center">No sync runs yet. Click <strong>Run Once</strong> to submit new learner emails now.</p>
       )}
 
       {!loading && logs.length > 0 && (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div className="border border-default rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-slate-700/30">
+              <thead className="bg-surface-elevated">
                 <tr>
                   {['Run Time (SGT)', 'New Emails', 'Submitted', 'Errors', 'Status', 'Message'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              <tbody className="divide-y divide-default">
                 {logs.map(row => (
-                  <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                  <tr key={row.id} className="hover:bg-surface-hover">
                     <td className="px-3 py-2 whitespace-nowrap">
                       {new Date(row.created_at).toLocaleString('en-SG', {
                         timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
@@ -9355,10 +9406,10 @@ const AutoSendEmailLogView: React.FC<{
   };
 
   const statusBadge = (status: string) => {
-    const cls = status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-      : status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-      : status === 'skipped' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
-      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    const cls = status === 'sent' ? 'bg-success-bg text-success'
+      : status === 'error' ? 'bg-danger-bg text-danger'
+      : status === 'skipped' ? 'bg-warning-bg text-warning'
+      : 'bg-surface-elevated text-on-surface-secondary';
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
         {status}
@@ -9383,23 +9434,23 @@ const AutoSendEmailLogView: React.FC<{
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
+      <p className="text-sm text-muted mb-4">{description}</p>
 
       {runResult && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+        <div className="mb-4 p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-sm text-success">
           ✅ Done — {runResult.totalSent} sent, {runResult.totalSkipped} skipped, {runResult.totalErrors} error(s).
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           ❌ {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading…</p>}
 
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -9413,36 +9464,36 @@ const AutoSendEmailLogView: React.FC<{
         const errorCount   = rows.filter(r => r.status === 'error').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
-                {sentCount    > 0 && <span className="text-xs text-green-600 dark:text-green-400">{sentCount} sent</span>}
-                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
-                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} row(s)</span>
+                {sentCount    > 0 && <span className="text-xs text-success">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="text-xs text-warning">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-muted text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {['Course Run ID', 'Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'Status', 'Error'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                      <tr key={row.id} className="hover:bg-surface-hover">
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-on-surface-secondary whitespace-nowrap">{row.course_code ?? '—'}</td>
                         <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.learner_email ?? '—'}</td>
@@ -9569,12 +9620,12 @@ const ScheduledInvoiceLogView: React.FC<{
 
   const statusBadge = (status: string) => {
     const cls = ['generated', 'success'].includes(status)
-      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      ? 'bg-success-bg text-success'
       : status === 'error'
-        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+        ? 'bg-danger-bg text-danger'
         : status === 'skipped'
-          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
-          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+          ? 'bg-warning-bg text-warning'
+          : 'bg-surface-elevated text-on-surface-secondary';
     return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{status}</span>;
   };
 
@@ -9602,22 +9653,22 @@ const ScheduledInvoiceLogView: React.FC<{
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
+      <p className="text-sm text-muted mb-4">{description}</p>
 
       {runSummary && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+        <div className="mb-4 p-3 rounded-lg bg-success-bg border border-green-200 dark:border-green-800 text-sm text-success">
           Done - {runSummary}.
         </div>
       )}
       {runError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800 text-sm text-danger">
           {runError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading...</p>}
+      {loading && <p className="text-sm text-muted py-6 text-center">Loading...</p>}
       {!loading && batches.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+        <p className="text-sm text-muted py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
       )}
 
       {batches.map(([runId, rows]) => {
@@ -9631,37 +9682,37 @@ const ScheduledInvoiceLogView: React.FC<{
         const errorCount = rows.filter(r => r.status === 'error').length;
 
         return (
-          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div key={runId} className="mb-3 border border-default rounded-xl overflow-hidden">
             <button
               onClick={() => toggleBatch(runId)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated hover:bg-surface-hover text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
-                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
-                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} ok</span>}
-                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
-                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+                <span className="text-sm font-semibold text-on-surface">{ts} SGT</span>
+                <span className="text-xs text-muted">{rows.length} row(s)</span>
+                {successCount > 0 && <span className="text-xs text-success">{successCount} ok</span>}
+                {skippedCount > 0 && <span className="text-xs text-warning">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-danger">{errorCount} error</span>}
               </div>
-              <span className="text-gray-400 text-xs">{isOpen ? '^' : 'v'}</span>
+              <span className="text-muted text-xs">{isOpen ? '^' : 'v'}</span>
             </button>
 
             {isOpen && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                  <thead className="bg-surface-elevated">
                     <tr>
                       {(type === 'proforma'
                         ? ['Enrolment ID', 'Learner', 'Course Code', 'Course Title', 'Invoice No.', 'Drive', 'Status', 'Message']
                         : ['Application ID', 'Enrolment ID', 'Stage', 'Status', 'Failed Step', 'Message', 'Error']
                       ).map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-on-surface-secondary whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody className="divide-y divide-default">
                     {rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                      <tr key={row.id} className="hover:bg-surface-hover">
                         {type === 'proforma' ? (
                           <>
                             <td className="px-3 py-2 font-mono whitespace-nowrap">{row.enrolment_id ?? row.enrollment_id ?? '-'}</td>
@@ -9669,7 +9720,7 @@ const ScheduledInvoiceLogView: React.FC<{
                             <td className="px-3 py-2 font-mono whitespace-nowrap">{row.course_code ?? '-'}</td>
                             <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '-'}</td>
                             <td className="px-3 py-2 font-mono whitespace-nowrap">{row.invoice_number ?? '-'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{row.drive_url ? <a className="text-blue-600 hover:underline" href={row.drive_url} target="_blank" rel="noreferrer">Open</a> : '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.drive_url ? <a className="text-primary hover:underline" href={row.drive_url} target="_blank" rel="noreferrer">Open</a> : '-'}</td>
                             <td className="px-3 py-2">{statusBadge(row.status)}</td>
                             <td className="px-3 py-2 max-w-[320px] truncate" title={row.reason ?? row.error_message ?? ''}>{row.reason ?? row.error_message ?? ''}</td>
                           </>

@@ -234,7 +234,7 @@ export const CreateNewClassView: React.FC = () => {
         fileContent: false
     });
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white";
 
     // Fetch available courses on component mount
     const fetchAvailableCourses = async () => {
@@ -781,23 +781,23 @@ export const CreateNewClassView: React.FC = () => {
                     <div className="p-6 border-b dark:border-gray-700">
                         <div className="flex items-center gap-3 mb-2">
                             {submissionResult.success ? (
-                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="w-10 h-10 bg-success-bg rounded-full flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                             ) : (
-                                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="w-10 h-10 bg-danger-bg rounded-full flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
                                     </svg>
                                 </div>
                             )}
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                <h2 className="text-2xl font-bold text-on-surface">
                                     {submissionResult.success ? 'Class Creation Result' : 'Class Creation Result'}
                                 </h2>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                <p className="text-sm text-on-surface-secondary">
                                     {submissionResult.success ? 'Successfully created course run' : 'Failed to create course run'}
                                 </p>
                             </div>
@@ -806,61 +806,61 @@ export const CreateNewClassView: React.FC = () => {
 
                     <div className="p-6">
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                <thead className="bg-gray-50 dark:bg-gray-800">
+                            <table className="min-w-full divide-y divide-default">
+                                <thead className="bg-surface-elevated">
                                     <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             Course Reference Number
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             Course Start Date
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             Course End Date
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             Status
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             Course Run ID
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                                             Response
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-600">
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                <tbody className="bg-surface divide-y divide-default">
+                                    <tr className="hover:bg-surface-hover">
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-on-surface">
                                             {courseReferenceNumber}
                                         </td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-muted">
                                             {formatDateToYYYYMMDD(courseStartDate)}
                                         </td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-muted">
                                             {formatDateToYYYYMMDD(courseEndDate)}
                                         </td>
                                         <td className="px-4 py-4 whitespace-nowrap">
                                             <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
                                                 submissionResult.success
-                                                    ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
-                                                    : 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                                                    ? 'bg-success-bg text-success border border-green-200 dark:border-green-700'
+                                                    : 'bg-danger-bg text-danger border border-red-200 dark:border-red-700'
                                             }`}>
                                                 {submissionResult.success ? 'Success' : 'Error'}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-white">
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-on-surface">
                                             {submissionResult.courseRunId || 'N/A'}
                                         </td>
-                                        <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                        <td className="px-4 py-4 text-sm text-on-surface-secondary">
                                             <div className="max-w-md">
                                                 {submissionResult.success ? (
                                                     <div className="flex items-start gap-2">
-                                                        <span className="text-green-600 dark:text-green-400">✓</span>
+                                                        <span className="text-success">✓</span>
                                                         <span>Success</span>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-start gap-2 text-red-700 dark:text-red-400">
+                                                    <div className="flex items-start gap-2 text-danger">
                                                         <span>❌</span>
                                                         <span>{submissionResult.message || 'An unknown error occurred'}</span>
                                                     </div>
@@ -897,7 +897,7 @@ export const CreateNewClassView: React.FC = () => {
             {/* Course Run Section */}
             <div className="mb-12">
                 <div className="flex items-center mb-6">
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Course Run</h3>
+                    <h3 className="text-2xl font-bold text-on-surface">Course Run</h3>
                 </div>
                 <div className="space-y-6">
 
@@ -905,7 +905,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Basic Information">
                         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Course Reference Number
                                 </label>
                                 <input
@@ -915,18 +915,18 @@ export const CreateNewClassView: React.FC = () => {
                                     className={inputClasses}
                                     placeholder="Enter course code (e.g., TGS-2024001234)"
                                 />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <p className="text-xs text-muted mt-1">
                                     Enter the course code manually or select from available courses below
                                 </p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Or Select from Available Courses
                                 </label>
                                 {loadingCourses ? (
                                     <div className="flex items-center space-x-2">
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">Loading courses...</span>
+                                        <span className="text-sm text-muted">Loading courses...</span>
                                     </div>
                                 ) : (
                                     <select
@@ -943,7 +943,7 @@ export const CreateNewClassView: React.FC = () => {
                                     </select>
                                 )}
                                 {availableCourses.length === 0 && !loadingCourses && (
-                                    <p className="text-xs text-amber-600 mt-1">
+                                    <p className="text-xs text-warning mt-1">
                                         No courses found in the database. You can still enter a course code manually above.
                                     </p>
                                 )}
@@ -955,7 +955,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Opening Registration Date
                                 </label>
                                 <input
@@ -967,7 +967,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Closing Registration Date
                                 </label>
                                 <input
@@ -984,7 +984,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Course Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Course Start Date
                                 </label>
                                 <input
@@ -996,7 +996,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Course End Date
                                 </label>
                                 <input
@@ -1014,7 +1014,7 @@ export const CreateNewClassView: React.FC = () => {
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         Venue Block
                                     </label>
                                     <input
@@ -1028,7 +1028,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         Venue Street
                                     </label>
                                     <input
@@ -1042,7 +1042,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         Venue Building
                                     </label>
                                     <input
@@ -1057,7 +1057,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Wheelchair Accessible
                                 </label>
                                 <select
@@ -1075,7 +1075,7 @@ export const CreateNewClassView: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         * Floor
                                     </label>
                                     <input
@@ -1089,7 +1089,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         * Unit
                                     </label>
                                     <input
@@ -1103,7 +1103,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         * Postal Code
                                     </label>
                                     <input
@@ -1117,7 +1117,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         * Room
                                     </label>
                                     <input
@@ -1137,7 +1137,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Course Admin Details">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Mode of Training
                                 </label>
                                 <select
@@ -1154,7 +1154,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     * Course Admin Email
                                 </label>
                                 <input
@@ -1172,7 +1172,7 @@ export const CreateNewClassView: React.FC = () => {
                     {/* Course Vacancy Details */}
                     <FormSection title="Course Vacancy Details">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                 * Course Vacancy
                             </label>
                             <select
@@ -1193,7 +1193,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Instant Confirm Settings">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Intake Size
                                 </label>
                                 <input
@@ -1202,13 +1202,13 @@ export const CreateNewClassView: React.FC = () => {
                                     readOnly
                                     className={`${inputClasses} cursor-not-allowed opacity-80`}
                                 />
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <p className="mt-1 text-xs text-muted">
                                     Default from Company Settings for Direct Application Instant Confirm.
                                 </p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                     Threshold
                                 </label>
                                 <input
@@ -1217,7 +1217,7 @@ export const CreateNewClassView: React.FC = () => {
                                     readOnly
                                     className={`${inputClasses} cursor-not-allowed opacity-80`}
                                 />
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <p className="mt-1 text-xs text-muted">
                                     Default from Company Settings for Direct Application Instant Confirm.
                                 </p>
                             </div>
@@ -1227,7 +1227,7 @@ export const CreateNewClassView: React.FC = () => {
             </div>
 
             {/* Optional Sections Checkboxes */}
-            <div className="mb-12 border-t border-gray-200 pt-8">
+            <div className="mb-12 border-t border-default pt-8">
                 <div className="space-y-4">
                     <FormSection title="Optional Sections">
                         <div className="space-y-4">
@@ -1309,12 +1309,12 @@ export const CreateNewClassView: React.FC = () => {
                                             }
                                         }
                                     }}
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    className="h-4 w-4 text-primary focus:ring-blue-500 border-strong rounded"
                                 />
-                                <label htmlFor="add-sessions" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label htmlFor="add-sessions" className="text-sm font-medium text-on-surface-secondary">
                                     Add Sessions
                                 </label>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                <span className="text-xs text-muted">
                                     (Add specific session details with dates, times, and venues)
                                 </span>
                             </div>
@@ -1325,12 +1325,12 @@ export const CreateNewClassView: React.FC = () => {
                                     id="assign-trainer"
                                     checked={showTrainer}
                                     onChange={(e) => setShowTrainer(e.target.checked)}
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    className="h-4 w-4 text-primary focus:ring-blue-500 border-strong rounded"
                                 />
-                                <label htmlFor="assign-trainer" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label htmlFor="assign-trainer" className="text-sm font-medium text-on-surface-secondary">
                                     Assign Trainer
                                 </label>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                <span className="text-xs text-muted">
                                     (Assign an existing trainer to this course)
                                 </span>
                             </div>
@@ -1341,10 +1341,10 @@ export const CreateNewClassView: React.FC = () => {
 
             {/* Sessions Section */}
             {showSessions && (
-                <div className="mb-12 border-t border-gray-200 pt-8">
+                <div className="mb-12 border-t border-default pt-8">
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
-                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Sessions</h3>
+                            <h3 className="text-2xl font-bold text-on-surface">Sessions</h3>
                             <Button
                                 variant="outline"
                                 onClick={fetchSessionTiming}
@@ -1370,7 +1370,7 @@ export const CreateNewClassView: React.FC = () => {
                                                 if (autoSessions.length > 0) { setSessions(autoSessions); setSessionCount(autoSessions.length); }
                                             }
                                         }}
-                                        className={`px-3 py-1 text-sm rounded-md border ${sessionType === 'day' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'}`}
+                                        className={`px-3 py-1 text-sm rounded-md border ${sessionType === 'day' ? 'bg-blue-600 text-white border-blue-600' : 'bg-surface text-on-surface-secondary border-strong'}`}
                                     >
                                         Day
                                     </button>
@@ -1386,7 +1386,7 @@ export const CreateNewClassView: React.FC = () => {
                                                 if (autoSessions.length > 0) { setSessions(autoSessions); setSessionCount(autoSessions.length); }
                                             }
                                         }}
-                                        className={`px-3 py-1 text-sm rounded-md border ${sessionType === 'evening' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'}`}
+                                        className={`px-3 py-1 text-sm rounded-md border ${sessionType === 'evening' ? 'bg-blue-600 text-white border-blue-600' : 'bg-surface text-on-surface-secondary border-strong'}`}
                                     >
                                         Evening
                                     </button>
@@ -1418,7 +1418,7 @@ export const CreateNewClassView: React.FC = () => {
                                                 setShowSessions(false);
                                             }
                                         }}
-                                        className="text-red-500 hover:text-red-700 px-2 py-1 text-sm"
+                                        className="text-danger hover:text-red-700 px-2 py-1 text-sm"
                                     >
                                         Remove
                                     </Button>
@@ -1426,7 +1426,7 @@ export const CreateNewClassView: React.FC = () => {
                             }>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                             * Mode of Training
                                         </label>
                                         <select
@@ -1444,7 +1444,7 @@ export const CreateNewClassView: React.FC = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                 * Start Date
                                             </label>
                                             <input
@@ -1456,7 +1456,7 @@ export const CreateNewClassView: React.FC = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                 * End Date
                                             </label>
                                             <input
@@ -1471,7 +1471,7 @@ export const CreateNewClassView: React.FC = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                 * Start Time
                                             </label>
                                             <input
@@ -1484,7 +1484,7 @@ export const CreateNewClassView: React.FC = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                 * End Time
                                             </label>
                                             <input
@@ -1499,7 +1499,7 @@ export const CreateNewClassView: React.FC = () => {
 
                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                            <p className="text-blue-700 text-sm">
+                                            <p className="text-primary text-sm">
                                                 Start and end time are set to 12:00 AM to 11:59 PM respectively for this mode of training.
                                             </p>
                                         </div>
@@ -1508,23 +1508,23 @@ export const CreateNewClassView: React.FC = () => {
                                     {/* Session Venue */}
                                     <div className="border-t pt-4">
                                         <div className="flex items-center justify-between mb-3">
-                                            <h5 className="font-medium text-gray-700 dark:text-gray-300">Venue Information</h5>
+                                            <h5 className="font-medium text-on-surface-secondary">Venue Information</h5>
                                             <div className="flex items-center space-x-2">
                                                 <input
                                                     type="checkbox"
                                                     id={`use-default-venue-${index}`}
                                                     checked={session.useDefaultVenue}
                                                     onChange={(e) => updateSessionField(index, 'useDefaultVenue', e.target.checked)}
-                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                    className="h-4 w-4 text-primary focus:ring-blue-500 border-strong rounded"
                                                 />
-                                                <label htmlFor={`use-default-venue-${index}`} className="text-sm text-gray-600 dark:text-gray-400">
+                                                <label htmlFor={`use-default-venue-${index}`} className="text-sm text-on-surface-secondary">
                                                     Use default primary venue
                                                 </label>
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                     * Floor
                                                 </label>
                                                 <input
@@ -1539,7 +1539,7 @@ export const CreateNewClassView: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                     * Unit
                                                 </label>
                                                 <input
@@ -1554,7 +1554,7 @@ export const CreateNewClassView: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                     * Postal Code
                                                 </label>
                                                 <input
@@ -1569,7 +1569,7 @@ export const CreateNewClassView: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                                     * Room
                                                 </label>
                                                 <input
@@ -1593,24 +1593,24 @@ export const CreateNewClassView: React.FC = () => {
 
             {/* Trainer Section */}
             {showTrainer && (
-                <div className="mb-12 border-t border-gray-200 pt-8">
+                <div className="mb-12 border-t border-default pt-8">
                     <div className="flex items-center mb-6">
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Trainer</h3>
+                        <h3 className="text-2xl font-bold text-on-surface">Trainer</h3>
                     </div>
                     <div className="space-y-6">
 
                         <FormSection title="Assign Existing Trainer">
                             <div className="space-y-4">
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                    <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Existing Trainer Assignment</h4>
-                                    <p className="text-blue-700 dark:text-blue-400 text-sm">
+                                <div className="bg-info-bg border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                    <h4 className="font-semibold text-info mb-2">Existing Trainer Assignment</h4>
+                                    <p className="text-primary text-sm">
                                         Enter the Trainer ID Number to assign an existing trainer to this course.
                                         The system will automatically retrieve trainer details from the existing trainer database.
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                         * Trainer ID Number
                                     </label>
                                     <input
@@ -1621,7 +1621,7 @@ export const CreateNewClassView: React.FC = () => {
                                         placeholder="S1234567A"
                                         maxLength={50}
                                     />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    <p className="text-xs text-muted mt-1">
                                         This refers to the NRIC number of the existing trainer.
                                     </p>
                                 </div>

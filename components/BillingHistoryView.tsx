@@ -34,15 +34,15 @@ const formatDate = (dateStr: string | null): string => {
 const typeBadgeClass = (type: string): string => {
   switch (type) {
     case 'Proforma Invoice':
-      return 'bg-yellow-50 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+      return 'bg-warning-bg text-warning';
     case 'Personal Invoice':
       return 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
     case 'Company Invoice':
       return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300';
     case 'Receipt':
-      return 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+      return 'bg-danger-bg text-danger';
     default:
-      return 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
+      return 'bg-surface-elevated text-muted';
   }
 };
 
@@ -128,7 +128,7 @@ const BillingHistoryView: React.FC = () => {
   });
 
   const cell = 'px-4 py-3 text-xs whitespace-nowrap';
-  const headerCell = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
+  const headerCell = 'px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap';
 
   return (
     <div className="space-y-6">
@@ -138,8 +138,8 @@ const BillingHistoryView: React.FC = () => {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-5 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-yellow-50 dark:bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.FileText} className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+          <div className="w-11 h-11 rounded-xl bg-warning-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.FileText} className="w-5 h-5 text-warning" />
           </div>
           <div>
             <p className="text-2xl font-bold text-on-surface">{loading ? '—' : summary.proformaCount}</p>
@@ -156,8 +156,8 @@ const BillingHistoryView: React.FC = () => {
           </div>
         </Card>
         <Card className="p-5 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-red-600 dark:text-red-400" />
+          <div className="w-11 h-11 rounded-xl bg-danger-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-danger" />
           </div>
           <div>
             <p className="text-2xl font-bold text-on-surface">{loading ? '—' : summary.receiptCount}</p>
@@ -216,7 +216,7 @@ const BillingHistoryView: React.FC = () => {
               ) : error ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center">
-                    <p className="text-sm text-red-500">{error}</p>
+                    <p className="text-sm text-danger">{error}</p>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -269,12 +269,12 @@ const BillingHistoryView: React.FC = () => {
                     {/* Status */}
                     <td className={`${cell} text-center`}>
                       {row.status === 'Issued' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-success-bg text-success">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Issued
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-700/40 dark:text-gray-400">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-surface-elevated text-muted">
                           <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
                           Pending
                         </span>
@@ -286,7 +286,7 @@ const BillingHistoryView: React.FC = () => {
                       (row.type === 'Personal Invoice' && row.status === 'Issued' && row.invoice_pdf_ready) ? (
                         brokenLinks.has(`${row.enrollment_id}-${row.type}`) ? (
                           <div className="flex flex-col items-center gap-1">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">
                               <Icon name={IconName.Warning} className="w-3 h-3" />
                               Unavailable
                             </span>
@@ -316,7 +316,7 @@ const BillingHistoryView: React.FC = () => {
                                   }
                                 }}
                                 disabled={verifyingId === `${row.enrollment_id}-${row.type}`}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-60"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-info-bg text-primary hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-60"
                               >
                                 {verifyingId === `${row.enrollment_id}-${row.type}` ? (
                                   <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-700 dark:border-blue-400" />

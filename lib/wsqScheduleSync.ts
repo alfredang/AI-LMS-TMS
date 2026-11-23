@@ -107,7 +107,7 @@ export async function getPriorFailureMap(): Promise<Map<string, PriorFailure>> {
 // which only records the per-item sync execution. Mirrors the trainer-invite log.
 
 export interface WsqSyncCronLogEntry {
-  cron: 'daily_fresh' | 'weekly_blocked';
+  cron: 'daily_fresh' | 'weekly_blocked' | 'storefront_request';
   status: 'started' | 'nothing_to_do' | 'already_running' | 'error';
   considered?: number;
   skippedPreviouslyFailed?: number;

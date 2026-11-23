@@ -58,14 +58,14 @@ const maskNric = (nric: string | null): string => {
 };
 
 const statusColor = (status: string | null): string => {
-  if (!status) return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  if (!status) return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
   const s = status.toLowerCase();
-  if (s.includes('completed') || s.includes('confirmed')) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-  if (s.includes('cancelled')) return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-  if (s.includes('rejected') || s.includes('refunded')) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-  if (s.includes('pending') || s.includes('ready')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-  if (s.includes('processing') || s.includes('approved')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  if (s.includes('completed') || s.includes('confirmed')) return 'bg-success-bg text-success';
+  if (s.includes('cancelled')) return 'bg-danger-bg text-danger';
+  if (s.includes('rejected') || s.includes('refunded')) return 'bg-danger-bg text-danger';
+  if (s.includes('pending') || s.includes('ready')) return 'bg-warning-bg text-warning';
+  if (s.includes('processing') || s.includes('approved')) return 'bg-info-bg text-info';
+  return 'bg-surface-elevated text-gray-800 dark:text-gray-300';
 };
 
 const PAGE_SIZE = 20;
@@ -103,10 +103,10 @@ const ProgressModal: React.FC<{
   const allFailed = done && succeeded === 0 && failed > 0;
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" style={{ backdropFilter: 'blur(8px)' }}>
-      <div className="w-full max-w-md mx-4 rounded-2xl bg-white dark:bg-gray-800 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="w-full max-w-md mx-4 rounded-2xl bg-surface shadow-2xl overflow-hidden border border-default">
         <div className={`h-1 ${done ? (allFailed ? 'bg-red-500' : 'bg-emerald-500') : 'bg-amber-500'}`} />
         <div className="flex flex-col items-center pt-7 pb-2 px-6">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${done ? (allFailed ? 'bg-red-100 dark:bg-red-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30') : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${done ? (allFailed ? 'bg-danger-bg' : 'bg-success-bg') : 'bg-warning-bg'}`}>
             {done ? (
               allFailed ? (
                 <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -117,10 +117,10 @@ const ProgressModal: React.FC<{
               <div className="animate-spin rounded-full h-7 w-7 border-[3px] border-amber-200 border-t-amber-500" />
             )}
           </div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-base font-semibold text-on-surface">
             {done ? (allFailed ? `${verb} failed` : `${verb} complete!`) : `${verb}…`}
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+          <p className="text-xs text-muted mt-1 text-center">
             {done ? `Completed in ${fmtDuration(elapsed)}` : `Processing ${total} enrolment(s), please wait…`}
           </p>
         </div>
@@ -138,18 +138,18 @@ const ProgressModal: React.FC<{
         </div>
         {done && (
           <div className="px-6 pt-3 pb-1">
-            <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 divide-x divide-gray-200 dark:divide-gray-600 overflow-hidden">
+            <div className="flex rounded-lg border border-default divide-x divide-default overflow-hidden">
               <div className="flex-1 py-3 text-center">
                 <div className="text-base font-bold text-emerald-500">{succeeded}</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Completed</div>
+                <div className="text-[10px] text-muted font-medium mt-0.5">Completed</div>
               </div>
               <div className="flex-1 py-3 text-center">
                 <div className={`text-base font-bold ${failed > 0 ? 'text-red-400' : 'text-gray-400'}`}>{failed}</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Issues</div>
+                <div className="text-[10px] text-muted font-medium mt-0.5">Issues</div>
               </div>
               <div className="flex-1 py-3 text-center">
-                <div className="text-base font-bold text-gray-700 dark:text-gray-300">{fmtDuration(elapsed)}</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Duration</div>
+                <div className="text-base font-bold text-on-surface-secondary">{fmtDuration(elapsed)}</div>
+                <div className="text-[10px] text-muted font-medium mt-0.5">Duration</div>
               </div>
             </div>
           </div>
@@ -159,12 +159,12 @@ const ProgressModal: React.FC<{
             <button
               type="button"
               onClick={onClose}
-              className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+              className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-700 hover:bg-emerald-800'}`}
             >
               Done
             </button>
           ) : (
-            <p className="text-center text-[11px] text-gray-500 dark:text-gray-400">Invoice details appear in the table when each job finishes.</p>
+            <p className="text-center text-[11px] text-muted">Invoice details appear in the table when each job finishes.</p>
           )}
         </div>
       </div>
@@ -461,13 +461,13 @@ export const NonDaInvoiceView: React.FC = () => {
       </Card>
 
       {syncToast && (
-        <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'}`}>
+        <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-danger-bg text-danger' : 'bg-success-bg text-success'}`}>
           {syncToast}
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm">{error}</div>
+        <div className="p-3 bg-danger-bg text-danger rounded-lg text-sm">{error}</div>
       )}
 
       <Card className="!overflow-visible">
@@ -557,7 +557,7 @@ export const NonDaInvoiceView: React.FC = () => {
                       {r.invoice_drive_web_view_link ? (
                         <button
                           onClick={() => window.open(r.invoice_drive_web_view_link!, '_blank', 'noreferrer')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-success-bg text-success hover:bg-green-100 dark:hover:bg-green-900/40"
                         >
                           <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
                           View
@@ -568,7 +568,7 @@ export const NonDaInvoiceView: React.FC = () => {
                       {r.grn_drive_web_view_link ? (
                         <button
                           onClick={() => window.open(r.grn_drive_web_view_link!, '_blank', 'noreferrer')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-info-bg text-primary hover:bg-blue-100 dark:hover:bg-blue-900/40"
                         >
                           <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
                           View

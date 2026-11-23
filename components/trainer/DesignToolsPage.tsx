@@ -35,7 +35,7 @@ const DesignToolsPage: React.FC = () => {
                 <Icon name={tool.icon} className="w-6 h-6 text-primary" />
               </div>
               <h3 className="font-semibold text-lg mb-1 dark:text-white">{tool.title}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{tool.description}</p>
+              <p className="text-sm text-muted">{tool.description}</p>
             </Card>
           </a>
         ))}

@@ -478,13 +478,13 @@ const AssessmentGrading: React.FC = () => {
 
       {/* Class Selection */}
       <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800">
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        <div className="px-5 py-4 border-b border-default bg-surface-elevated">
+          <label className="block text-sm font-semibold text-on-surface-secondary mb-2">
             Select a Class You Teach
           </label>
           <div className="relative w-full">
             {loadingClasses ? (
-              <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+              <div className="flex items-center gap-2 text-sm text-muted py-2">
                 <Icon name={IconName.Spinner} className="w-5 h-5 animate-spin text-blue-500" />
                 Loading your assigned classes...
               </div>
@@ -492,7 +492,7 @@ const AssessmentGrading: React.FC = () => {
               <select
                 value={selectedCourseRunId}
                 onChange={e => setSelectedCourseRunId(e.target.value)}
-                className="w-full pl-3 pr-10 py-2.5 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white shadow-sm"
+                className="w-full pl-3 pr-10 py-2.5 text-base border-strong focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white shadow-sm"
               >
                 <option value="">— Choose a class —</option>
                 {classes.map(c => (
@@ -509,10 +509,10 @@ const AssessmentGrading: React.FC = () => {
       {/* Student List */}
       {selectedCourseRunId && (
         <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex flex-col gap-3">
+          <div className="px-5 py-4 border-b border-default bg-surface-elevated flex flex-col gap-3">
             {/* Row 1 — title, refresh and the submission / TRAQOM / SIG counts */}
             <div className="flex justify-between items-center flex-wrap gap-y-2">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            <h2 className="text-sm font-semibold text-on-surface-secondary whitespace-nowrap">
               Student Grading Roster
             </h2>
             <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -536,8 +536,8 @@ const AssessmentGrading: React.FC = () => {
                     title={`${info.label}: ${count} of ${students.length} learners submitted`}
                     className={`text-xs px-3 py-1 rounded-full border ${
                       count === students.length
-                        ? 'text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/20 dark:border-green-800'
-                        : 'text-green-600 bg-white border-gray-200 dark:text-green-400 dark:bg-gray-700 dark:border-gray-600'
+                        ? 'text-success bg-success-bg border-green-200 dark:border-green-800'
+                        : 'text-success bg-surface border-default'
                     }`}
                   >
                     <span className="font-semibold">{info.abbr}</span>{' '}
@@ -554,7 +554,7 @@ const AssessmentGrading: React.FC = () => {
                     className={`text-xs px-3 py-1 rounded-full border ${
                       traqomCount === students.length
                         ? 'text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-300 dark:bg-indigo-900/20 dark:border-indigo-800'
-                        : 'text-indigo-600 bg-white border-gray-200 dark:text-indigo-300 dark:bg-gray-700 dark:border-gray-600'
+                        : 'text-indigo-600 bg-surface border-default dark:text-indigo-300'
                     }`}
                   >
                     <span className="font-semibold">TRAQOM</span>{' '}
@@ -571,8 +571,8 @@ const AssessmentGrading: React.FC = () => {
                     title={`Assessor signature: ${signedCount} of ${withFiles.length} learners with submissions signed`}
                     className={`text-xs px-3 py-1 rounded-full border ${
                       withFiles.length > 0 && signedCount === withFiles.length
-                        ? 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800'
-                        : 'text-amber-600 bg-white border-gray-200 dark:text-amber-300 dark:bg-gray-700 dark:border-gray-600'
+                        ? 'text-warning bg-warning-bg border-amber-200 dark:border-amber-800'
+                        : 'text-warning bg-surface border-default'
                     }`}
                   >
                     <span className="font-semibold">Assessor Sign</span>{' '}
@@ -588,8 +588,8 @@ const AssessmentGrading: React.FC = () => {
                     title={`Competent: ${competentCount} of ${students.length} learners`}
                     className={`text-xs px-3 py-1 rounded-full border ${
                       competentCount === students.length
-                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800'
-                        : 'text-emerald-600 bg-white border-gray-200 dark:text-emerald-300 dark:bg-gray-700 dark:border-gray-600'
+                        ? 'text-success bg-success-bg border-emerald-200 dark:border-emerald-800'
+                        : 'text-success bg-surface border-default'
                     }`}
                   >
                     <span className="font-semibold">Competent</span>{' '}
@@ -613,7 +613,7 @@ const AssessmentGrading: React.FC = () => {
               <button
                 onClick={() => setShowSignDemo(true)}
                 title="Watch a 1-minute demo of the assessor sign-off"
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
               >
                 <Icon name={IconName.Video} className="w-4 h-4" />
                 Watch Demo
@@ -625,8 +625,8 @@ const AssessmentGrading: React.FC = () => {
                 title={assessor ? `Assessor: ${assessor.assessor_name} — click to edit` : 'Set up your assessor name, NRIC, date and signature'}
                 className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors disabled:opacity-50 ${
                   assessor
-                    ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/40'
-                    : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600'
+                    ? 'text-warning bg-warning-bg border-amber-200 hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-900/40'
+                    : 'text-on-surface-secondary bg-surface border-default hover:bg-surface-hover'
                 }`}
               >
                 <Icon name={IconName.Edit} className="w-3.5 h-3.5" />
@@ -636,7 +636,7 @@ const AssessmentGrading: React.FC = () => {
                 <button
                   onClick={handleMarkAllCompetent}
                   disabled={markingAllCompetent || students.every(s => s.is_competent)}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {markingAllCompetent ? (
                     <>
@@ -677,12 +677,12 @@ const AssessmentGrading: React.FC = () => {
           {certSendResult && (
             <div className={`mx-5 mt-3 p-3 rounded-lg text-sm ${
               certSendResult.results?.some(r => r.status === 'error')
-                ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
-                : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+                ? 'bg-warning-bg border border-amber-200 dark:border-amber-800 text-warning'
+                : 'bg-success-bg border border-green-200 dark:border-green-800 text-success'
             }`}>
               <div className="flex justify-between items-center">
                 <span className="font-semibold">{certSendResult.message}</span>
-                <button onClick={() => setCertSendResult(null)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <button onClick={() => setCertSendResult(null)} className="text-muted hover:text-gray-700 dark:hover:text-gray-300">
                   <Icon name={IconName.Close} className="w-4 h-4" />
                 </button>
               </div>
@@ -691,8 +691,8 @@ const AssessmentGrading: React.FC = () => {
                   {certSendResult.results.map((r, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs">
                       {r.status === 'sent' && <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-green-500" />}
-                      {r.status === 'generated' && <Icon name={IconName.Clock} className="w-3.5 h-3.5 text-amber-500" />}
-                      {r.status === 'error' && <Icon name={IconName.Close} className="w-3.5 h-3.5 text-red-500" />}
+                      {r.status === 'generated' && <Icon name={IconName.Clock} className="w-3.5 h-3.5 text-warning" />}
+                      {r.status === 'error' && <Icon name={IconName.Close} className="w-3.5 h-3.5 text-danger" />}
                       <span>{r.name}: {r.status === 'sent' ? 'Certificate sent' : r.status === 'generated' ? r.error : r.error}</span>
                     </li>
                   ))}
@@ -705,14 +705,14 @@ const AssessmentGrading: React.FC = () => {
           {signResult && (
             <div className={`mx-5 mt-3 p-3 rounded-lg text-sm ${
               signResult.ok
-                ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
-                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
+                ? 'bg-warning-bg border border-amber-200 dark:border-amber-800 text-warning'
+                : 'bg-danger-bg border border-red-200 dark:border-red-800 text-danger'
             }`}>
               <div className="flex justify-between items-center">
                 <span className="font-semibold">
                   Assessor signature — {signResult.name}{signResult.ok ? '' : ': nothing was signed'}
                 </span>
-                <button onClick={() => setSignResult(null)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <button onClick={() => setSignResult(null)} className="text-muted hover:text-gray-700 dark:hover:text-gray-300">
                   <Icon name={IconName.Close} className="w-4 h-4" />
                 </button>
               </div>
@@ -726,29 +726,29 @@ const AssessmentGrading: React.FC = () => {
 
           <div className="p-0">
             {loadingStudents ? (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-12 text-muted">
                 <Icon name={IconName.Spinner} className="w-8 h-8 animate-spin text-blue-500 mb-3" />
                 <p>Loading students across manual and synced enrolments...</p>
               </div>
             ) : students.length === 0 ? (
-              <div className="py-12 text-center text-gray-500">
-                <Icon name={IconName.Users} className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <div className="py-12 text-center text-muted">
+                <Icon name={IconName.Users} className="w-12 h-12 mx-auto text-muted mb-3" />
                 <p>No students enrolled in this class.</p>
               </div>
             ) : (
               <>
               {/* Select All row */}
-              <div className="px-5 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 flex items-center">
+              <div className="px-5 py-2 bg-surface-elevated border-b border-default flex items-center">
                 <input
                   type="checkbox"
                   checked={selectedForCert.size === students.length && students.length > 0}
                   onChange={toggleAllCertSelection}
-                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 mr-3 cursor-pointer"
+                  className="w-4 h-4 rounded border-strong text-primary focus:ring-blue-500 mr-3 cursor-pointer"
                 />
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-muted">
                   {selectedForCert.size === students.length ? 'Deselect All' : 'Select All'}
                 </span>
-                <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">
+                <span className="ml-auto text-[10px] text-muted">
                   {assessmentMethods.length > 0 && (
                     <>Submission status: {assessmentMethods.map(m => `${(METHOD_INFO[m] || { abbr: m }).abbr} = ${(METHOD_INFO[m] || { label: m }).label}`).join(' · ')} · </>
                   )}
@@ -756,24 +756,24 @@ const AssessmentGrading: React.FC = () => {
                 </span>
               </div>
 
-              <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              <ul className="divide-y divide-default">
                 {students.map((student, idx) => {
                   const sId = student.enrolment_id || student.student_name;
                   const isSaving = savingStatus[sId];
                   return (
-                    <li key={sId} className="px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <li key={sId} className="px-5 py-4 flex items-center justify-between hover:bg-surface-hover transition-colors">
                       <div className="flex items-center">
                         <input
                           type="checkbox"
                           checked={selectedForCert.has(student.enrolment_id)}
                           onChange={() => toggleCertSelection(student.enrolment_id)}
-                          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 mr-3 cursor-pointer flex-shrink-0"
+                          className="w-4 h-4 rounded border-strong text-primary focus:ring-blue-500 mr-3 cursor-pointer flex-shrink-0"
                         />
-                        <div className="flex-shrink-0 mr-4 text-gray-400 font-mono text-sm w-6 text-right">
+                        <div className="flex-shrink-0 mr-4 text-muted font-mono text-sm w-6 text-right">
                           {idx + 1}.
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          <p className="text-sm font-medium text-on-surface">
                             {student.student_name}
                             {student.source === 'ssg' && (
                               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
@@ -784,7 +784,7 @@ const AssessmentGrading: React.FC = () => {
                           {/* A merged learner lists every email they enrolled under; the first
                               line also links to their assessment-records folder in Drive */}
                           {(student.emails && student.emails.length > 0 ? student.emails : [student.email]).map((email, i) => (
-                            <p key={email || i} className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                            <p key={email || i} className="text-xs text-muted flex items-center gap-2">
                               <span>{email || 'No email provided'}</span>
                               {i === 0 && student.assessment_folder_url && (
                                 <a
@@ -792,7 +792,7 @@ const AssessmentGrading: React.FC = () => {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   title="Open this learner's assessment records folder in Google Drive"
-                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                                 >
                                   <Icon name={IconName.Folder} className="w-3.5 h-3.5" />
                                   Assessment Records
@@ -806,7 +806,7 @@ const AssessmentGrading: React.FC = () => {
                       <div className="flex items-center space-x-4">
                         {/* Assessment submission status — ticked when the learner has submitted
                             that method — plus the trainer-ticked TRAQOM survey box */}
-                        <div className="flex items-center gap-3 pr-3 border-r border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3 pr-3 border-r border-default">
                           {assessmentMethods.map(m => {
                             const info = METHOD_INFO[m] || { abbr: m, label: m };
                             const submitted = student.submitted_assessments?.includes(m);
@@ -821,10 +821,10 @@ const AssessmentGrading: React.FC = () => {
                                   checked={!!submitted}
                                   readOnly
                                   tabIndex={-1}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-green-600 pointer-events-none"
+                                  className="w-3.5 h-3.5 rounded border-strong accent-green-600 pointer-events-none"
                                 />
                                 <span className={`text-[10px] font-semibold ${
-                                  submitted ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
+                                  submitted ? 'text-success' : 'text-muted'
                                 }`}>
                                   {info.abbr}
                                 </span>
@@ -843,10 +843,10 @@ const AssessmentGrading: React.FC = () => {
                               checked={!!student.traqom_completed}
                               onChange={() => handleToggleTraqom(student, idx)}
                               disabled={savingTraqom[sId]}
-                              className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-indigo-600 cursor-pointer disabled:cursor-wait"
+                              className="w-3.5 h-3.5 rounded border-strong accent-indigo-600 cursor-pointer disabled:cursor-wait"
                             />
                             <span className={`text-[10px] font-semibold ${
-                              student.traqom_completed ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500'
+                              student.traqom_completed ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted'
                             }`}>
                               TQ
                             </span>
@@ -869,18 +869,18 @@ const AssessmentGrading: React.FC = () => {
                                 }`}
                               >
                                 {busy ? (
-                                  <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                                  <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin text-warning" />
                                 ) : (
                                   <input
                                     type="checkbox"
                                     checked={!!student.assessor_signed}
                                     onChange={() => handleToggleAssessorSigned(student, idx)}
                                     disabled={!hasFiles}
-                                    className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-amber-600 cursor-pointer disabled:cursor-not-allowed"
+                                    className="w-3.5 h-3.5 rounded border-strong accent-amber-600 cursor-pointer disabled:cursor-not-allowed"
                                   />
                                 )}
                                 <span className={`text-[10px] font-semibold ${
-                                  student.assessor_signed ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'
+                                  student.assessor_signed ? 'text-warning' : 'text-muted'
                                 }`}>
                                   SIGN
                                 </span>
@@ -895,26 +895,26 @@ const AssessmentGrading: React.FC = () => {
                         <div className="w-32 flex justify-start flex-shrink-0">
                         {student.is_competent && (() => {
                           const verification = certVerification[sId];
-                          let badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+                          let badgeClass = 'bg-warning-bg text-warning';
                           let badgeIcon = IconName.Clock;
                           let badgeText = 'Cert Pending';
 
                           if (student.certificate) {
                             if (verification?.checking) {
-                              badgeClass = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+                              badgeClass = 'bg-info-bg text-primary';
                               badgeIcon = IconName.Spinner;
                               badgeText = 'Verifying...';
                             } else if (verification?.exists === true) {
-                              badgeClass = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+                              badgeClass = 'bg-success-bg text-success';
                               badgeIcon = IconName.CheckCircle;
                               badgeText = 'Cert Issued';
                             } else if (verification?.exists === false) {
-                              badgeClass = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+                              badgeClass = 'bg-danger-bg text-danger';
                               badgeIcon = IconName.Close;
                               badgeText = 'Cert Missing';
                             } else {
                               // Verification not yet run (e.g. just toggled competent)
-                              badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+                              badgeClass = 'bg-warning-bg text-warning';
                               badgeIcon = IconName.Clock;
                               badgeText = 'Cert Generating';
                             }
@@ -947,7 +947,7 @@ const AssessmentGrading: React.FC = () => {
                         </div>
 
                         <span className={`inline-block w-40 text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wider ${
-                            student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
+                            student.is_competent ? 'text-success' : 'text-muted'
                           }`}>
                             {student.is_competent ? 'Competent' : 'Not Yet Competent'}
                         </span>
@@ -996,12 +996,12 @@ const AssessmentGrading: React.FC = () => {
       {/* Assessor sign-off demo video */}
       {showSignDemo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowSignDemo(false)}>
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
+          <div className="relative bg-surface rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">Demo: Assessor Sign-off</h3>
+              <h3 className="text-base font-bold text-on-surface">Demo: Assessor Sign-off</h3>
               <button
                 onClick={() => setShowSignDemo(false)}
-                className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-1.5 rounded-full text-muted hover:text-on-surface hover:bg-surface-hover transition-colors"
                 aria-label="Close"
               >
                 <Icon name={IconName.Close} className="w-5 h-5" />

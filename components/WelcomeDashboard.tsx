@@ -52,7 +52,7 @@ const WelcomeDashboard: React.FC = () => {
       <div className="flex items-center justify-center min-h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading your courses...</p>
+          <p className="mt-2 text-on-surface-secondary">Loading your courses...</p>
         </div>
       </div>
     );
@@ -61,7 +61,7 @@ const WelcomeDashboard: React.FC = () => {
   if (currentError) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600 mb-4">Error loading courses: {currentError}</p>
+        <p className="text-danger mb-4">Error loading courses: {currentError}</p>
         <button
           onClick={() => window.location.reload()}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"

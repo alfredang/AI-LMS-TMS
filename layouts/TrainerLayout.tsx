@@ -41,6 +41,7 @@ import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
 import TrainingHoursPage from '../components/trainer/TrainingHoursPage';
 import PaymentHistoryPage from '../components/trainer/PaymentHistoryPage';
+import TrainerClassFeedbackPage from '../components/trainer/TrainerClassFeedbackPage';
 
 const isPhoneWidth = () => typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -86,6 +87,8 @@ const TrainerLayout: React.FC = () => {
     switch (trainerPage) {
       case TrainerPage.EAttendance:
         return <TrainerHomePage />;
+      case TrainerPage.ClassFeedback:
+        return <TrainerClassFeedbackPage />;
       case TrainerPage.AssessmentGrading:
         return <AssessmentGrading />;
       case TrainerPage.MyClasses:
@@ -163,15 +166,15 @@ const TrainerLayout: React.FC = () => {
       <div className="flex flex-1">
         {/* Sidebar: icon rail when collapsed, full panel when expanded */}
         <div className="flex flex-shrink-0">
-          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-surface border-r border-default flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
             {/* Toggle arrow at top */}
-            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
+            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-default`}>
               <button
                 onClick={() => {
                   autoCollapsedRef.current = false;
                   setIsSidebarOpen(prev => !prev);
                 }}
-                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                className="p-1 text-muted hover:text-on-surface transition-colors"
                 title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
               >
                 <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -187,13 +190,13 @@ const TrainerLayout: React.FC = () => {
                 }}
               />
             </div>
-            {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
+            {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-muted font-mono border-t border-default">version {appVersion}</p>}
           </aside>
         </div>
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
-          <div className={`${isCourseDetailView ? 'w-full lg:px-5' : 'max-w-6xl mx-auto lg:px-8'} px-4 sm:px-6 py-6`}>
+          <div className={`${isCourseDetailView ? 'w-full lg:px-5' : 'w-full lg:px-8'} px-4 sm:px-6 py-6`}>
             {renderContent()}
           </div>
         </main>

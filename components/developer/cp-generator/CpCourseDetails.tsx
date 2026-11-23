@@ -23,13 +23,13 @@ const StepperInput: React.FC<{
   const display = decimals > 0 ? value.toFixed(decimals) : String(value);
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-      <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+      <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+      <div className="flex items-center border border-strong rounded-lg overflow-hidden bg-surface">
         <button
           type="button"
           onClick={() => onChange(round(Math.max(min, value - step)))}
           disabled={value <= min}
-          className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
+          className="px-3 py-2 text-muted hover:bg-surface-hover disabled:opacity-30 transition-colors text-lg font-medium"
         >
           −
         </button>
@@ -41,13 +41,13 @@ const StepperInput: React.FC<{
             const n = Number(e.target.value);
             if (!isNaN(n)) onChange(round(Math.min(max, Math.max(min, n))));
           }}
-          className="flex-1 text-center py-2 bg-transparent text-gray-900 dark:text-white text-sm border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="flex-1 text-center py-2 bg-transparent text-on-surface text-sm border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
         <button
           type="button"
           onClick={() => onChange(round(Math.min(max, value + step)))}
           disabled={value >= max}
-          className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
+          className="px-3 py-2 text-muted hover:bg-surface-hover disabled:opacity-30 transition-colors text-lg font-medium"
         >
           +
         </button>
@@ -73,7 +73,7 @@ const PillSelector: React.FC<{
 
   return (
     <Card className="p-5 space-y-3">
-      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">{label}</h3>
+      <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">{label}</h3>
       <div className="flex flex-wrap gap-2">
         {options.map(method => (
           <button
@@ -83,14 +83,14 @@ const PillSelector: React.FC<{
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
               selected.includes(method)
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
             }`}
           >
             {method}
           </button>
         ))}
       </div>
-      <p className="text-xs text-gray-400">{selected.length} selected</p>
+      <p className="text-xs text-muted">{selected.length} selected</p>
     </Card>
   );
 };
@@ -240,14 +240,14 @@ const CpCourseDetails: React.FC = () => {
     <div className="space-y-6">
       {/* Framework selector */}
       <Card className="p-5">
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Select Course Type</h3>
+        <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider mb-3">Select Course Type</h3>
         <div className="flex gap-3">
           <button
             onClick={() => cp.setFramework('wsq')}
             className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
               cp.framework === 'wsq'
                 ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
             }`}
           >
             WSQ Course
@@ -257,7 +257,7 @@ const CpCourseDetails: React.FC = () => {
             className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
               cp.framework === 'casl'
                 ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-surface-elevated text-on-surface-secondary hover:bg-surface-hover'
             }`}
           >
             CASL Course
@@ -267,29 +267,29 @@ const CpCourseDetails: React.FC = () => {
 
       {/* Course Details Card */}
       <Card className="p-5 space-y-5">
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+        <h3 className="text-sm font-bold text-on-surface-secondary uppercase tracking-wider">
           {cp.framework === 'wsq' ? 'WSQ' : 'CASL'} Course Details
         </h3>
 
         {/* Course Title */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
           <input
             type="text"
             value={cp.courseTitle}
             onChange={e => cp.setCourseTitle(e.target.value)}
             placeholder="e.g. Innovative Problem Solving with Generative AI"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         {/* Suggest Course Titles with AI — works for both WSQ and CASL.
             Brainstorms 20 SEO-friendly titles from a user-entered topic. */}
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="border border-default rounded-lg">
           <button
             type="button"
             onClick={() => setSuggestOpen(o => !o)}
-            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-lg"
+            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors rounded-lg"
           >
             <svg className={`w-4 h-4 transition-transform ${suggestOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -298,30 +298,30 @@ const CpCourseDetails: React.FC = () => {
           </button>
           {suggestOpen && (
             <div className="px-4 pb-4 space-y-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 Enter a course topic to brainstorm 20 appealing, SEO-friendly course titles.
               </p>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Course Topic</label>
+                <label className="block text-xs font-medium text-on-surface-secondary mb-1">Course Topic</label>
                 <input
                   type="text"
                   value={topicInput}
                   onChange={e => setTopicInput(e.target.value)}
                   placeholder="e.g. Digital Marketing, Generative AI for Business, Agile Project Management"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <CpPromptTemplateEditor section="suggest_titles" />
               <button
                 onClick={handleSuggestTitles}
                 disabled={suggesting}
-                className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-all"
+                className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-all"
               >
                 {suggesting ? 'Suggesting…' : 'Suggest Titles'}
               </button>
-              {suggestError && <p className="text-sm text-red-500">{suggestError}</p>}
+              {suggestError && <p className="text-sm text-danger">{suggestError}</p>}
               {suggestResult && (
-                <pre className="text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed border border-gray-200 dark:border-gray-700">
+                <pre className="text-sm text-on-surface bg-surface-elevated rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed border border-default">
                   {suggestResult}
                 </pre>
               )}
@@ -333,33 +333,33 @@ const CpCourseDetails: React.FC = () => {
         {cp.framework === 'wsq' ? (
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TSC Reference Code</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">TSC Reference Code</label>
               <input
                 type="text"
                 value={cp.tscRefCode}
                 onChange={e => cp.setTscRefCode(e.target.value)}
                 placeholder="e.g. ICT-DIT-4003-1.1"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TSC Title</label>
+              <label className="block text-sm font-medium text-on-surface-secondary mb-1">TSC Title</label>
               <input
                 type="text"
                 value={cp.tscTitle}
                 onChange={e => cp.setTscTitle(e.target.value)}
                 placeholder="e.g. Digital Innovation"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unique Skill Name</label>
+            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Unique Skill Name</label>
             <select
               value={cp.uniqueSkillName}
               onChange={e => cp.setUniqueSkillName(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a skill...</option>
               {CP_SKILLS.map(s => (
@@ -370,11 +370,11 @@ const CpCourseDetails: React.FC = () => {
         )}
 
         {/* Generate Topics with AI - Collapsible */}
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="border border-default rounded-lg">
           <button
             type="button"
             onClick={() => setTopicsOpen(!topicsOpen)}
-            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-lg"
+            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-secondary hover:bg-surface-hover transition-colors rounded-lg"
           >
             <svg className={`w-4 h-4 transition-transform ${topicsOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -383,7 +383,7 @@ const CpCourseDetails: React.FC = () => {
           </button>
           {topicsOpen && (
             <div className="px-4 pb-4 space-y-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 Auto-generate course topics based on the course title. You can edit the results afterwards.
               </p>
               <CpPromptTemplateEditor section="generate_topics" />
@@ -391,14 +391,14 @@ const CpCourseDetails: React.FC = () => {
                 const selected = CP_SKILLS.find(s => s.name === cp.uniqueSkillName);
                 if (!selected) return null;
                 return (
-                  <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-1 text-sm">
-                    <p className="text-gray-800 dark:text-gray-200">
-                      <span className="font-semibold text-blue-700 dark:text-blue-300">Skill:</span>{' '}
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-info-bg p-3 space-y-1 text-sm">
+                    <p className="text-on-surface">
+                      <span className="font-semibold text-primary">Skill:</span>{' '}
                       {selected.name}
                     </p>
                     {selected.description && (
-                      <p className="text-gray-700 dark:text-gray-300">
-                        <span className="font-semibold text-blue-700 dark:text-blue-300">Description:</span>{' '}
+                      <p className="text-on-surface-secondary">
+                        <span className="font-semibold text-primary">Description:</span>{' '}
                         {selected.description}
                       </p>
                     )}
@@ -421,17 +421,17 @@ const CpCourseDetails: React.FC = () => {
               {/* Special Requirements — one-shot prompt addendum, appended to
                   the generation prompt only when non-empty. */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Special Requirements (optional)</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Special Requirements (optional)</label>
                 <textarea
                   value={specialRequirements}
                   onChange={e => setSpecialRequirements(e.target.value)}
                   placeholder="e.g. Must include a topic on safety regulations, focus on hands-on practical skills, etc."
                   rows={3}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 AI will generate <span className="font-semibold">2-3 topics per day</span> for{' '}
                 <span className="font-semibold">{topicNumDays} day(s)</span> (max {topicMaxTopics} topics)
               </p>
@@ -443,20 +443,20 @@ const CpCourseDetails: React.FC = () => {
               >
                 {generating ? 'Generating...' : 'Generate Topics'}
               </button>
-              {topicError && <p className="text-sm text-red-500">{topicError}</p>}
+              {topicError && <p className="text-sm text-danger">{topicError}</p>}
             </div>
           )}
         </div>
 
         {/* Course Topics */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Topics</label>
+          <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Topics</label>
           <textarea
             value={cp.courseTopics}
             onChange={e => cp.setCourseTopics(e.target.value)}
             placeholder={"## Topic 1: Strategic Marketing Principles\n- Explain core marketing frameworks and models\n- Identify target market segments and positioning strategies\n\n## Topic 2: Consumer Behaviour Analysis\n- Describe consumer decision-making processes\n- Analyse factors influencing purchasing behaviour"}
             rows={10}
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+            className="w-full px-3 py-2 rounded-lg border border-strong bg-surface text-on-surface text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
           />
         </div>
       </Card>
@@ -497,7 +497,7 @@ const CpCourseDetails: React.FC = () => {
       <div className="flex gap-3">
         <button
           onClick={handleSave}
-          className="flex-1 py-3 px-4 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-all shadow-md"
+          className="flex-1 py-3 px-4 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-all shadow-md"
         >
           {saved ? 'Saved!' : 'Save Course Details'}
         </button>
@@ -507,7 +507,7 @@ const CpCourseDetails: React.FC = () => {
               cp.reset();
             }
           }}
-          className="py-3 px-4 rounded-lg text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+          className="py-3 px-4 rounded-lg text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-on-surface hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
         >
           Clear All
         </button>
@@ -517,10 +517,10 @@ const CpCourseDetails: React.FC = () => {
           st.dataframe summary on the Streamlit "Course Details" page. */}
       {cp.hasSavedCourseDetails && cp.courseTitle && (
         <Card className="p-5 space-y-3">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">{cp.courseTitle}</h3>
-          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+          <h3 className="text-xl font-bold text-on-surface">{cp.courseTitle}</h3>
+          <div className="overflow-hidden rounded-lg border border-default">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
+              <thead className="bg-surface-elevated text-muted text-xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-4 py-2 font-semibold">Field</th>
                   <th className="text-left px-4 py-2 font-semibold">Value</th>
@@ -528,9 +528,9 @@ const CpCourseDetails: React.FC = () => {
               </thead>
               <tbody>
                 {summaryRows.map(([field, value]) => (
-                  <tr key={field} className="border-t border-gray-200 dark:border-gray-700">
-                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{field}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-white font-medium">{value}</td>
+                  <tr key={field} className="border-t border-default">
+                    <td className="px-4 py-2 text-on-surface-secondary">{field}</td>
+                    <td className="px-4 py-2 text-on-surface font-medium">{value}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
+import { clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
+import { assignTrainerToRun } from '../../../lib/trainers/assignTrainerToRun';
 import { patchRunAttendee } from '../../../lib/calendar/runAttendees';
-import { autoShareCourseResourcesWithTrainerByRun } from '../../../lib/google-drive/drive-helpers';
 
 /**
  * POST /api/external/assign-trainer
@@ -122,66 +122,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 async function handleAssign({
   runUuid, emailNorm, trainer_name, is_official, syncTpg, syncCalendar, notes, res,
 }: { runUuid: string; emailNorm: string; trainer_name?: string; is_official: boolean; syncTpg: boolean; syncCalendar: boolean; notes?: string; res: NextApiResponse }) {
-  const userRow = (await pool.query(
-    `SELECT u.id, u.full_name, u.email,
-            EXISTS(SELECT 1 FROM user_role_map WHERE user_id = u.id AND role = 'Learner') AS is_learner
-     FROM app_user u WHERE LOWER(u.email) = $1 LIMIT 1`, [emailNorm]
-  )).rows[0];
-  const trainerId = userRow?.id ?? null;
-  const resolvedName = userRow?.full_name ?? trainer_name ?? emailNorm;
-  const resolvedEmail = userRow?.email ?? emailNorm;
-
-  // Item 17: warn if assigning a Learner-role account as trainer
-  const learnerRoleWarning = userRow?.is_learner
-    ? `${emailNorm} has the 'Learner' role in the LMS. Verify this is the correct account before proceeding.`
-    : undefined;
-
-  console.log(`[external/assign-trainer] ASSIGN ${emailNorm} to run ${runUuid}${notes ? ` (${notes})` : ''}`);
-
-  // Step 1: LMS — upsert into course_run_trainer (SSG push reads from this table)
-  await pool.query(
-    `DELETE FROM course_run_trainer WHERE course_run_id = $1 AND LOWER(COALESCE(trainer_email, '')) = $2`,
-    [runUuid, emailNorm]
-  );
-  const junctionRes = (await pool.query(
-    `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [runUuid, trainerId, resolvedName, resolvedEmail]
-  )).rows[0];
-
-  if (is_official) {
-    await pool.query(
-      `UPDATE course_run SET assigned_trainer_id = $1, assigned_trainer_name = $2,
-              assigned_trainer_email = $3, updated_at = NOW() WHERE id = $4`,
-      [trainerId, resolvedName, resolvedEmail, runUuid]
-    );
-  }
-  const lms = { assigned: true, junction_id: junctionRes.id as string, is_official };
-
-  // Auto-share courseware + assessment folders with the trainer (non-blocking)
-  autoShareCourseResourcesWithTrainerByRun(runUuid, resolvedEmail).catch(err => {
-    console.warn(`⚠️ [external/assign-trainer] auto-share failed (non-blocking): ${err?.message}`);
+  const result = await assignTrainerToRun({
+    runUuid, emailNorm, trainerName: trainer_name, isOfficial: is_official, syncTpg, syncCalendar, notes,
   });
-
-  // Step 2: SSG/TPG push (only the official trainer goes to TPGateway)
-  let tpg: any = { status: 'skipped', message: !syncTpg ? 'sync_tpg disabled' : 'is_official is false — only the official trainer is pushed to TPGateway' };
-  if (syncTpg && is_official) {
-    tpg = await pushTrainerToTpgForRun(runUuid, { onlyEmail: resolvedEmail });
-  }
-
-  // Step 3: GCal add (best-effort last)
-  let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-  if (syncCalendar) {
-    calendar = await patchRunAttendee(runUuid, resolvedEmail, 'add');
-  }
-
-  return res.status(200).json({
-    success: true,
-    lms,
-    tpg,
-    calendar,
-    ...(learnerRoleWarning ? { warning: learnerRoleWarning } : {}),
-  });
+  return res.status(200).json({ success: true, ...result });
 }
 
 async function handleUnassign({

@@ -44,7 +44,7 @@ const PAGE_SIZE = 20;
 const STATUS_META: Record<TrainerBill['status'], { label: string; cls: string; dot: string }> = {
   posted: {
     label: 'In QuickBooks',
-    cls: 'bg-green-100 text-green-700 ring-green-600/20 dark:bg-green-900/40 dark:text-green-300',
+    cls: 'bg-success-bg text-success ring-green-600/20',
     dot: 'bg-green-500',
   },
   pending: {
@@ -54,12 +54,12 @@ const STATUS_META: Record<TrainerBill['status'], { label: string; cls: string; d
   },
   failed: {
     label: 'Failed',
-    cls: 'bg-rose-100 text-rose-700 ring-rose-600/20 dark:bg-rose-900/40 dark:text-rose-300',
+    cls: 'bg-danger-bg text-rose-700 ring-rose-600/20 dark:text-rose-300',
     dot: 'bg-rose-500',
   },
   voided: {
     label: 'Voided',
-    cls: 'bg-gray-100 text-gray-600 ring-gray-500/20 dark:bg-slate-700 dark:text-gray-300',
+    cls: 'bg-surface-elevated text-on-surface-secondary ring-gray-500/20',
     dot: 'bg-gray-400',
   },
 };
@@ -367,10 +367,10 @@ const BillListView: React.FC = () => {
         className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
           active
             ? 'bg-primary text-white border-primary'
-            : 'bg-white dark:bg-slate-800 border-default text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+            : 'bg-surface border-default text-on-surface-secondary hover:bg-surface-hover'
         }`}
       >
-        {label} <span className={active ? 'opacity-80' : 'opacity-60'}>({counts[value] ?? 0})</span>
+        {label} <span className={active ? '' : 'opacity-75'}>({counts[value] ?? 0})</span>
       </button>
     );
   };
@@ -400,7 +400,7 @@ const BillListView: React.FC = () => {
               className={`px-3 text-sm font-medium transition ${
                 windowMode === m
                   ? 'bg-primary text-white'
-                  : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                  : 'bg-surface text-on-surface-secondary hover:bg-surface-hover'
               }`}
             >
               {m === 'month' ? 'Month' : m === 'range' ? 'Range' : 'All time'}
@@ -409,14 +409,14 @@ const BillListView: React.FC = () => {
         </div>
 
         {windowMode === 'month' && (
-          <div className="flex items-center h-9 border border-default rounded-lg bg-white dark:bg-slate-800 overflow-hidden">
-            <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-lg leading-none">‹</button>
+          <div className="flex items-center h-9 border border-default rounded-lg bg-surface overflow-hidden">
+            <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-surface-hover text-lg leading-none">‹</button>
             <span className="text-sm font-semibold min-w-[8rem] text-center px-1">{monthLabel}</span>
             <button
               onClick={() => shiftMonth(1)}
               disabled={month >= currentMonthStr}
               aria-label="Next month"
-              className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-lg leading-none disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-surface-hover text-lg leading-none disabled:opacity-30 disabled:cursor-not-allowed"
             >›</button>
           </div>
         )}
@@ -442,7 +442,7 @@ const BillListView: React.FC = () => {
         <button
           onClick={() => load()}
           title="Refresh"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-surface-hover text-on-surface-secondary transition"
         >
           <Icon name={IconName.Sync} className="w-4 h-4" />
           <span className="hidden md:inline">Refresh</span>
@@ -452,7 +452,7 @@ const BillListView: React.FC = () => {
           onClick={exportCsv}
           disabled={filtered.length === 0}
           title="Download the bills currently shown, for reconciling against QuickBooks"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-surface-hover text-on-surface-secondary transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Icon name={IconName.Download} className="w-4 h-4" />
           <span className="hidden md:inline">Export</span>
@@ -490,7 +490,7 @@ const BillListView: React.FC = () => {
         />
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-default shadow-sm p-3 space-y-3">
+      <div className="bg-white rounded-lg border border-default shadow-sm p-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <FilterPill value="all" label="All" />
           <FilterPill value="posted" label="In QuickBooks" />
@@ -508,18 +508,18 @@ const BillListView: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search bill no., trainer or course…"
-            className="w-full h-9 border border-default rounded-md pl-8 pr-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-9 border border-default rounded-md pl-8 pr-2 text-sm bg-surface dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 px-3 py-2 text-sm">
+        <div className="rounded-md border border-red-300 bg-danger-bg text-danger px-3 py-2 text-sm">
           {error}
         </div>
       )}
       {retryError && (
-        <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 px-3 py-2 text-sm">
+        <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
           {retryError}
         </div>
       )}
@@ -551,7 +551,7 @@ const BillListView: React.FC = () => {
         />
       )}
 
-      <div className="overflow-x-auto bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-default">
+      <div className="overflow-x-auto bg-surface rounded-xl shadow-sm border border-default">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-slate-900/40 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary font-semibold border-b border-default">
             <tr>
@@ -581,7 +581,7 @@ const BillListView: React.FC = () => {
                     onClick={() => setPendingDeleteIds(Array.from(selected))}
                     disabled={deleting}
                     title={`Delete ${selected.size} billing invoice${selected.size === 1 ? '' : 's'} — removes them from QuickBooks too`}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md normal-case tracking-normal text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/25 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md normal-case tracking-normal text-[11px] font-semibold text-danger hover:bg-rose-50 dark:hover:bg-rose-900/25 disabled:opacity-40"
                   >
                     <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
                     Delete {selected.size}
@@ -723,7 +723,7 @@ const BillListView: React.FC = () => {
                 <td className="px-3 py-2.5">
                   <BillStatusBadge status={b.status} />
                   {b.status === 'failed' && b.error && (
-                    <div className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 max-w-[20rem]" title={b.error}>
+                    <div className="text-[11px] text-danger mt-1 max-w-[20rem]" title={b.error}>
                       {b.error.length > 120 ? `${b.error.slice(0, 120)}…` : b.error}
                     </div>
                   )}
@@ -740,7 +740,7 @@ const BillListView: React.FC = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         title={`Open ${b.bill_no} in QuickBooks`}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface font-medium"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-surface hover:bg-surface-hover text-on-surface font-medium"
                       >
                         <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
                         View in QuickBooks
@@ -756,7 +756,7 @@ const BillListView: React.FC = () => {
                         type="button"
                         onClick={() => retry(b)}
                         disabled={retrying !== null}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-white hover:bg-surface-hover text-on-surface disabled:opacity-50"
                       >
                         <Icon
                           name={retrying === b.id ? IconName.Spinner : IconName.Sync}
@@ -787,7 +787,7 @@ const BillListView: React.FC = () => {
         </table>
 
         {!loading && filtered.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-default bg-gray-50 dark:bg-slate-700/30 text-xs text-on-surface-secondary">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-default bg-surface-elevated text-xs text-on-surface-secondary">
             <div>
               Showing <span className="font-medium text-on-surface">{safePage * PAGE_SIZE + 1}</span>–
               <span className="font-medium text-on-surface">

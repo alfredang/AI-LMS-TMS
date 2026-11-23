@@ -1,4 +1,5 @@
 import { withAuth } from '@lib/auth/withAuth';
+import { invalidateExamsConfigCache } from '../../../lib/practiceExam/examsApi';
 import pool from '../../../lib/db';
 import { IncomingForm, File, Fields, Files } from 'formidable';
 import fs from 'fs';
@@ -519,9 +520,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             company_shortname = $2,
             uen = $3,
             company_address = $4,
-            company_email = $38,
-            company_tel = $39,
-            company_website = $40,
+            company_email = $36,
+            company_tel = $37,
+            company_website = $38,
             contact_person_name = $5,
             contact_tel = $6,
             invoice_template_url = COALESCE($7, invoice_template_url),
@@ -546,31 +547,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             enable_otp_login = $26,
             enable_default_otp = $27,
             default_otp = $28,
-            enable_leaderboard = $29,
-            enable_point_sys = $30,
-            normal_fund_rate = $31,
-            enhanced_fund_rate = $32,
-            gst_rate = $33,
-            gst_register = $34,
-            color_scheme = $35,
-            company_logo_url = COALESCE($37, company_logo_url),
-            ssg_app1_cert_file = COALESCE($41, ssg_app1_cert_file),
-            ssg_app1_private_key_file = COALESCE($42, ssg_app1_private_key_file),
-            ssg_app1_encryption_key = $43,
-            ssg_app3_cert_file = COALESCE($44, ssg_app3_cert_file),
-            ssg_app3_private_key_file = COALESCE($45, ssg_app3_private_key_file),
-            ssg_app3_encryption_key = $46,
-            ssg_app4_client_id = $47,
-            ssg_app4_client_secret = $48,
-            ssg_default_app = $49,
-            auto_enrol_direct_applications = $50,
-            auto_generate_qb_invoice = $51,
-            sanitise_after_months = $52,
-            auto_add_learner_to_calendar = $53,
-            google_service_account_json = COALESCE($54, google_service_account_json),
-            ssg_app_count = $55,
-            ssg_app_names = $56
-        WHERE id = $36
+            normal_fund_rate = $29,
+            enhanced_fund_rate = $30,
+            gst_rate = $31,
+            gst_register = $32,
+            color_scheme = $33,
+            company_logo_url = COALESCE($35, company_logo_url),
+            ssg_app1_cert_file = COALESCE($39, ssg_app1_cert_file),
+            ssg_app1_private_key_file = COALESCE($40, ssg_app1_private_key_file),
+            ssg_app1_encryption_key = $41,
+            ssg_app3_cert_file = COALESCE($42, ssg_app3_cert_file),
+            ssg_app3_private_key_file = COALESCE($43, ssg_app3_private_key_file),
+            ssg_app3_encryption_key = $44,
+            ssg_app4_client_id = $45,
+            ssg_app4_client_secret = $46,
+            ssg_default_app = $47,
+            auto_enrol_direct_applications = $48,
+            auto_generate_qb_invoice = $49,
+            sanitise_after_months = $50,
+            auto_add_learner_to_calendar = $51,
+            google_service_account_json = COALESCE($52, google_service_account_json),
+            ssg_app_count = $53,
+            ssg_app_names = $54
+        WHERE id = $34
         RETURNING *
       `;
 
@@ -603,8 +602,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         profileData.securitySettings?.enableOtpLogin || false,
         profileData.securitySettings?.enableDefaultOtp || false,
         profileData.securitySettings?.defaultOtpValue || '',
-        profileData.gamingSettings?.enableLeaderboard || false,
-        profileData.gamingSettings?.enablePoints || false,
         profileData.fundingSettings?.normalFunding || 70,
         profileData.fundingSettings?.enhancedFunding || 90,
         profileData.fundingSettings?.gstRate || 8.0,
@@ -741,6 +738,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         { name: 'mailerlite_api_key', value: profileData.integrations?.mailerliteApiKey || null },
         { name: 'mailerlite_group_id', value: profileData.integrations?.mailerliteGroupId || null },
       ]);
+      // AI Exam (Tertiary Exams) — practice-exam registration from the class page
+      // Only when the form carries the fields — a tab opened before this panel existed must not wipe the token.
+      if (profileData.integrations?.examsApiToken !== undefined || profileData.integrations?.examsApiUrl !== undefined) {
+        await autoCreateAndUpdate([
+          { name: 'exams_api_url', value: String(profileData.integrations?.examsApiUrl ?? '').trim() || null },
+          { name: 'exams_api_token', value: String(profileData.integrations?.examsApiToken ?? '').trim() || null },
+        ]);
+        invalidateExamsConfigCache();
+      }
       // AI Agent (WhatsApp support widgets — admin ops group + trainer group)
       await autoCreateAndUpdate([
         { name: 'whatsapp_chat_url', value: profileData.integrations?.whatsappChatUrl || null },

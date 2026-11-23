@@ -211,14 +211,14 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
+      <div className="border-b border-default pb-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
               <Icon name={IconName.FileText} className="w-7 h-7" />
               Proforma Invoice Email Template
             </h3>
-            <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-2 max-w-4xl text-sm text-muted">
               Customize the email sent to learners when a proforma invoice is issued.
             </p>
           </div>
@@ -237,8 +237,8 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
         <div
           className={`p-3 rounded-md text-sm ${
             saveMessage.type === 'success'
-              ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-              : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              ? 'bg-success-bg text-success'
+              : 'bg-danger-bg text-danger'
           }`}
         >
           {saveMessage.text}
@@ -247,14 +247,14 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
 
       <Card>
         <div className="p-4">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Available Variables</h4>
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Available Variables</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {variables.map((variable) => (
               <div key={variable.name} className="flex items-start gap-2 text-xs">
-                <code className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded font-mono shrink-0">
+                <code className="px-1.5 py-0.5 bg-info-bg text-primary rounded font-mono shrink-0">
                   {variable.name}
                 </code>
-                <span className="text-gray-500 dark:text-gray-400">{variable.desc}</span>
+                <span className="text-muted">{variable.desc}</span>
               </div>
             ))}
           </div>
@@ -271,53 +271,53 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
           ) : (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Template</label>
+                <label className="block text-sm font-medium text-on-surface-secondary">Email Template</label>
                 <span className="text-xs text-gray-400">{hasChanges ? 'Unsaved changes' : 'Up to date'}</span>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Subject</label>
                 <input
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
                   placeholder="Email subject line..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Body</label>
                 <textarea
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   rows={16}
-                  className="block w-full px-4 py-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
+                  className="block w-full px-4 py-3 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
                   placeholder="Email body content..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Default CC Recipients</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Default CC Recipients</label>
                 <input
                   type="text"
                   value={cc}
                   onChange={(e) => setCc(e.target.value)}
-                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
                   placeholder="email1@example.com, email2@example.com"
                 />
                 <p className="mt-1 text-xs text-gray-400">Comma-separated email addresses to CC on all proforma invoice emails.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                   Invoice Attachment URL
                 </label>
                 <input
                   type="url"
                   value={attachmentUrl}
                   onChange={(e) => setAttachmentUrl(e.target.value)}
-                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  className="block w-full px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
                   placeholder="https://drive.google.com/file/d/... or https://example.com/invoice.pdf"
                 />
                 <p className="mt-1 text-xs text-gray-400">Google Drive or PDF link included as a clickable attachment button in the email.</p>
@@ -329,14 +329,14 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
 
       <Card>
         <div className="p-6">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Send Test Email</h4>
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Send Test Email</h4>
           <div className="flex gap-3 items-start">
             <input
               type="email"
               value={testEmail}
               onChange={(e) => setTestEmail(e.target.value)}
               placeholder="Enter test email address..."
-              className="flex-1 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-4 py-2.5 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Button variant="secondary" onClick={handleSendTestEmail} disabled={isSendingTest || !testEmail.trim()}>
               {isSendingTest ? 'Sending...' : 'Send Test'}
@@ -346,8 +346,8 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
             <div
               className={`mt-3 p-2 rounded-md text-xs ${
                 testMessage.type === 'success'
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  ? 'bg-success-bg text-success'
+                  : 'bg-danger-bg text-danger'
               }`}
             >
               {testMessage.text}
@@ -358,22 +358,22 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
 
       <Card>
         <div className="p-6">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview</h4>
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
-            <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Preview</h4>
+          <div className="border border-default rounded-lg bg-surface overflow-hidden">
+            <div className="px-6 py-3 bg-surface-elevated border-b border-default">
               <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-gray-500 dark:text-gray-400">Subject:</span>
-                <span className="text-gray-900 dark:text-white font-medium">{previewSubject}</span>
+                <span className="font-medium text-muted">Subject:</span>
+                <span className="text-on-surface font-medium">{previewSubject}</span>
               </div>
               {cc && (
                 <div className="flex items-center gap-2 text-sm mt-1">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">CC:</span>
-                  <span className="text-gray-600 dark:text-gray-300 text-xs">{cc}</span>
+                  <span className="font-medium text-muted">CC:</span>
+                  <span className="text-on-surface-secondary text-xs">{cc}</span>
                 </div>
               )}
             </div>
             <div
-              className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto [&_p]:mb-3 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline"
+              className="px-6 py-5 text-sm text-on-surface-secondary max-h-96 overflow-y-auto [&_p]:mb-3 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline"
               dangerouslySetInnerHTML={{
                 __html: /<[a-z][\s\S]*>/i.test(previewBody)
                   ? previewBody
@@ -381,11 +381,11 @@ const ProformaInvoiceEmailTemplateView: React.FC = () => {
               }}
             />
             {attachmentUrl && (
-              <div className="mx-6 mb-5 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3">
+              <div className="mx-6 mb-5 p-3 bg-info-bg border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3">
                 <span className="text-blue-500 text-lg">📎</span>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">Proforma Invoice Attached</p>
-                  <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 underline break-all">{attachmentUrl}</a>
+                  <p className="text-xs font-semibold text-primary mb-1">Proforma Invoice Attached</p>
+                  <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline break-all">{attachmentUrl}</a>
                 </div>
               </div>
             )}

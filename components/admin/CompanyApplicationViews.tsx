@@ -288,7 +288,7 @@ interface MergePreviewData {
   };
 }
 
-const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500';
+const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white';
 
 const normalize = (value: unknown) =>
   String(value ?? '')
@@ -404,9 +404,17 @@ const columnMatchers: Array<[string, (header: string) => boolean]> = [
 const getCellText = (value: unknown): string => {
   if (value == null) return '';
   if (value instanceof Date) {
-    const day = String(value.getDate()).padStart(2, '0');
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const year = value.getFullYear();
+    // SheetJS builds date cells from a local-time 1899 epoch, and Singapore's
+    // 1899 offset (+6:55:25) differs from today's, so a cell holding 18 Nov
+    // arrives as 17 Nov 23:59:35 — a whole day early (and 00:29:35 for dates
+    // under the old +7:30 zone). Reading the calendar day straight off it
+    // shifted DOBs (SSG then rejects "verify particulars", TGS-403) and start
+    // dates (wrong or no course run). Snap to the nearest midnight first: a
+    // correct midnight value is unchanged, a shifted one is put right.
+    const snapped = new Date(value.getTime() + 12 * 60 * 60 * 1000);
+    const day = String(snapped.getDate()).padStart(2, '0');
+    const month = String(snapped.getMonth() + 1).padStart(2, '0');
+    const year = snapped.getFullYear();
     return `${day}-${month}-${year}`;
   }
   return String(value).trim();
@@ -458,6 +466,8 @@ export interface RowValidationError {
     courseTitle: string;
     courseStartDate: string;
     candidates: CourseRunCandidate[];
+    /** 'none' = no run matched; 'many' = several runs of the course start that day. */
+    reason?: 'none' | 'many';
   };
 }
 
@@ -489,17 +499,49 @@ export class UploadValidationError extends Error {
   }
 }
 
+/** A company that already holds an invoice for the class some uploaded learners join. */
+export interface UploadBillingGroup {
+  key: string;
+  employerOrgName: string;
+  employerUen: string;
+  courseRunId: string;
+  invoices: Array<{ invoiceId: string; docNumber: string; learnerCount: number }>;
+  canReplace: boolean;
+  blockedReason: 'sent' | 'paid' | 'qbo-unreachable' | null;
+  newLearners: string[];
+}
+
+export type UploadBillingChoice = { mode: 'auto' | 'enrol-only' | 'replace'; invoiceRef?: string };
+
+// Thrown when the server stops the upload to ask how late joiners should be
+// billed — the Excel twin of the Enrol Learners existing-invoice popup.
+export class UploadBillingChoiceNeeded extends Error {
+  groups: UploadBillingGroup[];
+  constructor(message: string, groups: UploadBillingGroup[]) {
+    super(message);
+    this.name = 'UploadBillingChoiceNeeded';
+    this.groups = groups;
+  }
+}
+
 const uploadRows = async (
   rows: CompanyApplicationRow[],
   courseRunOverrides: CourseRunOverride[] = [],
+  billingByGroup?: Record<string, UploadBillingChoice>,
 ): Promise<CompanyUploadResult> => {
   const response = await fetch('/api/admin/upload-company-applications', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows, courseRunOverrides }),
+    body: JSON.stringify({ rows, courseRunOverrides, ...(billingByGroup ? { billingByGroup } : {}) }),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
+    if (response.status === 409 && err?.needsBillingChoice && Array.isArray(err.groups)) {
+      throw new UploadBillingChoiceNeeded(
+        err?.message || 'Some companies already have an invoice for this class.',
+        err.groups as UploadBillingGroup[],
+      );
+    }
     if (Array.isArray(err?.validationErrors) && err.validationErrors.length > 0) {
       throw new UploadValidationError(
         err?.message || 'Excel file has validation issues.',
@@ -533,7 +575,7 @@ export const hasValue = (value: unknown): boolean => String(value ?? '').trim() 
 
 const statusCheckboxClass = (checked: boolean, color: 'green' | 'blue' | 'amber') => {
   const accent = color === 'green' ? 'accent-green-600' : color === 'blue' ? 'accent-blue-600' : 'accent-amber-600';
-  return `w-3.5 h-3.5 rounded border-gray-300 ${checked ? accent : ''}`;
+  return `w-3.5 h-3.5 rounded border-strong ${checked ? accent : ''}`;
 };
 
 const isPasswordProtectedWorkbookError = (err: unknown): boolean => {
@@ -566,12 +608,24 @@ const parseCompanyApplicationRows = async (file: File, password?: string): Promi
   const workbook = await readCompanyApplicationWorkbook(file, password);
   if (!workbook.SheetNames.length) throw new Error('Excel file has no sheets.');
 
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
-  const headerRowIndex = rawRows.findIndex(row => {
+  const isHeaderRow = (row: unknown[]) => {
     const text = row.map(normalize).join(' ');
     return text.includes('course title') && text.includes('employer') && (text.includes('trainee') || text.includes('nric'));
-  });
+  };
+  // The learner table is usually the first sheet, but employers sometimes add
+  // an instructions or cover sheet in front of it — use the first sheet that
+  // actually has the header row instead of failing on sheet one.
+  let rawRows: unknown[][] = [];
+  let headerRowIndex = -1;
+  for (const sheetName of workbook.SheetNames) {
+    const candidateRows: unknown[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: true });
+    const idx = candidateRows.findIndex(isHeaderRow);
+    if (idx >= 0) {
+      rawRows = candidateRows;
+      headerRowIndex = idx;
+      break;
+    }
+  }
 
   if (headerRowIndex < 0) {
     throw new Error('Could not find the company application table headers in this workbook.');
@@ -638,6 +692,18 @@ const parseCompanyApplicationRows = async (file: File, password?: string): Promi
     const courseTitle = courseTitleIdx >= 0 ? values[courseTitleIdx] : '';
     if (isInstructionText(courseTitle)) continue;
 
+    // A row is a learner only if it names a course, a trainee or an ID number.
+    // Stray dropdown picks (e.g. "NRIC" left in Trainee Identity Type on the blank
+    // row under the instructions) otherwise become a phantom "(no course title)"
+    // learner that blocks the import with "information not filled".
+    const identifyingColumns = EXCEL_APPLICATION_COLUMNS
+      .map((column, idx) => ({ column: String(column).toLowerCase(), idx }))
+      .filter(({ column }) =>
+        column.startsWith('course title') ||
+        column.startsWith('trainee full name') ||
+        column.includes('nric/fin number'));
+    if (identifyingColumns.length && identifyingColumns.every(({ idx }) => !values[idx]?.trim())) continue;
+
     const instructionHits = values.filter(v => isInstructionText(v)).length;
     if (instructionHits >= 2) continue;
 
@@ -677,8 +743,8 @@ const PageNotice: React.FC<{
   return (
     <div
       className={`rounded-lg border ${warn
-        ? 'border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20'
-        : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}`}
+        ? 'border-amber-300 bg-warning-bg dark:border-amber-700/60'
+        : 'border-default bg-surface'}`}
     >
       <button
         type="button"
@@ -688,21 +754,21 @@ const PageNotice: React.FC<{
       >
         <Icon
           name={icon}
-          className={`w-4 h-4 flex-shrink-0 ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}
+          className={`w-4 h-4 flex-shrink-0 ${warn ? 'text-warning' : 'text-success'}`}
         />
         <span className="min-w-0 flex-1">
-          <span className={`block text-sm font-semibold truncate ${warn ? 'text-amber-800 dark:text-amber-200' : 'text-gray-900 dark:text-white'}`}>
+          <span className={`block text-sm font-semibold truncate ${warn ? 'text-warning' : 'text-on-surface'}`}>
             {title}
           </span>
           {hint && !open && (
-            <span className={`block text-xs truncate ${warn ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
+            <span className={`block text-xs truncate ${warn ? 'text-warning' : 'text-muted'}`}>
               {hint}
             </span>
           )}
         </span>
         <Icon
           name={IconName.ChevronDown}
-          className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`}
+          className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${warn ? 'text-warning' : 'text-muted'}`}
         />
       </button>
       {open && <div className="px-3.5 pb-3.5 pt-0">{children}</div>}
@@ -791,17 +857,17 @@ const CaEmailToggleBanner: React.FC = () => {
   };
 
   return (
-    <div className={`mb-6 p-4 rounded-lg border-2 ${emailToggleOn ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700' : 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700'}`}>
+    <div className={`mb-6 p-4 rounded-lg border-2 ${emailToggleOn ? 'border-emerald-300 bg-success-bg dark:border-emerald-700' : 'border-amber-300 bg-warning-bg dark:border-amber-700'}`}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-3">
-          <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-amber-100 dark:bg-amber-800/40'}`}>
-            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`} />
+          <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-warning-bg'}`}>
+            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-success' : 'text-warning'}`} />
           </div>
           <div>
-            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-warning'}`}>
               Send Tax Invoice Email to Employer: {emailToggleOn ? 'ON' : 'OFF (test mode)'}
             </p>
-            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-success' : 'text-warning'}`}>
               {emailToggleOn
                 ? 'Send Invoice Email button on View Company Application is armed. Sending still requires all supporting docs verified.'
                 : 'Send Invoice Email button on View Company Application is held in test mode — clicks generate nothing. Safe for dry runs.'}
@@ -824,7 +890,7 @@ const CaEmailToggleBanner: React.FC = () => {
             <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
               Supporting docs must be verified before any invoice email is sent.
             </p>
-            <p className="text-[11px] mt-0.5 text-emerald-700 dark:text-emerald-300 max-w-2xl">
+            <p className="text-[11px] mt-0.5 text-success max-w-2xl">
               This applies to both automatic sends and the manual Send Invoice button.
             </p>
           </div>
@@ -832,7 +898,7 @@ const CaEmailToggleBanner: React.FC = () => {
       )}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
         <label className="block">
-          <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">CC recipients</span>
+          <span className="block text-xs font-medium text-on-surface-secondary mb-1">CC recipients</span>
           <input
             type="text"
             value={invoiceEmailCc}
@@ -842,7 +908,7 @@ const CaEmailToggleBanner: React.FC = () => {
           />
         </label>
         <label className="block">
-          <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">BCC recipients</span>
+          <span className="block text-xs font-medium text-on-surface-secondary mb-1">BCC recipients</span>
           <input
             type="text"
             value={invoiceEmailBcc}
@@ -872,6 +938,12 @@ export const UploadCompanyApplicationView: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<RowValidationError[]>([]);
+  // Late joiners in this upload whose company already has an invoice for the
+  // class — the admin picks Replace / Separate / Enrol only per company.
+  const [billingChoice, setBillingChoice] = useState<{
+    groups: UploadBillingGroup[];
+    overrides: CourseRunOverride[];
+  } | null>(null);
   const [uploadResult, setUploadResult] = useState<CompanyUploadResult | null>(null);
   const [backendStatus, setBackendStatus] = useState<'idle' | 'processing' | 'complete' | 'stalled'>('idle');
   const [backendDoneCount, setBackendDoneCount] = useState(0);
@@ -1178,8 +1250,12 @@ export const UploadCompanyApplicationView: React.FC = () => {
   // `courseRunOverrides` also carries answers from the validation modal's picker
   // when a row still fails afterwards. Re-parses the same file rather than
   // caching the parsed rows — the file is still in state and parsing is cheap.
-  const handleUpload = async (courseRunOverrides: CourseRunOverride[] = []) => {
+  const handleUpload = async (
+    courseRunOverrides: CourseRunOverride[] = [],
+    billingByGroup?: Record<string, UploadBillingChoice>,
+  ) => {
     if (!file) return;
+    setBillingChoice(null);
     setIsUploading(true);
     setError(null);
     setValidationErrors([]);
@@ -1206,14 +1282,18 @@ export const UploadCompanyApplicationView: React.FC = () => {
           courseTitle,
         };
       });
-      if (!(await confirmCourseFees(feeItems))) return;
-      const result = await uploadRows(rows, courseRunOverrides);
+      // Already confirmed on the first attempt — the billing-choice retry
+      // re-sends the same file, so don't make the admin confirm fees twice.
+      if (!billingByGroup && !(await confirmCourseFees(feeItems))) return;
+      const result = await uploadRows(rows, courseRunOverrides, billingByGroup);
       setUploadResult(result);
       pollBackendProcessing(result.insertedIds);
     } catch (err) {
       if (err instanceof UploadValidationError) {
         setError(err.message);
         setValidationErrors(err.validationErrors);
+      } else if (err instanceof UploadBillingChoiceNeeded) {
+        setBillingChoice({ groups: err.groups, overrides: courseRunOverrides });
       } else if (isPasswordProtectedWorkbookError(err) && !workbookPassword) {
         setPendingPasswordAction('upload');
         setPasswordError(null);
@@ -1272,11 +1352,11 @@ export const UploadCompanyApplicationView: React.FC = () => {
       {courseFeePopup}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white leading-tight">Upload Company Application</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Import the employer-sponsored WSQ registration & grant application Excel form.</p>
+          <h1 className="text-3xl font-bold text-on-surface leading-tight">Upload Company Application</h1>
+          <p className="text-sm text-muted mt-1">Import the employer-sponsored WSQ registration & grant application Excel form.</p>
         </div>
         {uploadResult !== null && (
-          <Button variant="ghost" onClick={reset} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+          <Button variant="ghost" onClick={reset} className="border border-blue-500 text-primary hover:bg-blue-50 dark:border-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />New Upload
           </Button>
         )}
@@ -1286,11 +1366,11 @@ export const UploadCompanyApplicationView: React.FC = () => {
 
       {uploadResult === null ? (
         <Card className="p-6">
-          <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-400 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <Icon name={IconName.InfoCircle} className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="bg-warning-bg border-l-4 border-amber-500 dark:border-amber-400 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <Icon name={IconName.InfoCircle} className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-1">Important: For Company Application File</h4>
-              <p className="text-sm text-amber-700 dark:text-amber-300">
+              <h4 className="font-semibold text-warning mb-1">Important: For Company Application File</h4>
+              <p className="text-sm text-warning">
                 Upload the employer-sponsored WSQ course registration and grant application Excel form. The table headers will be matched to the View Company Application columns.
               </p>
             </div>
@@ -1305,30 +1385,30 @@ export const UploadCompanyApplicationView: React.FC = () => {
               handleFile(e.dataTransfer.files?.[0]);
             }}
             onClick={() => !file && fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer ${isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-[1.01]' : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:bg-blue-50/40 dark:hover:bg-blue-900/10'}`}
+            className={`border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer ${isDragOver ? 'border-blue-500 bg-info-bg scale-[1.01]' : 'border-strong hover:border-blue-400 hover:bg-blue-50/40 dark:hover:bg-blue-900/10'}`}
           >
-            <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center transition-colors ${isDragOver ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-gray-100 dark:bg-gray-700/40'}`}>
-              <Icon name={IconName.Upload} className={`w-8 h-8 ${isDragOver ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`} />
+            <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center transition-colors ${isDragOver ? 'bg-info-bg' : 'bg-surface-elevated'}`}>
+              <Icon name={IconName.Upload} className={`w-8 h-8 ${isDragOver ? 'text-primary' : 'text-muted'}`} />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Upload Company Application</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Drag and drop your Excel file here, or browse from your computer.</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Supported formats: .xlsx, .xls</p>
+            <h3 className="text-xl font-bold text-on-surface">Upload Company Application</h3>
+            <p className="text-sm text-muted mt-2">Drag and drop your Excel file here, or browse from your computer.</p>
+            <p className="text-xs text-muted mt-1">Supported formats: .xlsx, .xls</p>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
             {!file ? (
               <Button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} className="mt-5" variant="secondary">
                 <Icon name={IconName.Folder} className="w-4 h-4 mr-2" />Choose File
               </Button>
             ) : (
-              <div className="mt-5 inline-flex items-stretch gap-3 pl-3 pr-2 py-2 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 shadow-sm max-w-full">
+              <div className="mt-5 inline-flex items-stretch gap-3 pl-3 pr-2 py-2 rounded-xl bg-success-bg border border-green-200 dark:border-green-800 shadow-sm max-w-full">
                 <div className="flex items-center">
-                  <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
-                    <Icon name={IconName.FileText} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <div className="w-9 h-9 rounded-lg bg-success-bg flex items-center justify-center flex-shrink-0">
+                    <Icon name={IconName.FileText} className="w-5 h-5 text-success" />
                   </div>
                 </div>
                 <div className="flex flex-col justify-center min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
-                    <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                    <p className="text-sm font-semibold text-green-800 dark:text-green-200 truncate">{file.name}</p>
+                    <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-success flex-shrink-0" />
+                    <p className="text-sm font-semibold text-success truncate">{file.name}</p>
                   </div>
                   <p className="text-xs text-green-700/70 dark:text-green-300/70 mt-0.5">
                     {file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1024 / 1024).toFixed(2)} MB`}
@@ -1340,7 +1420,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                    className="text-xs font-medium text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100 hover:underline px-2 py-1"
+                    className="text-xs font-medium text-success hover:text-green-900 dark:hover:text-green-100 hover:underline px-2 py-1"
                   >
                     Change
                   </button>
@@ -1350,7 +1430,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
                     className="w-7 h-7 rounded-md hover:bg-green-100 dark:hover:bg-green-900/40 flex items-center justify-center flex-shrink-0 transition-colors"
                     aria-label="Remove file"
                   >
-                    <Icon name={IconName.Close} className="w-4 h-4 text-green-700 dark:text-green-300" />
+                    <Icon name={IconName.Close} className="w-4 h-4 text-success" />
                   </button>
                 </div>
               </div>
@@ -1358,9 +1438,9 @@ export const UploadCompanyApplicationView: React.FC = () => {
           </div>
 
           {error && (
-            <div className="mt-4 flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-              <Icon name={IconName.Warning} className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            <div className="mt-4 flex items-start gap-2 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800">
+              <Icon name={IconName.Warning} className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+              <p className="text-danger text-sm">{error}</p>
             </div>
           )}
 
@@ -1384,28 +1464,28 @@ export const UploadCompanyApplicationView: React.FC = () => {
         </Card>
       ) : (
         <Card className="p-8 text-center">
-          <div className={`w-14 h-14 rounded-full ${backendStatus === 'processing' ? 'bg-blue-100 dark:bg-blue-900/30' : backendStatus === 'stalled' ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'} flex items-center justify-center mx-auto mb-4`}>
+          <div className={`w-14 h-14 rounded-full ${backendStatus === 'processing' ? 'bg-info-bg' : backendStatus === 'stalled' ? 'bg-warning-bg' : 'bg-success-bg'} flex items-center justify-center mx-auto mb-4`}>
             {backendStatus === 'processing' ? (
               <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-200 border-t-blue-600" />
             ) : backendStatus === 'stalled' ? (
-              <Icon name={IconName.Warning} className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+              <Icon name={IconName.Warning} className="w-8 h-8 text-warning" />
             ) : (
-              <Icon name={IconName.CheckCircle} className="w-8 h-8 text-green-600 dark:text-green-400" />
+              <Icon name={IconName.CheckCircle} className="w-8 h-8 text-success" />
             )}
           </div>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+          <h3 className="text-xl font-bold text-on-surface">
             {backendStatus === 'processing'
               ? 'Processing Enrolment & Grant Lookup'
               : backendStatus === 'stalled'
                 ? 'Processing Stopped — Needs Your Attention'
                 : 'Upload Complete'}
           </h3>
-          <p className="text-gray-500 dark:text-gray-400 mt-2">
+          <p className="text-muted mt-2">
             {uploadResult.inserted} inserted, {uploadResult.updated} updated. {uploadResult.queued} record{uploadResult.queued === 1 ? '' : 's'} queued for enrolment and grant lookup.
           </p>
           {backendStatus === 'processing' && (
             <div className="w-full max-w-md mx-auto mt-6 space-y-2">
-              <div className="flex justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="flex justify-between text-sm font-medium text-on-surface-secondary">
                 <span>Background progress</span>
                 <span>{Math.min(backendDoneCount, uploadResult.queued)} / {uploadResult.queued}</span>
               </div>
@@ -1415,11 +1495,11 @@ export const UploadCompanyApplicationView: React.FC = () => {
                   style={{ width: `${Math.round(Math.min(Math.max(backendProgress, 0), 1) * 100)}%` }}
                 />
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Please keep this page open while SSG enrolment and grant lookup continue.</p>
+              <p className="text-xs text-muted">Please keep this page open while SSG enrolment and grant lookup continue.</p>
             </div>
           )}
           {backendStatus === 'complete' && uploadResult.queued > 0 && (
-            <p className="text-sm text-green-600 dark:text-green-400 mt-4">Background processing finished. View the table to see enrolment and grant results.</p>
+            <p className="text-sm text-success mt-4">Background processing finished. View the table to see enrolment and grant results.</p>
           )}
           {(backendStatus === 'complete' || backendStatus === 'stalled') && backendIneligible.length > 0 && (
             <div className="w-full max-w-2xl mx-auto mt-4 text-left rounded-lg border border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-900/20 p-4">
@@ -1435,8 +1515,8 @@ export const UploadCompanyApplicationView: React.FC = () => {
           )}
           {backendStatus === 'stalled' && backendStall && (
             <div className="w-full max-w-2xl mx-auto mt-6 text-left space-y-3">
-              <div className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-4 space-y-3">
-                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              <div className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-warning-bg p-4 space-y-3">
+                <p className="text-sm font-semibold text-warning">
                   {backendStall.doneCount} of {backendStall.total} record{backendStall.total === 1 ? '' : 's'} fully processed.
                   {backendStall.workerFinished
                     ? ' Enrolment finished, but the run stopped before everything was invoiced:'
@@ -1444,18 +1524,18 @@ export const UploadCompanyApplicationView: React.FC = () => {
                 </p>
 
                 {backendStall.notEnrolled.length > 0 && (
-                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <div className="text-sm text-warning">
                     <p className="font-medium">Not enrolled with SSG ({backendStall.notEnrolled.length}):</p>
-                    <p className="text-amber-700 dark:text-amber-300">{backendStall.notEnrolled.join(', ')}</p>
-                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">Open the application on View Company Application to see the error, then use Retry Selected.</p>
+                    <p className="text-warning">{backendStall.notEnrolled.join(', ')}</p>
+                    <p className="text-xs mt-1 text-warning">Open the application on View Company Application to see the error, then use Retry Selected.</p>
                   </div>
                 )}
 
                 {backendStall.awaitingGrant.length > 0 && (
-                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <div className="text-sm text-warning">
                     <p className="font-medium">No SSG grant found yet ({backendStall.awaitingGrant.length}):</p>
-                    <p className="text-amber-700 dark:text-amber-300">{backendStall.awaitingGrant.join(', ')}</p>
-                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                    <p className="text-warning">{backendStall.awaitingGrant.join(', ')}</p>
+                    <p className="text-xs mt-1 text-warning">
                       SSG creates the grant asynchronously after enrolment and it can lag by 15+ minutes. The employer invoice covers the whole group,
                       so it is not generated until every learner has a grant — or is marked <span className="font-semibold">Not Grant Eligible</span>.
                       On View Company Application, click <span className="font-semibold">Sync Grants</span> to re-check, or mark the learner Not Grant Eligible to release the invoice.
@@ -1464,13 +1544,13 @@ export const UploadCompanyApplicationView: React.FC = () => {
                 )}
 
                 {backendStall.failed.length > 0 && (
-                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <div className="text-sm text-warning">
                     <p className="font-medium">Errors reported ({backendStall.failed.length}):</p>
                     <div className="mt-1 space-y-2">
                       {backendStall.failed.map((f, idx) => (
                         <div key={`${f.name}-${idx}`} className="rounded-md border border-amber-200 dark:border-amber-700/60 bg-white/60 dark:bg-gray-900/30 px-3 py-2">
                           <p className="font-semibold text-amber-900 dark:text-amber-100">{f.name}</p>
-                          <p className="mt-0.5 text-xs whitespace-pre-wrap text-amber-700 dark:text-amber-300">{f.error}</p>
+                          <p className="mt-0.5 text-xs whitespace-pre-wrap text-warning">{f.error}</p>
                         </div>
                       ))}
                     </div>
@@ -1478,21 +1558,21 @@ export const UploadCompanyApplicationView: React.FC = () => {
                 )}
 
                 {backendStall.notEnrolled.length === 0 && backendStall.awaitingGrant.length === 0 && backendStall.failed.length === 0 && backendStall.awaitingInvoice > 0 && (
-                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <div className="text-sm text-warning">
                     <p className="font-medium">Awaiting invoice ({backendStall.awaitingInvoice}):</p>
-                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                    <p className="text-xs mt-1 text-warning">
                       Enrolment and grants are done but no QuickBooks invoice was created. Use <span className="font-semibold">Generate Invoice</span> on View Company Application.
                     </p>
                   </div>
                 )}
 
                 {!backendStall.workerFinished && (
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                  <p className="text-xs text-warning">
                     Nothing is lost — the rows are saved. This usually means the server restarted mid-run. Re-check from View Company Application (Sync Grants / Retry Selected).
                   </p>
                 )}
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 It is safe to leave this page — enrolments and grants already recorded are saved.
               </p>
             </div>
@@ -1560,6 +1640,129 @@ export const UploadCompanyApplicationView: React.FC = () => {
           }}
         />
       )}
+
+      {billingChoice && (
+        <UploadBillingChoiceModal
+          groups={billingChoice.groups}
+          isUploading={isUploading}
+          onClose={() => setBillingChoice(null)}
+          onSubmit={(choices) => void handleUpload(billingChoice.overrides, choices)}
+        />
+      )}
+    </div>
+  );
+};
+
+const describeUploadReplaceBlock = (reason: UploadBillingGroup['blockedReason']): string => {
+  if (reason === 'sent') return 'The company has already been sent this invoice, so it cannot be replaced.';
+  if (reason === 'paid') return 'A payment is already applied to this invoice, so it cannot be replaced.';
+  if (reason === 'qbo-unreachable') return 'QuickBooks could not be checked, so replacing it is not safe right now.';
+  return 'This invoice cannot be replaced.';
+};
+
+/**
+ * "This company already has an invoice for this class" — one card per company,
+ * the same three choices Enrol Learners offers. Nothing is imported until every
+ * company has an answer.
+ */
+const UploadBillingChoiceModal: React.FC<{
+  groups: UploadBillingGroup[];
+  isUploading: boolean;
+  onClose: () => void;
+  onSubmit: (choices: Record<string, UploadBillingChoice>) => void;
+}> = ({ groups, isUploading, onClose, onSubmit }) => {
+  const [choices, setChoices] = useState<Record<string, UploadBillingChoice>>({});
+  const allChosen = groups.every(g => {
+    const c = choices[g.key];
+    return !!c && (c.mode !== 'enrol-only' || !!c.invoiceRef);
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">{/* design-tokens-allow: modal backdrop is dark in both themes, same as every other popup */}
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="p-6 border-b border-default">
+          <h2 className="text-lg font-bold text-on-surface">
+            {groups.length === 1 ? 'This company already has' : `${groups.length} companies already have`} an invoice for this class
+          </h2>
+          <p className="text-sm text-muted mt-0.5">
+            Choose how to bill the new learners. Nothing has been imported yet.
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {groups.map(g => {
+            const choice = choices[g.key];
+            const setChoice = (c: UploadBillingChoice) => setChoices(prev => ({ ...prev, [g.key]: c }));
+            const invoiceLabel = g.invoices.map(i => `${i.docNumber || i.invoiceId} (${i.learnerCount} learner${i.learnerCount === 1 ? '' : 's'})`).join(', ');
+            const option = (mode: UploadBillingChoice['mode'], label: string, hint: string, disabled = false) => (
+              <label
+                className={`flex items-start gap-2.5 rounded-lg border p-2.5 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-surface-hover'} ${choice?.mode === mode ? 'border-primary bg-surface-elevated' : 'border-default'}`}
+              >
+                <input
+                  type="radio"
+                  name={`billing-${g.key}`}
+                  className="mt-0.5"
+                  disabled={disabled || isUploading}
+                  checked={choice?.mode === mode}
+                  onChange={() => setChoice({
+                    mode,
+                    invoiceRef: mode === 'enrol-only' ? (g.invoices[0]?.docNumber || g.invoices[0]?.invoiceId) : undefined,
+                  })}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-on-surface">{label}</span>
+                  <span className="block text-xs text-muted">{hint}</span>
+                </span>
+              </label>
+            );
+            return (
+              <div key={g.key} className="rounded-xl border border-default p-4 space-y-2">
+                <p className="text-sm font-semibold text-on-surface">
+                  {g.employerOrgName || g.employerUen}
+                  <span className="font-normal text-muted"> · Run {g.courseRunId}</span>
+                </p>
+                <p className="text-xs text-muted">
+                  Existing invoice: <span className="font-mono">{invoiceLabel}</span>
+                  <br />
+                  New in this upload: {g.newLearners.join(', ')}
+                </p>
+                {option(
+                  'replace',
+                  'Replace with one invoice covering everyone',
+                  g.canReplace
+                    ? 'The current invoice is deleted and a single new one is raised once SSG grants the new learners. Until then the current invoice stays as it is.'
+                    : describeUploadReplaceBlock(g.blockedReason),
+                  !g.canReplace,
+                )}
+                {option('auto', 'Create a separate invoice', 'The new learners are billed on a second invoice for this class.')}
+                {option('enrol-only', 'Enrol only — add them in QuickBooks myself', 'No LMS invoice for them; they are marked Billed by hand.')}
+                {choice?.mode === 'enrol-only' && g.invoices.length > 1 && (
+                  <select
+                    className="input text-sm"
+                    value={choice.invoiceRef || ''}
+                    onChange={e => setChoice({ mode: 'enrol-only', invoiceRef: e.target.value })}
+                  >
+                    {g.invoices.map(i => {
+                      const ref = i.docNumber || i.invoiceId;
+                      return <option key={ref} value={ref}>Add to {ref}</option>;
+                    })}
+                  </select>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-4 border-t border-default flex justify-end gap-2">
+          <button type="button" className="btn btn-outline" onClick={onClose} disabled={isUploading}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!allChosen || isUploading}
+            onClick={() => onSubmit(choices)}
+          >
+            {isUploading ? 'Uploading…' : 'Continue upload'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1575,14 +1778,14 @@ const WorkbookPasswordModal: React.FC<{
 }> = ({ fileName, password, error, isBusy, onPasswordChange, onCancel, onSubmit }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-md rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-start gap-3">
-          <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.Shield} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+      <div className="w-full max-w-md rounded-xl border border-default bg-surface shadow-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-default flex items-start gap-3">
+          <div className="w-9 h-9 rounded-full bg-warning-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.Shield} className="w-5 h-5 text-warning" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">File is password-protected</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+            <h3 className="text-base font-bold text-on-surface">File is password-protected</h3>
+            <p className="text-sm text-muted truncate">
               {fileName || 'Enter the workbook password to continue.'}
             </p>
           </div>
@@ -1596,7 +1799,7 @@ const WorkbookPasswordModal: React.FC<{
           }}
         >
           <label className="block">
-            <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Workbook password</span>
+            <span className="block text-xs font-medium text-on-surface-secondary mb-1">Workbook password</span>
             <input
               type="password"
               autoFocus
@@ -1609,9 +1812,9 @@ const WorkbookPasswordModal: React.FC<{
           </label>
 
           {error && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-              <Icon name={IconName.Warning} className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-danger-bg border border-red-200 dark:border-red-800">
+              <Icon name={IconName.Warning} className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+              <p className="text-danger text-sm">{error}</p>
             </div>
           )}
 
@@ -1745,10 +1948,10 @@ const CourseRunConfirmModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[88vh] flex flex-col">
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Confirm the course run</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-3xl w-full max-h-[88vh] flex flex-col">
+        <div className="p-6 border-b border-default">
+          <h2 className="text-lg font-bold text-on-surface">Confirm the course run</h2>
+          <p className="text-sm text-muted mt-1">
             {totalRows} row{totalRows === 1 ? '' : 's'}{fileName ? ` in ${fileName}` : ''} ·{' '}
             {groups.length} course{groups.length === 1 ? '' : 's'}. Nothing is imported yet — enrolment, calendar and invoicing
             all start once you continue, so check the run is right.
@@ -1761,13 +1964,13 @@ const CourseRunConfirmModal: React.FC<{
             const v = verified[key];
             const err = lookupError[key];
             return (
-              <div key={key} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{g.courseTitle || '(no course title)'}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <div key={key} className="border border-default rounded-xl p-4">
+                <p className="text-sm font-semibold text-on-surface">{g.courseTitle || '(no course title)'}</p>
+                <p className="text-xs text-muted mt-0.5">
                   Excel start date {g.courseStartDate || '(none)'} · {g.rowCount} learner{g.rowCount === 1 ? '' : 's'}
                 </p>
 
-                <label className="block mt-3 text-xs font-medium text-gray-700 dark:text-gray-300">Course Run ID</label>
+                <label className="block mt-3 text-xs font-medium text-on-surface-secondary">Course Run ID</label>
                 <div className="flex gap-2 mt-1">
                   <input
                     type="text"
@@ -1776,25 +1979,25 @@ const CourseRunConfirmModal: React.FC<{
                     onBlur={e => void verify(key, e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void verify(key, (e.target as HTMLInputElement).value); } }}
                     placeholder="e.g. 1404702"
-                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-strong bg-surface text-on-surface"
                   />
                   <Button variant="secondary" onClick={() => void verify(key, typed[key] ?? '')} disabled={checking[key]}>
                     {checking[key] ? 'Checking…' : 'Check'}
                   </Button>
                 </div>
 
-                {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
+                {err && <p className="mt-2 text-sm text-danger">{err}</p>}
 
                 {v && (
-                  <div className="mt-2 rounded-lg border border-green-300 dark:border-green-500/40 bg-green-50 dark:bg-green-900/20 p-3">
-                    <p className="text-sm font-medium text-green-800 dark:text-green-200">{v.title}</p>
-                    <p className="text-xs text-green-700 dark:text-green-300 mt-0.5">
+                  <div className="mt-2 rounded-lg border border-green-300 dark:border-green-500/40 bg-success-bg p-3">
+                    <p className="text-sm font-medium text-success">{v.title}</p>
+                    <p className="text-xs text-success mt-0.5">
                       Run {v.courseRunId}{v.courseCode ? ` · ${v.courseCode}` : ''} · {v.startDate}
                       {v.endDate && v.endDate !== v.startDate ? ` → ${v.endDate}` : ''}
                       {v.source === 'ssg' ? ' · pulled from SSG and added to the LMS' : ''}
                     </p>
                     {v.startDate && g.courseStartDate && v.startDate !== toIsoFromDdMmYyyy(g.courseStartDate) && (
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      <p className="text-xs text-warning mt-1">
                         Heads up: this run starts {v.startDate}, but the Excel says {g.courseStartDate}. Continuing uses the run above.
                       </p>
                     )}
@@ -1803,17 +2006,17 @@ const CourseRunConfirmModal: React.FC<{
 
                 {g.candidates.length > 0 && !v && (
                   <div className="mt-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Or pick a likely match:</p>
+                    <p className="text-xs text-muted mb-1">Or pick a likely match:</p>
                     <div className="space-y-1.5">
                       {g.candidates.slice(0, 4).map(c => (
                         <button
                           key={c.courseRunId}
                           type="button"
                           onClick={() => pick(key, c.courseRunId)}
-                          className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-blue-400 bg-white dark:bg-gray-900"
+                          className="w-full text-left px-3 py-2 rounded-lg border border-default hover:border-blue-400 bg-surface"
                         >
-                          <span className="block text-sm text-gray-900 dark:text-white truncate">{c.courseTitle}</span>
-                          <span className="block text-xs text-gray-500 dark:text-gray-400">
+                          <span className="block text-sm text-on-surface truncate">{c.courseTitle}</span>
+                          <span className="block text-xs text-muted">
                             {c.startDate} · Run {c.courseRunId}
                             {c.courseCode ? ` · ${c.courseCode}` : ''}
                             {c.score >= 0.999 ? ' · course code match' : ` · ${Math.round(c.score * 100)}% title match`}
@@ -1828,9 +2031,9 @@ const CourseRunConfirmModal: React.FC<{
           })}
         </div>
 
-        <div className="flex justify-end items-center gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end items-center gap-3 p-6 border-t border-default">
           {!allConfirmed && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mr-auto">
+            <p className="text-xs text-muted mr-auto">
               Confirm a course run for every course to continue.
             </p>
           )}
@@ -1878,14 +2081,14 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
   // Ten learners on the same course share one unresolved (title, date) — ask
   // once, not ten times.
   const runGroups = useMemo(() => {
-    const map = new Map<string, { courseTitle: string; courseStartDate: string; candidates: CourseRunCandidate[]; rowCount: number }>();
+    const map = new Map<string, { courseTitle: string; courseStartDate: string; candidates: CourseRunCandidate[]; rowCount: number; reason: 'none' | 'many' }>();
     for (const err of errors) {
       const u = err.courseRunUnresolved;
       if (!u) continue;
       const key = runGroupKey(u.courseTitle, u.courseStartDate);
       const existing = map.get(key);
       if (existing) existing.rowCount++;
-      else map.set(key, { courseTitle: u.courseTitle, courseStartDate: u.courseStartDate, candidates: u.candidates || [], rowCount: 1 });
+      else map.set(key, { courseTitle: u.courseTitle, courseStartDate: u.courseStartDate, candidates: u.candidates || [], rowCount: 1, reason: u.reason === 'many' ? 'many' : 'none' });
     }
     return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
   }, [errors]);
@@ -1910,17 +2113,17 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
-        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-default">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-              <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className="w-10 h-10 rounded-xl bg-danger-bg flex items-center justify-center flex-shrink-0">
+              <Icon name={IconName.Warning} className="w-5 h-5 text-danger" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-bold text-on-surface">
                 Excel has {errors.length} row{errors.length === 1 ? '' : 's'} with issues
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-sm text-muted mt-0.5">
                 {totalIssues} issue{totalIssues === 1 ? '' : 's'} found{fileName ? ` in ${fileName}` : ''}. Nothing was imported
                 {runGroups.length > 0 && blockedRowCount === 0
                   ? ' — pick the correct course run below to continue.'
@@ -1931,10 +2134,10 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0"
+            className="w-8 h-8 rounded-lg hover:bg-surface-hover flex items-center justify-center flex-shrink-0"
             aria-label="Close"
           >
-            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            <Icon name={IconName.Close} className="w-4 h-4 text-on-surface-secondary" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -1944,14 +2147,19 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
               className="border border-blue-300 dark:border-blue-500/40 rounded-xl p-4 bg-blue-50/60 dark:bg-blue-900/15"
             >
               <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                No run matched &ldquo;{group.courseTitle}&rdquo; on {group.courseStartDate}
+                {group.reason === 'many'
+                  ? <>More than one run of &ldquo;{group.courseTitle}&rdquo; starts on {group.courseStartDate}</>
+                  : <>No run matched &ldquo;{group.courseTitle}&rdquo; on {group.courseStartDate}</>}
               </p>
-              <p className="text-xs text-blue-800 dark:text-blue-300 mt-0.5">
-                Affects {group.rowCount} row{group.rowCount === 1 ? '' : 's'}. Did you mean one of these? Runs within 30 days, closest title first.
+              <p className="text-xs text-info mt-0.5">
+                Affects {group.rowCount} row{group.rowCount === 1 ? '' : 's'}.{' '}
+                {group.reason === 'many'
+                  ? 'Pick the run these learners are on — the LMS will not guess between them.'
+                  : 'Did you mean one of these? Runs within 45 days, closest title first.'}
               </p>
 
               {group.candidates.length === 0 ? (
-                <p className="text-sm text-blue-800 dark:text-blue-300 mt-3">
+                <p className="text-sm text-info mt-3">
                   No similar runs found near that date — create the course run first, or fix the title/date in the Excel.
                 </p>
               ) : (
@@ -1965,15 +2173,15 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
                         onClick={() => setPicked(p => ({ ...p, [group.key]: c.courseRunId }))}
                         className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
                           selected
-                            ? 'border-blue-600 bg-blue-100 dark:bg-blue-900/40 dark:border-blue-400'
-                            : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400'
+                            ? 'border-blue-600 bg-info-bg dark:border-blue-400'
+                            : 'border-default bg-surface hover:border-blue-400'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.courseTitle}</span>
-                          {selected && <Icon name={IconName.CheckCircle} className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+                          <span className="text-sm font-medium text-on-surface truncate">{c.courseTitle}</span>
+                          {selected && <Icon name={IconName.CheckCircle} className="w-4 h-4 text-primary flex-shrink-0" />}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <div className="text-xs text-muted mt-0.5">
                           {c.startDate}{c.endDate && c.endDate !== c.startDate ? ` → ${c.endDate}` : ''} · Run {c.courseRunId}
                           {c.courseCode ? ` · ${c.courseCode}` : ''}
                           {c.score >= 0.999 ? ' · course code match' : ` · ${Math.round(c.score * 100)}% title match`}
@@ -1992,18 +2200,18 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
               className="border border-red-200 dark:border-red-900/40 rounded-xl p-4 bg-red-50/50 dark:bg-red-900/10"
             >
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded-md">
+                <span className="text-xs font-semibold text-danger bg-danger-bg px-2 py-0.5 rounded-md">
                   Row {err.rowNumber}
                 </span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{err.traineeName}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">{err.traineeNric}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{err.courseTitle}</span>
+                <span className="text-sm font-semibold text-on-surface">{err.traineeName}</span>
+                <span className="text-xs text-muted">·</span>
+                <span className="text-xs text-muted">{err.traineeNric}</span>
+                <span className="text-xs text-muted">·</span>
+                <span className="text-xs text-muted truncate">{err.courseTitle}</span>
               </div>
               <ul className="space-y-1.5">
                 {err.issues.map((issue, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
+                  <li key={i} className="flex items-start gap-2 text-sm text-danger">
                     <span className="text-red-500 dark:text-red-400 mt-0.5">•</span>
                     <span>{issue}</span>
                   </li>
@@ -2012,9 +2220,9 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
             </div>
           ))}
         </div>
-        <div className="flex justify-end items-center gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end items-center gap-3 p-6 border-t border-default">
           {runGroups.length > 0 && blockedRowCount > 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mr-auto text-left">
+            <p className="text-xs text-muted mr-auto text-left">
               {blockedRowCount} row{blockedRowCount === 1 ? '' : 's'} {blockedRowCount === 1 ? 'has' : 'have'} other problems too — those must be fixed in the Excel.
             </p>
           )}
@@ -2040,11 +2248,11 @@ const CourseRunChoiceModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
-        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-default">
           <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Choose course run for enrolment</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <h2 className="text-lg font-bold text-on-surface">Choose course run for enrolment</h2>
+            <p className="text-sm text-muted mt-1">
               {target.traineeName || 'This learner'} cannot be SSG-enrolled until the correct run is selected.
             </p>
           </div>
@@ -2052,23 +2260,23 @@ const CourseRunChoiceModal: React.FC<{
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+            className="w-8 h-8 rounded-lg hover:bg-surface-hover flex items-center justify-center flex-shrink-0 disabled:opacity-50"
             aria-label="Close"
           >
-            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            <Icon name={IconName.Close} className="w-4 h-4 text-on-surface-secondary" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+          <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-warning-bg p-3">
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{target.courseTitle}</p>
-            <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+            <p className="text-xs text-warning mt-0.5">
               Uploaded start date {target.courseStartDate || '(none)'}
             </p>
           </div>
 
           {target.candidates.length === 0 ? (
-            <p className="text-sm text-gray-600 dark:text-gray-300">
+            <p className="text-sm text-on-surface-secondary">
               No likely course runs were found. Create or sync the course run first, then retry Auto-Process.
             </p>
           ) : (
@@ -2083,14 +2291,14 @@ const CourseRunChoiceModal: React.FC<{
                     disabled={isSaving}
                     className={`w-full text-left rounded-xl border p-3 transition-colors disabled:opacity-60 ${
                       selected
-                        ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/25'
-                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300'
+                        ? 'border-blue-500 bg-info-bg dark:border-blue-400'
+                        : 'border-default bg-surface hover:border-blue-300'
                     }`}
                   >
                     <span className="flex items-start justify-between gap-3">
                       <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-gray-900 dark:text-white">{c.courseTitle}</span>
-                        <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <span className="block text-sm font-semibold text-on-surface">{c.courseTitle}</span>
+                        <span className="block text-xs text-muted mt-0.5">
                           Run {c.courseRunId}
                           {c.courseCode ? ` · ${c.courseCode}` : ''}
                           {' · '}{c.startDate}
@@ -2099,7 +2307,7 @@ const CourseRunChoiceModal: React.FC<{
                       </span>
                       <span
                         className={`mt-1 w-4 h-4 rounded-full border-[3px] flex-shrink-0 ${
-                          selected ? 'border-blue-500 dark:border-blue-300' : 'border-gray-300 dark:border-gray-600'
+                          selected ? 'border-blue-500 dark:border-blue-300' : 'border-strong'
                         }`}
                       />
                     </span>
@@ -2110,7 +2318,7 @@ const CourseRunChoiceModal: React.FC<{
           )}
         </div>
 
-        <div className="flex justify-end items-center gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end items-center gap-3 p-6 border-t border-default">
           <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
           <Button onClick={() => picked && onChoose(picked)} disabled={!picked || isSaving}>
             {isSaving ? 'Saving...' : 'Save run & retry'}
@@ -2128,6 +2336,19 @@ interface InvoiceError {
   courseRunId: string;
   error: string;
   isCustomerNotFound: boolean;
+  isNotEnrolled?: boolean;
+}
+
+/**
+ * A group Generate Invoice held back because some learners are not yet
+ * SSG-enrolled, but which still has enrolled learners that could be billed now.
+ */
+interface SkipNotEnrolledGroup {
+  employerOrgName: string;
+  employerUen: string;
+  courseRunId: string;
+  enrolledCount: number;
+  skipped: Array<{ name: string; reason: string }>;
 }
 
 interface QboSearchResult {
@@ -2214,15 +2435,15 @@ const QboCustomerRescueModal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        className="bg-surface rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-5 border-b dark:border-gray-700">
           <h3 className="text-lg font-bold dark:text-white">Link QBO Customer</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-muted mt-1">
             Excel employer: <span className="font-semibold">{target.employerOrgName || '(unnamed)'}</span> · UEN {target.employerUen || '(none)'}
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Search QuickBooks by partial name (try the full legal name, e.g. &quot;polyclinics&quot;). Picking a customer saves the mapping and re-runs the invoice.
           </p>
         </div>
@@ -2241,9 +2462,9 @@ const QboCustomerRescueModal: React.FC<{
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-5">
-          {message && <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">{message}</p>}
+          {message && <p className="text-sm text-warning mb-3">{message}</p>}
           {results.length === 0 && !message && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-muted">
               No results yet — type a search term above (e.g. part of the long-form company name).
             </p>
           )}
@@ -2251,25 +2472,25 @@ const QboCustomerRescueModal: React.FC<{
             {results.map(c => (
               <li
                 key={c.id}
-                className="border dark:border-gray-700 rounded p-3 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-start justify-between gap-3"
+                className="border dark:border-gray-700 rounded p-3 hover:bg-surface-hover flex items-start justify-between gap-3"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 dark:text-white truncate" title={c.displayName}>{c.displayName}</p>
+                  <p className="font-semibold text-on-surface truncate" title={c.displayName}>{c.displayName}</p>
                   {c.companyName && c.companyName !== c.displayName && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={c.companyName}>
+                    <p className="text-xs text-muted truncate" title={c.companyName}>
                       Company: {c.companyName}
                     </p>
                   )}
                   {c.fullyQualifiedName && c.fullyQualifiedName !== c.displayName && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={c.fullyQualifiedName}>
+                    <p className="text-xs text-muted truncate" title={c.fullyQualifiedName}>
                       Full path: {c.fullyQualifiedName}
                     </p>
                   )}
                   {c.email && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={c.email}>Email: {c.email}</p>
+                    <p className="text-xs text-muted truncate" title={c.email}>Email: {c.email}</p>
                   )}
                   {c.addressLine && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={c.addressLine}>{c.addressLine}</p>
+                    <p className="text-xs text-muted truncate" title={c.addressLine}>{c.addressLine}</p>
                   )}
                 </div>
                 <Button
@@ -2316,31 +2537,31 @@ const DeleteConfirmModal: React.FC<{
       onClick={() => { if (!isDeleting) onClose(); }}
     >
       <div
-        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-red-200/60 dark:ring-red-900/40"
+        className="bg-surface rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-red-200/60 dark:ring-red-900/40"
         onClick={e => e.stopPropagation()}
       >
         <div className="relative px-6 py-5 border-b dark:border-gray-800 bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/30 dark:via-gray-900 dark:to-gray-900">
           <span className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-red-500 via-red-400 to-red-500" />
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/40 ring-1 ring-red-200 dark:ring-red-800/60 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Icon name={IconName.Warning} className="w-6 h-6 text-red-600 dark:text-red-400" />
+            <div className="w-12 h-12 rounded-xl bg-danger-bg ring-1 ring-red-200 dark:ring-red-800/60 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Icon name={IconName.Warning} className="w-6 h-6 text-danger" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+                <h3 className="text-lg font-bold text-on-surface tracking-tight">
                   Cancel {count} Company Application row{count === 1 ? '' : 's'}?
                 </h3>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 ring-1 ring-red-300/60 dark:ring-red-800/60">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-danger-bg text-danger ring-1 ring-red-300/60 dark:ring-red-800/60">
                   Destructive
                 </span>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                For rows with an Enrolment ID this <strong className="text-red-700 dark:text-red-300">cancels the live TPGateway enrolment</strong>,
+              <p className="text-sm text-on-surface-secondary mt-1.5 leading-relaxed">
+                For rows with an Enrolment ID this <strong className="text-danger">cancels the live TPGateway enrolment</strong>,
                 marks the local LMS enrolment cancelled, removes calendar attendees, and voids the QBO invoice only when no other active learner shares it.
-                A <strong className="text-gray-800 dark:text-gray-200">consolidated invoice</strong> shared with other learners is
-                <strong className="text-gray-800 dark:text-gray-200"> not</strong> voided unless it can be safely reissued.
+                A <strong className="text-on-surface">consolidated invoice</strong> shared with other learners is
+                <strong className="text-on-surface"> not</strong> voided unless it can be safely reissued.
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+              <p className="text-sm text-on-surface-secondary mt-1 leading-relaxed">
                 The Company Application row is archived for audit instead of being hard-deleted, and uploaded supporting documents are retained.
               </p>
             </div>
@@ -2349,56 +2570,56 @@ const DeleteConfirmModal: React.FC<{
 
         <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50/60 dark:bg-gray-950/40">
           <div className="flex items-center justify-between mb-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Rows to delete
             </p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-200 dark:bg-gray-800 text-on-surface-secondary">
               {count} selected
             </span>
           </div>
-          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-x-auto shadow-sm">
+          <div className="rounded-lg border border-default bg-surface overflow-x-auto shadow-sm">
             <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-800">
+              <thead className="bg-surface-elevated border-b border-default">
                 <tr>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Trainee</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">NRIC</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Employer</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Course</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Enrolment</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Invoice</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">Trainee</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">NRIC</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">Employer</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">Course</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">Enrolment</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">Invoice</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
+              <tbody className="divide-y divide-default">
                 {rows.map((r, i) => {
                   const nric = String(r['Trainee NRIC/FIN Number*'] || '').trim();
                   const maskedNric = nric ? maskNric(nric) : '-';
                   return (
                     <tr key={r.id || i} className="hover:bg-red-50/40 dark:hover:bg-red-900/10 transition-colors">
                       <td
-                        className="px-4 py-2.5 font-semibold text-gray-900 dark:text-gray-100 max-w-[160px] truncate"
+                        className="px-4 py-2.5 font-semibold text-on-surface max-w-[160px] truncate"
                         title={r['Trainee FULL Name as on government ID*']}
                       >
                         {r['Trainee FULL Name as on government ID*'] || '(unnamed)'}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      <td className="px-4 py-2.5 font-mono text-on-surface-secondary whitespace-nowrap">
                         {maskedNric}
                       </td>
                       <td
-                        className="px-4 py-2.5 text-gray-700 dark:text-gray-300 max-w-[150px] truncate"
+                        className="px-4 py-2.5 text-on-surface-secondary max-w-[150px] truncate"
                         title={r['Employer Organization Name*']}
                       >
                         {r['Employer Organization Name*'] || '-'}
                       </td>
                       <td
-                        className="px-4 py-2.5 text-gray-700 dark:text-gray-300 max-w-[180px] truncate"
+                        className="px-4 py-2.5 text-on-surface-secondary max-w-[180px] truncate"
                         title={r['Course Title*']}
                       >
                         {r['Course Title*'] || '-'}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-muted whitespace-nowrap">
                         {r['Enrolment ID'] || '-'}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-muted whitespace-nowrap">
                         {r['Invoice Doc Number'] || '-'}
                       </td>
                     </tr>
@@ -2408,22 +2629,22 @@ const DeleteConfirmModal: React.FC<{
             </table>
           </div>
           {previewMessage && (
-            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">
+            <div className="mt-3 rounded-md border border-amber-300 bg-warning-bg px-3 py-2 text-xs font-medium text-warning dark:border-amber-700/60">
               {previewMessage}
             </div>
           )}
         </div>
 
-        <div className="px-6 py-4 border-t dark:border-gray-800 flex items-center justify-between gap-3 bg-white dark:bg-gray-900">
-          <p className="text-[11px] text-gray-500 dark:text-gray-500 hidden sm:flex items-center gap-1.5">
-            Press <kbd className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-mono text-[10px] text-gray-600 dark:text-gray-400">Esc</kbd> to cancel
+        <div className="px-6 py-4 border-t dark:border-gray-800 flex items-center justify-between gap-3 bg-surface">
+          <p className="text-[11px] text-muted hidden sm:flex items-center gap-1.5">
+            Press <kbd className="px-1.5 py-0.5 rounded border border-strong bg-surface-elevated font-mono text-[10px] text-on-surface-secondary">Esc</kbd> to cancel
           </p>
           <div className="flex gap-2 ml-auto">
             <button
               type="button"
               onClick={onClose}
               disabled={isDeleting}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-strong text-on-surface-secondary bg-surface hover:bg-surface-hover disabled:opacity-50 transition-colors"
             >
               Cancel
             </button>
@@ -2575,6 +2796,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // the default (one invoice per employer x course-run); per-learner exists
   // because admin sometimes has to bill a single person on their own.
   const [invoiceMode, setInvoiceMode] = useState<'consolidated' | 'per-learner'>('consolidated');
+  // Shown after Generate Invoice when a group was held back only because some
+  // learners are not yet SSG-enrolled — offers to bill the enrolled ones now.
+  const [skipNotEnrolledPrompt, setSkipNotEnrolledPrompt] = useState<{
+    applicationIds: string[];
+    groups: SkipNotEnrolledGroup[];
+  } | null>(null);
   // List of pre-check problems blocking a Send Invoice Email attempt. Surfaced
   // as a popup instead of a cramped inline message so admins can read each
   // reason on its own line.
@@ -2896,16 +3123,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
     setConfirmGenerateInvoiceOpen(true);
   };
 
-  const executeGenerateInvoice = async () => {
+  /**
+   * With `retry`, re-runs only the groups held back for un-enrolled learners
+   * (the ids the skip popup collected) with skipNotEnrolled, billing their
+   * enrolled classmates and leaving the rest off. The earlier run's message
+   * and its errors for other groups are kept so nothing from it disappears.
+   */
+  const executeGenerateInvoice = async (
+    retry?: { applicationIds: string[]; groups: SkipNotEnrolledGroup[] },
+  ) => {
+    const skipNotEnrolled = !!retry;
+    const applicationIds = retry ? retry.applicationIds : Array.from(selectedIds);
+    const previousMessage = retry ? invoiceMessage : null;
     setConfirmGenerateInvoiceOpen(false);
+    setSkipNotEnrolledPrompt(null);
     setIsGeneratingInvoice(true);
     setInvoiceMessage(null);
-    setInvoiceErrors([]);
+    if (!retry) setInvoiceErrors([]);
     try {
       const res = await fetch('/api/admin/ca-generate-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationIds: Array.from(selectedIds), mode: invoiceMode }),
+        body: JSON.stringify({ applicationIds, mode: invoiceMode, skipNotEnrolled }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -2918,6 +3157,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const failed = Number(data.failed) || 0;
       const replaced = Number(data.replacedGroups) || 0;
       const billedByHand = Number(data.skippedBilledManually) || 0;
+      const leftOff: Array<{ name: string }> = Array.isArray(data.skippedNotEnrolledLearners)
+        ? data.skippedNotEnrolledLearners
+        : [];
       // The backend counts per group, and in per-learner mode a group IS one
       // learner — so name the unit after the mode the user actually picked.
       const unit = invoiceMode === 'per-learner' ? 'learner' : 'group';
@@ -2925,6 +3167,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (generated) parts.push(`${generated} invoice${generated === 1 ? '' : 's'} generated`);
       if (replaced) parts.push(`${replaced} existing invoice${replaced === 1 ? '' : 's'} replaced to cover a late joiner`);
       if (billedByHand) parts.push(`${billedByHand} learner${billedByHand === 1 ? '' : 's'} billed by hand — left for QuickBooks`);
+      if (leftOff.length) parts.push(`${leftOff.length} learner${leftOff.length === 1 ? '' : 's'} left off the invoice (not yet SSG-enrolled): ${leftOff.map(l => l.name).join(', ')}`);
       if (alreadyInvoiced) parts.push(`${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — left alone`);
       if (notEnrolled) parts.push(`${notEnrolled} ${unit}${notEnrolled === 1 ? '' : 's'} skipped (not yet enrolled with SSG)`);
       if (awaitingGrants) parts.push(`${awaitingGrants} ${unit}${awaitingGrants === 1 ? '' : 's'} awaiting grants — click "Sync Grants" after stakeholders apply in the SSG portal`);
@@ -2937,13 +3180,55 @@ export const ViewCompanyApplicationView: React.FC = () => {
           `⚠ ${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — cannot regenerate. Open the existing invoice via the Tax Invoice column, or delete it in QBO first if you need to regenerate.`
         );
       } else {
-        setInvoiceMessage(
-          parts.length === 0
-            ? 'Nothing to do — selected rows are not yet enrolled.'
-            : parts.join(' · ')
-        );
+        const message = parts.length === 0
+          ? 'Nothing to do — selected rows are not yet enrolled.'
+          : parts.join(' · ');
+        setInvoiceMessage(previousMessage ? `${previousMessage} · Then: ${message}` : message);
       }
-      setInvoiceErrors(Array.isArray(data.errors) ? data.errors : []);
+      const newErrors: InvoiceError[] = Array.isArray(data.errors) ? data.errors : [];
+      const groupKeyOfError = (e: InvoiceError) =>
+        `${String(e.employerUen || '').trim().toLowerCase()}::${String(e.courseRunId || '').trim()}`;
+      if (retry) {
+        // Drop the earlier "not yet SSG-enrolled" banners for the groups just
+        // retried; keep every other error from the first run.
+        const retriedKeys = new Set(retry.groups.map(g => `${g.employerUen.toLowerCase()}::${g.courseRunId}`));
+        setInvoiceErrors(prev => [
+          ...prev.filter(e => !(e.isNotEnrolled && retriedKeys.has(groupKeyOfError(e)))),
+          ...newErrors,
+        ]);
+      } else {
+        setInvoiceErrors(newErrors);
+        // Groups held back only for un-enrolled learners that still have
+        // enrolled ones — offer to bill those now and leave the rest off.
+        const sentIds = new Set(applicationIds);
+        const groups: SkipNotEnrolledGroup[] = [];
+        const retryIds: string[] = [];
+        for (const e of newErrors.filter(err => err.isNotEnrolled)) {
+          const key = groupKeyOfError(e);
+          const groupRows = rows.filter(r =>
+            sentIds.has(String(r.id || '')) &&
+            `${String(r['Employer UEN*'] || '').trim().toLowerCase()}::${String(r['Course Run ID'] || '').trim()}` === key &&
+            !hasValue(r['Invoice ID']) &&
+            !isCheckedValue(r['Billed Manually'])
+          );
+          const isEnrolled = (r: CompanyApplicationRow) => /^ENR-/i.test(String(r['Enrolment ID'] || '').trim());
+          const enrolled = groupRows.filter(isEnrolled);
+          const notEnrolled = groupRows.filter(r => !isEnrolled(r));
+          if (enrolled.length === 0 || notEnrolled.length === 0) continue;
+          groups.push({
+            employerOrgName: String(e.employerOrgName || '').trim() || String(e.employerUen || ''),
+            employerUen: String(e.employerUen || '').trim(),
+            courseRunId: String(e.courseRunId || '').trim(),
+            enrolledCount: enrolled.length,
+            skipped: notEnrolled.map(r => ({
+              name: String(r['Trainee FULL Name as on government ID*'] || '').trim() || '(unnamed)',
+              reason: String(r['Auto-Enrol Error'] || '').replace(/^enrol(?:l)?ment:\s*/i, '').trim(),
+            })),
+          });
+          retryIds.push(...groupRows.map(r => String(r.id)));
+        }
+        if (groups.length > 0) setSkipNotEnrolledPrompt({ applicationIds: retryIds, groups });
+      }
       void reloadRows();
       window.setTimeout(() => void reloadRows(), 3000);
     } catch (err) {
@@ -3524,12 +3809,32 @@ export const ViewCompanyApplicationView: React.FC = () => {
     const matched = showStuckOnly
       ? queryMatched.filter(row => row._stuck === '1')
       : queryMatched;
-    // Sort so rows sharing the same Invoice ID are adjacent — keeps the
-    // (employer, course-run) groups together so the Invoice # / Tax Invoice
-    // cell-merging below picks them up. Within a group, trainee name is the
-    // tiebreaker. Rows without an invoice yet sort first (newest uploads
-    // first via created_at fallback through the original DB ORDER BY).
-    return [...matched].sort((a, b) => {
+    // Sort so every application for one course run is adjacent (so a class
+    // is never split across pages — see pageBoundaries), and within a run,
+    // rows sharing the same Invoice ID are adjacent so the Invoice # / Tax
+    // Invoice cell-merging below picks them up (an invoice is per employer +
+    // course run, so it never spans runs). Runs with un-invoiced rows come
+    // first, then runs in the original DB order (newest uploads first).
+    // Within a run: un-invoiced rows first, then by invoice, then trainee name.
+    const runKey = (row: Record<string, string>, idx: number) =>
+      String(row['Course Run ID'] || '').trim() || `__no_run_${idx}`;
+    const runFirstIdx = new Map<string, number>();
+    const runHasUninvoiced = new Set<string>();
+    matched.forEach((row, idx) => {
+      const key = runKey(row, idx);
+      if (!runFirstIdx.has(key)) runFirstIdx.set(key, idx);
+      if (!(row['Invoice ID'] || '').trim()) runHasUninvoiced.add(key);
+    });
+    const indexed = matched.map((row, idx) => ({ row, key: runKey(row, idx) }));
+    indexed.sort((x, y) => {
+      if (x.key !== y.key) {
+        const ux = runHasUninvoiced.has(x.key) ? 0 : 1;
+        const uy = runHasUninvoiced.has(y.key) ? 0 : 1;
+        if (ux !== uy) return ux - uy;
+        return (runFirstIdx.get(x.key) ?? 0) - (runFirstIdx.get(y.key) ?? 0);
+      }
+      const a = x.row;
+      const b = y.row;
       const ia = (a['Invoice ID'] || '').trim();
       const ib = (b['Invoice ID'] || '').trim();
       if (ia !== ib) {
@@ -3541,25 +3846,26 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const nb = (b['Trainee FULL Name as on government ID*'] || '').trim();
       return na.localeCompare(nb);
     });
+    return indexed.map(x => x.row);
   }, [rows, searchQuery, showStuckOnly]);
 
   React.useEffect(() => { setCurrentPage(1); }, [searchQuery, showStuckOnly]);
 
   // Group-aware page boundaries: target ~itemsPerPage rows per page, but
-  // never split an invoice group (rows sharing an Invoice ID) across pages,
-  // because the Invoice # / Tax Invoice cells use rowSpan and would render
-  // incorrectly if the group were broken. A single group larger than the
-  // target gets its own page.
+  // never split a course run across pages — admins work a class at a time,
+  // so a 32-learner run shows on one page. This also keeps every invoice
+  // group whole (an invoice never spans runs), which the rowSpan'd Invoice # /
+  // Tax Invoice cells need. A single run larger than the target gets its own page.
   const pageBoundaries = useMemo(() => {
     const pages: Array<{ start: number; end: number }> = [];
     if (filteredRows.length === 0) return pages;
     let pageStart = 0;
     let i = 0;
     while (i < filteredRows.length) {
-      const inv = (filteredRows[i]['Invoice ID'] || '').trim();
+      const run = (filteredRows[i]['Course Run ID'] || '').trim();
       let groupEnd = i + 1;
-      if (inv) {
-        while (groupEnd < filteredRows.length && (filteredRows[groupEnd]['Invoice ID'] || '').trim() === inv) {
+      if (run) {
+        while (groupEnd < filteredRows.length && (filteredRows[groupEnd]['Course Run ID'] || '').trim() === run) {
           groupEnd++;
         }
       }
@@ -3624,26 +3930,26 @@ export const ViewCompanyApplicationView: React.FC = () => {
       {courseFeePopup}
       <div className="mb-6">
         <h2 className="text-3xl font-bold dark:text-white leading-tight">View Company Application</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track enrolment, calendar, and invoice status across uploaded company applications.</p>
+        <p className="text-sm text-muted mt-1">Track enrolment, calendar, and invoice status across uploaded company applications.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card className="p-4 flex items-center gap-4 border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
-          <div className="w-11 h-11 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.Building} className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <div className="w-11 h-11 rounded-lg bg-info-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.Building} className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="text-2xl font-bold text-blue-600 leading-none">{rows.length}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">Company Applications</p>
+            <p className="text-2xl font-bold text-primary leading-none">{rows.length}</p>
+            <p className="text-xs text-muted mt-1.5">Company Applications</p>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-4 border-l-4 border-green-500 hover:shadow-lg transition-shadow">
-          <div className="w-11 h-11 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+          <div className="w-11 h-11 rounded-lg bg-success-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
           </div>
           <div className="min-w-0">
-            <p className="text-2xl font-bold text-green-600 leading-none">{enroledCount}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">Enrolled</p>
+            <p className="text-2xl font-bold text-success leading-none">{enroledCount}</p>
+            <p className="text-xs text-muted mt-1.5">Enrolled</p>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-4 border-l-4 border-indigo-500 hover:shadow-lg transition-shadow">
@@ -3651,17 +3957,17 @@ export const ViewCompanyApplicationView: React.FC = () => {
             <Icon name={IconName.Calendar} className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="min-w-0">
-            <p className="text-2xl font-bold text-indigo-600 leading-none">{calendarAddedCount}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">Added to Calendar</p>
+            <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 leading-none">{calendarAddedCount}</p>
+            <p className="text-xs text-muted mt-1.5">Added to Calendar</p>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-4 border-l-4 border-amber-500 hover:shadow-lg transition-shadow">
-          <div className="w-11 h-11 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.FileText} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          <div className="w-11 h-11 rounded-lg bg-warning-bg flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.FileText} className="w-5 h-5 text-warning" />
           </div>
           <div className="min-w-0">
-            <p className="text-2xl font-bold text-amber-600 leading-none">{invoiceCreatedCount}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">Invoice Created</p>
+            <p className="text-2xl font-bold text-warning leading-none">{invoiceCreatedCount}</p>
+            <p className="text-xs text-muted mt-1.5">Invoice Created</p>
           </div>
         </Card>
       </div>
@@ -3685,20 +3991,20 @@ export const ViewCompanyApplicationView: React.FC = () => {
             hint="Amounts are correct — but each invoice is emailed separately"
           >
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
-                  <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+                <div className="w-9 h-9 flex-shrink-0 rounded-full bg-warning-bg flex items-center justify-center">
+                  <Icon name={IconName.Warning} className="w-5 h-5 text-warning" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  <p className="text-sm font-semibold text-warning">
                     {splitInvoiceGroups.length} compan{splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class
                   </p>
-                  <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-300">
+                  <p className="text-xs mt-0.5 text-warning">
                     The amounts are correct — each learner is billed once. But the employer receives several
                     invoices for one class, and each one is emailed separately.
                   </p>
                   <ul className="mt-2 space-y-1">
                     {splitInvoiceGroups.slice(0, 6).map(g => (
-                      <li key={g.key} className="text-xs text-amber-800 dark:text-amber-200 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <li key={g.key} className="text-xs text-warning flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span>
                           <span className="font-semibold">{g.employer}</span>
                           <span className="opacity-75"> · run {g.courseRunId} · </span>
@@ -3708,7 +4014,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                           type="button"
                           onClick={() => void openMergePreview(g)}
                           disabled={mergingGroupKey !== null}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-400 text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-400 text-warning hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:hover:bg-amber-900/40"
                           title="See what merging these into one invoice would do. Nothing is changed until you confirm."
                         >
                           {mergingGroupKey === g.key ? 'Checking…' : 'Merge into one'}
@@ -3716,7 +4022,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       </li>
                     ))}
                     {splitInvoiceGroups.length > 6 && (
-                      <li className="text-xs text-amber-700 dark:text-amber-300">
+                      <li className="text-xs text-warning">
                         …and {splitInvoiceGroups.length - 6} more.
                       </li>
                     )}
@@ -3733,7 +4039,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
           hint="A company must be a QuickBooks customer before its invoice can generate"
         >
           <div className="relative mt-3">
-            <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Icon name={IconName.Search} className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="search-qb-company"
               type="text"
@@ -3745,22 +4051,22 @@ export const ViewCompanyApplicationView: React.FC = () => {
           </div>
 
           {qbEmployersLoading && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading companies from QuickBooks…</p>
+            <p className="text-xs text-muted mt-2">Loading companies from QuickBooks…</p>
           )}
           {qbEmployersError && (
-            <p className="text-xs text-red-500 mt-2">Couldn’t load companies: {qbEmployersError}</p>
+            <p className="text-xs text-danger mt-2">Couldn’t load companies: {qbEmployersError}</p>
           )}
 
           {qbCompanyQuery.trim() && !qbEmployersLoading && (
             qbCompanyMatches.length > 0 ? (
-              <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+              <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-default divide-y divide-default">
                 {qbCompanyMatches.map((e) => {
                   const inQb = e.source === 'qb' || e.source === 'both';
                   return (
                     <li key={e.id} className="px-3 py-2 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        <p className="text-sm font-medium text-on-surface truncate">{e.employerOrgName}</p>
+                        <p className="text-xs text-muted truncate">
                           {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
                           {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
                         </p>
@@ -3776,30 +4082,30 @@ export const ViewCompanyApplicationView: React.FC = () => {
                           // company has none", which is not what it means.
                           if (addr === undefined) {
                             return (
-                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                              <p className="text-xs text-muted mt-0.5 truncate">
                                 Type more of the name to look up this address
                               </p>
                             );
                           }
                           return (
-                            <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5 truncate">
+                            <p className="text-xs text-success mt-0.5 truncate">
                               {addr === '…' ? 'Looking up address…' : addr}
                             </p>
                           );
                         })() : (
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                          <p className="text-xs text-muted mt-0.5 truncate">
                             No UEN, so the address cannot be looked up
                           </p>
                         )}
                       </div>
                       {inQb ? (
-                        <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-success-bg text-success">
                           <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
                           In QuickBooks
                         </span>
                       ) : (
                         <span
-                          className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning"
                           title="Only in application history — not a QuickBooks customer yet. Add it in QuickBooks before enrolling or the invoice will fail."
                         >
                           <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
@@ -3811,7 +4117,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 })}
               </ul>
             ) : (
-              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+              <div className="mt-3 rounded-md border border-amber-200 bg-warning-bg dark:border-amber-800 px-3 py-2 text-xs text-warning">
                 No company matches “{qbCompanyQuery.trim()}”. If this is a new company, add it in QuickBooks first — otherwise its consolidated invoice will fail when you enrol under it.
               </div>
             )
@@ -3829,9 +4135,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
       <Card className="p-6 mb-6">
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1 w-full">
-            <label htmlFor="search-company-application" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Search Applications</label>
+            <label htmlFor="search-company-application" className="block text-sm font-bold text-on-surface-secondary mb-1">Search Applications</label>
             <div className="relative">
-              <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Icon name={IconName.Search} className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input id="search-company-application" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by trainee, employer, course, UEN, or email..." className={`${inputClasses} pl-9`} />
             </div>
           </div>
@@ -3845,10 +4151,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
             }
             className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
               showStuckOnly
-                ? 'border-red-500 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 dark:border-red-400'
+                ? 'border-red-500 bg-danger-bg text-danger dark:border-red-400'
                 : stuckRowCount > 0
-                  ? 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/20'
-                  : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400 cursor-default'
+                  ? 'border-red-300 text-danger hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/20'
+                  : 'border-strong text-muted cursor-default'
             }`}
             disabled={stuckRowCount === 0 && !showStuckOnly}
           >
@@ -3869,14 +4175,14 @@ export const ViewCompanyApplicationView: React.FC = () => {
             )}
           </Button>
         </div>
-        {loadError && <p className="text-red-500 text-sm mt-3">{loadError}</p>}
+        {loadError && <p className="text-danger text-sm mt-3">{loadError}</p>}
       </Card>
 
       {isLoading && (
         <div className="flex justify-center py-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
-            <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching company applications from database...</p>
+            <p className="mt-4 text-on-surface-secondary">Fetching company applications from database...</p>
           </div>
         </div>
       )}
@@ -3885,12 +4191,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
       <Card className="p-0">
         <div className="p-6 border-b flex justify-between items-start dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 rounded-t-lg">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-              <Icon name={IconName.Users} className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className="w-10 h-10 rounded-lg bg-info-bg flex items-center justify-center flex-shrink-0">
+              <Icon name={IconName.Users} className="w-5 h-5 text-primary" />
             </div>
             <div>
               <h3 className="text-xl font-bold dark:text-white">Company Applications</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Showing {filteredRows.length === 0 ? 0 : startIndex + 1}-{endIndex} of {filteredRows.length} applications</p>
+              <p className="text-sm text-muted mt-0.5">Showing {filteredRows.length === 0 ? 0 : startIndex + 1}-{endIndex} of {filteredRows.length} applications</p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -3917,7 +4223,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 onClick={() => void generateInvoiceForSelected()}
                 disabled={isGeneratingInvoice || selectedIds.size === 0}
                 title="Generate one consolidated QuickBooks invoice per (employer, course) group for the selected rows. Skips groups that already have an invoice."
-                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-orange-600 hover:bg-orange-700 shadow-sm shadow-orange-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-orange-700 hover:bg-orange-800 shadow-sm shadow-orange-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isGeneratingInvoice ? (
                   <>
@@ -3953,7 +4259,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 onClick={() => void removeInvoiceFromSelected()}
                 disabled={isRemovingInvoice || selectedIds.size === 0}
                 title="Detach a wrong tax invoice from the selected learners so a correct one can be generated. The enrolment, grant and calendar entry are NOT touched. The QuickBooks document is deleted only when it is ours, unpaid, and every learner on it was selected."
-                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-amber-700 bg-amber-100 hover:bg-amber-200 ring-1 ring-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:text-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 dark:ring-amber-700/60"
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-warning bg-warning-bg hover:bg-amber-200 ring-1 ring-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:hover:bg-amber-900/60 dark:ring-amber-700/60"
               >
                 {isRemovingInvoice ? (
                   <>
@@ -3987,21 +4293,21 @@ export const ViewCompanyApplicationView: React.FC = () => {
               </button>
             </div>
             {pipelineMessage && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{pipelineMessage}</p>
+              <p className="text-xs text-muted max-w-md text-right">{pipelineMessage}</p>
             )}
             {emailMessage && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{emailMessage}</p>
+              <p className="text-xs text-muted max-w-md text-right">{emailMessage}</p>
             )}
             {invoiceMessage && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{invoiceMessage}</p>
+              <p className="text-xs text-muted max-w-md text-right">{invoiceMessage}</p>
             )}
             {deleteMessage && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{deleteMessage}</p>
+              <p className="text-xs text-muted max-w-md text-right">{deleteMessage}</p>
             )}
             {invoiceErrors.length > 0 && (
               <div className="mt-1 max-w-md text-right space-y-1">
                 {invoiceErrors.map((e, i) => (
-                  <div key={`${e.groupKey}-${i}`} className="text-xs text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 rounded p-2 bg-red-50/50 dark:bg-red-900/10 text-left">
+                  <div key={`${e.groupKey}-${i}`} className="text-xs text-danger border border-red-200 dark:border-red-900 rounded p-2 bg-red-50/50 dark:bg-red-900/10 text-left">
                     <p>
                       <span className="font-semibold">{e.employerOrgName || '(unnamed)'}</span>
                       {e.employerUen ? ` · UEN ${e.employerUen}` : ''}
@@ -4015,7 +4321,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                           employerOrgName: e.employerOrgName,
                           courseRunId: e.courseRunId,
                         })}
-                        className="mt-2 inline-flex items-center px-2 py-1 text-[11px] font-medium rounded border border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        className="mt-2 inline-flex items-center px-2 py-1 text-[11px] font-medium rounded border border-amber-500 text-warning hover:bg-amber-50 dark:hover:bg-amber-900/20"
                       >
                         Search QBO &amp; Link
                       </button>
@@ -4045,7 +4351,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
             onConfirm={() => {}}
             onCancel={() => {}}
           >
-            <p className="text-sm text-gray-700 dark:text-gray-200">Loading candidate runs...</p>
+            <p className="text-sm text-on-surface-secondary">Loading candidate runs...</p>
           </ConfirmPopup>
         )}
         {courseRunChoice && (
@@ -4068,7 +4374,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
             onConfirm={() => setAutoProcessPopup(null)}
             onCancel={() => setAutoProcessPopup(null)}
           >
-            <p className="text-sm text-gray-700 dark:text-gray-200">{autoProcessPopup.message}</p>
+            <p className="text-sm text-on-surface-secondary">{autoProcessPopup.message}</p>
           </ConfirmPopup>
         )}
         {sendBlockedReasons && (
@@ -4087,7 +4393,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
               {sendBlockedReasons.map((reason, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <Icon name={IconName.Warning} className="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-500 dark:text-orange-400" />
-                  <span className="text-gray-700 dark:text-gray-200">{reason}</span>
+                  <span className="text-on-surface-secondary">{reason}</span>
                 </li>
               ))}
             </ul>
@@ -4108,7 +4414,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
             <p>
               One consolidated email is sent per unique invoice. Already-sent invoices are skipped automatically (idempotent).
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-muted">
               Tip: if the master &quot;send invoice emails&quot; toggle is OFF, the send is held — no email actually leaves.
             </p>
           </ConfirmPopup>
@@ -4165,7 +4471,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
               onCancel={() => setConfirmGenerateInvoiceOpen(false)}
             >
               <div className="space-y-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">How should this be billed?</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted">How should this be billed?</p>
                 {([
                   {
                     value: 'consolidated' as const,
@@ -4187,44 +4493,44 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       disabled={isGeneratingInvoice}
                       className={`w-full text-left flex items-start gap-2.5 rounded-lg border p-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                         active
-                          ? 'border-orange-400 dark:border-orange-500/70 bg-orange-50 dark:bg-orange-900/20'
-                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 hover:border-gray-300 dark:hover:border-gray-600'
+                          ? 'border-orange-400 dark:border-orange-500/70 bg-warning-bg'
+                          : 'border-default bg-surface-elevated hover:border-gray-300 dark:hover:border-gray-600'
                       }`}
                     >
                       <span
                         className={`mt-0.5 w-3.5 h-3.5 rounded-full border-[3px] flex-shrink-0 ${
                           active
                             ? 'border-orange-500 dark:border-orange-400'
-                            : 'border-gray-300 dark:border-gray-600'
+                            : 'border-strong'
                         }`}
                       />
                       <span className="min-w-0">
-                        <span className={`block text-xs font-semibold ${active ? 'text-orange-800 dark:text-orange-200' : 'text-gray-700 dark:text-gray-200'}`}>
+                        <span className={`block text-xs font-semibold ${active ? 'text-orange-800 dark:text-orange-200' : 'text-on-surface-secondary'}`}>
                           {opt.label}
                         </span>
-                        <span className="block text-[11px] text-gray-500 dark:text-gray-400">{opt.hint}</span>
+                        <span className="block text-[11px] text-muted">{opt.hint}</span>
                       </span>
                     </button>
                   );
                 })}
               </div>
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pre-check on selected rows</p>
+              <div className="rounded-lg border border-default bg-surface-elevated p-3 space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Pre-check on selected rows</p>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 dark:text-gray-300">Already has tax invoice (Invoice #)</span>
-                  <span className={`font-mono font-semibold ${withInvoice > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  <span className="text-on-surface-secondary">Already has tax invoice (Invoice #)</span>
+                  <span className={`font-mono font-semibold ${withInvoice > 0 ? 'text-warning' : 'text-success'}`}>
                     {withInvoice} / {totalSelected}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 dark:text-gray-300">Already has grant invoice</span>
-                  <span className={`font-mono font-semibold ${withGrantInvoice > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  <span className="text-on-surface-secondary">Already has grant invoice</span>
+                  <span className={`font-mono font-semibold ${withGrantInvoice > 0 ? 'text-warning' : 'text-success'}`}>
                     {withGrantInvoice} / {totalSelected}
                   </span>
                 </div>
               </div>
               {priorInvoiceDocs.length > 0 && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
+                <div className="rounded-lg bg-warning-bg ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-warning inline-flex items-start gap-1.5">
                   <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>
                     This employer already has {priorInvoiceDocs.length === 1 ? 'an invoice' : `${priorInvoiceDocs.length} invoices`} for this course
@@ -4236,12 +4542,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 </div>
               )}
               {allInvoiced ? (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
+                <div className="rounded-lg bg-warning-bg ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-warning inline-flex items-start gap-1.5">
                   <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>Every selected row already has an invoice. Nothing new will be generated.</span>
                 </div>
               ) : withInvoice > 0 ? (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
+                <div className="rounded-lg bg-warning-bg ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-warning inline-flex items-start gap-1.5">
                   <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>
                     {withInvoice} of {totalSelected} selected row{totalSelected === 1 ? '' : 's'} already invoiced — those learners are left alone (no duplicates).
@@ -4249,31 +4555,70 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   </span>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted">
                   {perLearner
                     ? `${newInvoiceCount} separate tax invoice${newInvoiceCount === 1 ? '' : 's'} will be created in QuickBooks — one per selected learner.`
                     : 'A consolidated tax invoice will be created in QuickBooks for each (employer × course-run) group in your selection.'}
                 </p>
               )}
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted">
                 Tip: {perLearner ? 'learners' : 'groups'} whose grants are still awaiting application get flagged and skipped — sync grants first if so.
+              </p>
+            </ConfirmPopup>
+          );
+        })()}
+        {skipNotEnrolledPrompt && (() => {
+          const { groups } = skipNotEnrolledPrompt;
+          const skippedTotal = groups.reduce((n, g) => n + g.skipped.length, 0);
+          const billTotal = groups.reduce((n, g) => n + g.enrolledCount, 0);
+          return (
+            <ConfirmPopup
+              tone="warning"
+              icon={IconName.FileText}
+              title="Generate invoice without these learners?"
+              subtitle={`${skippedTotal} learner${skippedTotal === 1 ? ' is' : 's are'} not yet enrolled with SSG · ${billTotal} enrolled learner${billTotal === 1 ? '' : 's'} can be invoiced now`}
+              confirmLabel={`Skip ${skippedTotal === 1 ? 'learner' : 'learners'} & generate invoice`}
+              busyLabel="Generating…"
+              busy={isGeneratingInvoice}
+              onConfirm={() => void executeGenerateInvoice(skipNotEnrolledPrompt)}
+              onCancel={() => setSkipNotEnrolledPrompt(null)}
+            >
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {groups.map(g => (
+                  <div key={`${g.employerUen}::${g.courseRunId}`} className="rounded-lg border border-default bg-surface-elevated p-2.5 space-y-1.5">
+                    <p className="text-xs font-semibold text-on-surface">
+                      {g.employerOrgName}
+                      <span className="font-normal text-muted"> · Run {g.courseRunId} · {g.enrolledCount} to invoice</span>
+                    </p>
+                    {g.skipped.map((l, i) => (
+                      <div key={i} className="text-xs">
+                        <span className="font-semibold text-danger">Skip: {l.name}</span>
+                        {l.reason && <span className="block text-muted mt-0.5">{l.reason}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted">
+                The skipped learner{skippedTotal === 1 ? ' stays' : 's stay'} on the list without an invoice. Once SSG accepts the
+                enrolment, select them and click Generate Invoice again — they are billed as a late joiner.
               </p>
             </ConfirmPopup>
           );
         })()}
         {refreshedDoc && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-800">
+            <div className="w-full max-w-md rounded-lg bg-surface shadow-xl">
               <div className="p-6 space-y-3">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 flex-shrink-0 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-                    <Icon name={IconName.CheckCircle} className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+                  <div className="w-9 h-9 flex-shrink-0 rounded-full bg-success-bg flex items-center justify-center">
+                    <Icon name={IconName.CheckCircle} className="w-5 h-5 text-success" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                    <h3 className="text-base font-semibold text-on-surface">
                       This invoice was edited in QuickBooks
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                    <p className="text-sm text-on-surface-secondary mt-1">
                       {refreshedDoc.docNumber ? (
                         <>The copy stored here for <span className="font-mono font-semibold">{refreshedDoc.docNumber}</span> has been updated to match.</>
                       ) : (
@@ -4282,16 +4627,16 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted">
                   Google Drive can take a few seconds to show a newly changed file. If it still looks
                   like the old version, refresh that tab.
                 </p>
               </div>
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-default">
                 <button
                   type="button"
                   onClick={() => setRefreshedDoc(null)}
-                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover"
                 >
                   Close
                 </button>
@@ -4301,7 +4646,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     window.open(refreshedDoc.url, '_blank', 'noopener');
                     setRefreshedDoc(null);
                   }}
-                  className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700"
+                  className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-700 hover:bg-emerald-800"
                 >
                   Open updated PDF
                 </button>
@@ -4314,19 +4659,19 @@ export const ViewCompanyApplicationView: React.FC = () => {
           const totalToDelete = data.invoices.length;
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-800 max-h-[85vh] flex flex-col">
+              <div className="w-full max-w-2xl rounded-lg bg-surface shadow-xl max-h-[85vh] flex flex-col">
                 <div className="p-6 space-y-4 overflow-y-auto">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <h3 className="text-lg font-semibold text-on-surface">
                       Merge {totalToDelete} invoices into one?
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                    <p className="text-sm text-on-surface-secondary mt-1">
                       {data.employerOrgName || group.employer} &middot; course run {group.courseRunId}
                     </p>
                   </div>
 
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted mb-2">
                       These invoices would be deleted in QuickBooks
                     </p>
                     <div className="space-y-2">
@@ -4334,25 +4679,25 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         <div
                           key={inv.invoiceId}
                           className={`rounded-md border p-3 ${inv.mergeable
-                            ? 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40'
-                            : 'border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20'}`}
+                            ? 'border-default bg-surface-elevated'
+                            : 'border-amber-300 bg-warning-bg dark:border-amber-700/60'}`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-mono text-sm font-semibold text-gray-900 dark:text-white">
+                            <span className="font-mono text-sm font-semibold text-on-surface">
                               {inv.docNumber || inv.invoiceId}
                             </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs text-muted">
                               {inv.learnerCount} learner{inv.learnerCount === 1 ? '' : 's'}
                               {inv.total > 0 && ` · $${inv.total.toFixed(2)}`}
                             </span>
                           </div>
                           {inv.learnerNames.length > 0 && (
-                            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                            <p className="text-xs text-on-surface-secondary mt-1">
                               {inv.learnerNames.join(', ')}
                             </p>
                           )}
                           {!inv.mergeable && (
-                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mt-1.5 inline-flex items-start gap-1.5">
+                            <p className="text-xs font-semibold text-warning mt-1.5 inline-flex items-start gap-1.5">
                               <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                               <span>{inv.blockedReason}</span>
                             </p>
@@ -4374,31 +4719,31 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     const matches = Math.abs(currentTotal - proj.total) < 0.01;
                     return (
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted mb-2">
                           The invoice that would replace them
                         </p>
 
                         {/* Deliberately light in both themes — this is a preview
                             of a printed document, not part of the app chrome. */}
-                        <div className="rounded-md border border-gray-300 bg-white text-gray-900 overflow-hidden shadow-sm dark:border-gray-600">
-                          <div className="flex items-start justify-between gap-4 px-4 pt-4 pb-3 border-b border-gray-200">
+                        <div className="rounded-md border border-strong bg-white text-on-surface overflow-hidden shadow-sm">
+                          <div className="flex items-start justify-between gap-4 px-4 pt-4 pb-3 border-b border-default">
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Tax Invoice</p>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">Tax Invoice</p>
                               <p className="text-sm font-bold mt-1">{proj.billTo || group.employer}</p>
-                              <p className="text-[11px] text-gray-500 mt-0.5">
+                              <p className="text-[11px] text-muted mt-0.5">
                                 Course run {group.courseRunId} · {proj.quantity} participant{proj.quantity === 1 ? '' : 's'}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="text-[10px] uppercase tracking-wider text-gray-400">Invoice no.</p>
-                              <p className="text-[11px] font-mono text-gray-400 italic">assigned on issue</p>
+                              <p className="text-[10px] uppercase tracking-wider text-muted">Invoice no.</p>
+                              <p className="text-[11px] font-mono text-muted italic">assigned on issue</p>
                             </div>
                           </div>
 
                           <div className="overflow-x-auto">
                             <table className="w-full text-[11px]">
                               <thead>
-                                <tr className="bg-gray-50 text-gray-500">
+                                <tr className="bg-gray-50 text-muted">
                                   <th className="text-left font-semibold uppercase tracking-wider px-4 py-1.5">Description</th>
                                   <th className="text-right font-semibold uppercase tracking-wider px-2 py-1.5 whitespace-nowrap">Qty</th>
                                   <th className="text-right font-semibold uppercase tracking-wider px-2 py-1.5 whitespace-nowrap">Rate</th>
@@ -4408,16 +4753,16 @@ export const ViewCompanyApplicationView: React.FC = () => {
                               </thead>
                               <tbody>
                                 {proj.lines.map((ln, i) => (
-                                  <tr key={i} className="border-t border-gray-200 align-top">
+                                  <tr key={i} className="border-t border-default align-top">
                                     <td className="px-4 py-2">
                                       <p className="font-semibold">{ln.product}</p>
-                                      <p className="text-gray-600 whitespace-pre-line leading-snug mt-0.5">{ln.description}</p>
+                                      <p className="text-on-surface-secondary whitespace-pre-line leading-snug mt-0.5">{ln.description}</p>
                                     </td>
                                     <td className="px-2 py-2 text-right font-mono tabular-nums">{ln.qty}</td>
                                     <td className="px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap">
                                       {ln.rate < 0 ? '-' : ''}${money(ln.rate)}
                                     </td>
-                                    <td className="px-2 py-2 text-right text-gray-500 whitespace-nowrap">{ln.taxCode}</td>
+                                    <td className="px-2 py-2 text-right text-muted whitespace-nowrap">{ln.taxCode}</td>
                                     <td className="px-4 py-2 text-right font-mono tabular-nums whitespace-nowrap">
                                       {ln.amount < 0 ? '-' : ''}${money(ln.amount)}
                                     </td>
@@ -4427,17 +4772,17 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             </table>
                           </div>
 
-                          <div className="border-t border-gray-200 px-4 py-3 flex justify-end">
+                          <div className="border-t border-default px-4 py-3 flex justify-end">
                             <div className="w-56 space-y-1 text-[11px]">
                               <div className="flex justify-between">
-                                <span className="text-gray-600">Subtotal</span>
+                                <span className="text-on-surface-secondary">Subtotal</span>
                                 <span className="font-mono tabular-nums">${money(proj.subtotal)}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">GST 9%</span>
+                                <span className="text-on-surface-secondary">GST 9%</span>
                                 <span className="font-mono tabular-nums">${money(proj.gst)}</span>
                               </div>
-                              <div className="flex justify-between pt-1 border-t border-gray-300 text-sm font-bold">
+                              <div className="flex justify-between pt-1 border-t border-strong text-sm font-bold">
                                 <span>Balance due</span>
                                 <span className="font-mono tabular-nums">${money(proj.total)}</span>
                               </div>
@@ -4446,8 +4791,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         </div>
 
                         <div className={`mt-2 rounded-md px-3 py-2 text-[11px] border ${matches
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/60 dark:bg-emerald-900/20 dark:text-emerald-200'
-                          : 'border-amber-300 bg-amber-50 text-amber-800 font-semibold dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200'}`}>
+                          ? 'border-emerald-300 bg-success-bg text-emerald-800 dark:border-emerald-700/60 dark:text-emerald-200'
+                          : 'border-amber-300 bg-warning-bg text-warning font-semibold dark:border-amber-700/60'}`}>
                           {matches
                             ? `Same as the ${data.invoices.length} invoices today ($${money(currentTotal)}) — the company owes exactly what it owes now.`
                             : `The ${data.invoices.length} invoices today total $${money(currentTotal)} — that is $${money(currentTotal - proj.total)} ${currentTotal > proj.total ? 'more' : 'less'} than this. Check why before merging.`}
@@ -4457,33 +4802,33 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   })()}
 
                   {data.canMerge ? (
-                    <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-700/60 dark:bg-emerald-900/20">
+                    <div className="rounded-md border border-emerald-300 bg-success-bg p-3 dark:border-emerald-700/60">
                       <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
                         Ready to merge
                       </p>
-                      <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                      <p className="text-xs text-success mt-0.5">
                         None of these has been emailed or paid, so nothing has left the office.
                         The old numbers are deleted and a new one is issued.
                       </p>
                     </div>
                   ) : (
-                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-900/20">
-                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                    <div className="rounded-md border border-amber-300 bg-warning-bg p-3 dark:border-amber-700/60">
+                      <p className="text-sm font-semibold text-warning">
                         These cannot be merged
                       </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                      <p className="text-xs text-warning mt-0.5">
                         {data.blockedReason} Use a credit note in QuickBooks if they must be combined.
                       </p>
                     </div>
                   )}
                 </div>
 
-                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-default">
                   <button
                     type="button"
                     disabled={isMerging}
                     onClick={() => setMergePreview(null)}
-                    className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                    className="px-4 py-2 text-sm font-medium rounded-md border border-strong text-on-surface-secondary hover:bg-surface-hover disabled:opacity-50"
                   >
                     {data.canMerge ? 'Cancel' : 'Close'}
                   </button>
@@ -4529,8 +4874,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-max w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+          <table className="min-w-max w-full divide-y divide-default text-[11px]">
+            <thead className="bg-surface-elevated">
               <tr>
                 <th colSpan={5} className="bg-gray-200 dark:bg-gray-900" />
                 {COLUMN_GROUPS.map(group => (
@@ -4555,23 +4900,23 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         setSelectedIds(new Set());
                       }
                     }}
-                    className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
+                    className="w-3.5 h-3.5 text-primary rounded border-strong cursor-pointer"
                   />
                 </th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Grant status — click to mark a learner as ineligible (bill at full fee) when SSG won't issue any grant for them">Grant</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="SSG Enrolment Done">Enrol</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="Added to Google Calendar">Cal</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="Invoice Generated">Inv</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-muted uppercase" title="Grant status — click to mark a learner as ineligible (bill at full fee) when SSG won't issue any grant for them">Grant</th>
                 {VISIBLE_COLUMNS.map((column) => {
                   const isPiiColumn = column === 'Trainee NRIC/FIN Number*' || column === 'Date of Birth* (DD-MM-YYYY)';
                   const label = COLUMN_DISPLAY_LABELS[column] ?? column.replace(/\*/g, '').trim();
                   return (
-                    <th key={column} className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">
+                    <th key={column} className="px-2 py-2 text-left text-[10px] font-semibold text-muted uppercase whitespace-nowrap">
                       {label}
                       {isPiiColumn && (
                         <button
                           onClick={() => setShowPii(v => !v)}
-                          className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500"
+                          className="ml-1 inline-flex align-middle text-muted hover:text-blue-500"
                           title={showPii ? 'Hide sensitive info' : 'Show sensitive info'}
                         >
                           <Icon name={showPii ? IconName.Eye : IconName.EyeOff} className="w-3 h-3" />
@@ -4582,7 +4927,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 })}
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+            <tbody className="bg-surface divide-y divide-default">
               {paginatedRows.length > 0 ? paginatedRows.map((row, index) => {
                 const groupMeta = invoiceGroupMeta[index] || { isFirst: true, size: 1 };
                 const isStuck = row._stuck === '1';
@@ -4625,7 +4970,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         onChange={() => toggleRowSelected(String(row.id || ''))}
                         disabled={!row.id}
                         title="Click to select all rows from the same employer × course run · Alt-click to select just this row"
-                        className={`${canDeleteAsSuccessfulDuplicate ? 'hidden' : ''} w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer`}
+                        className={`${canDeleteAsSuccessfulDuplicate ? 'hidden' : ''} w-3.5 h-3.5 text-primary rounded border-strong cursor-pointer`}
                       />
                       {canDeleteAsSuccessfulDuplicate ? (
                         <button
@@ -4657,7 +5002,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                                 : 'Click for details'
                           }
                           aria-label="Show auto-enrol error details"
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 cursor-pointer"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-danger-bg text-danger hover:bg-red-200 dark:hover:bg-red-900/60 cursor-pointer"
                         >
                           <Icon name={IconName.Warning} className="w-3 h-3" />
                         </button>
@@ -4699,7 +5044,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       if (hasGrant) {
                         return (
                           <span
-                            className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-success-bg text-success"
                             title={`Grant issued: ${row['Grant ID'] || row['Grant ID (BL)']}`}
                           >
                             <Icon name={IconName.CheckCircle} className="w-3 h-3" />
@@ -4712,7 +5057,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             type="button"
                             onClick={() => void toggleGrantEligibility(applicationId, false)}
                             disabled={!applicationId}
-                            className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50"
+                            className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-danger-bg text-danger hover:bg-red-200 dark:hover:bg-red-900/50"
                             title="Marked Not Grant Eligible — will be billed at full fee. Click to un-mark."
                           >
                             <Icon name={IconName.Close} className="w-3 h-3" />
@@ -4729,7 +5074,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             }
                           }}
                           disabled={!applicationId}
-                          className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 hover:border-amber-500 hover:text-amber-600 dark:hover:text-amber-400"
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-dashed border-strong text-muted hover:border-amber-500 hover:text-amber-600 dark:hover:text-amber-400"
                           title="Awaiting grant — click to mark as Not Grant Eligible (bill at full fee)"
                         >
                           <span className="text-[10px] font-bold">?</span>
@@ -4776,7 +5121,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       const previous = String(row._course_previous_code || '').trim();
                       const current = String(row._course_current_code || '').trim();
                       if (!previous || !current || previous.toUpperCase() === current.toUpperCase()) {
-                        return <td key={column} className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-400 dark:text-gray-500">-</td>;
+                        return <td key={column} className="px-2 py-1.5 whitespace-nowrap font-mono text-muted">-</td>;
                       }
                       const rowRef = String(row['Course Reference Number'] || '').trim().toUpperCase();
                       const onPrevious = rowRef === previous.toUpperCase();
@@ -4787,9 +5132,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             className="inline-flex items-center gap-1"
                             title={`This course was renewed from ${previous} to ${current}. This group is enrolled under ${rowRef || '(no reference)'}.`}
                           >
-                            <span className={onPrevious ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{previous}</span>
-                            <span className="text-gray-400 text-[9px]" aria-hidden>&rarr;</span>
-                            <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{current}</span>
+                            <span className={onPrevious ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-muted'}>{previous}</span>
+                            <span className="text-muted text-[9px]" aria-hidden>&rarr;</span>
+                            <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-muted'}>{current}</span>
                           </span>
                         </td>
                       );
@@ -4803,7 +5148,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       return (
                         <td
                           key={column}
-                          className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300"
+                          className="px-2 py-1.5 whitespace-nowrap text-muted"
                           title={display}
                         >
                           {display}
@@ -4816,7 +5161,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       return (
                         <td
                           key={column}
-                          className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300"
+                          className="px-2 py-1.5 whitespace-nowrap text-muted"
                           title={raw || '-'}
                         >
                           {display}
@@ -4825,14 +5170,14 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     }
                     if (column === 'Date of Birth* (DD-MM-YYYY)') {
                       const raw = (row[column] || '').trim();
-                      if (!raw) return <td key={column} className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">-</td>;
+                      if (!raw) return <td key={column} className="px-2 py-1.5 whitespace-nowrap text-muted">-</td>;
                       const formatted = raw.replace(/-/g, '/');
                       const year = raw.match(/(\d{4})/)?.[1] || '';
                       const display = showPii ? formatted : (year ? `**/**/${year}` : '****');
                       return (
                         <td
                           key={column}
-                          className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono"
+                          className="px-2 py-1.5 whitespace-nowrap text-muted font-mono"
                           title={showPii ? formatted : 'Toggle visibility via header eye icon'}
                         >
                           {display}
@@ -4841,12 +5186,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     }
                     if (column === 'Trainee NRIC/FIN Number*') {
                       const raw = (row[column] || '').trim();
-                      if (!raw) return <td key={column} className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">-</td>;
+                      if (!raw) return <td key={column} className="px-2 py-1.5 whitespace-nowrap text-muted">-</td>;
                       const display = showPii ? raw : maskNric(raw);
                       return (
                         <td
                           key={column}
-                          className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono"
+                          className="px-2 py-1.5 whitespace-nowrap text-muted font-mono"
                           title={showPii ? raw : 'Toggle visibility via header eye icon'}
                         >
                           {display}
@@ -4865,18 +5210,18 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-center align-middle">
                           {sentAt ? (
                             <span
-                              className="relative inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-700/60"
+                              className="relative inline-flex items-center justify-center w-6 h-6 rounded-md bg-success-bg ring-1 ring-inset ring-emerald-200 dark:ring-emerald-700/60"
                               title={`Sent${sentTo ? ` to ${sentTo}` : ''} on ${new Date(sentAt).toLocaleString('en-SG')}`}
                             >
-                              <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-success" />
                               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-700" />
                             </span>
                           ) : (
                             <span
-                              className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-gray-300 dark:border-gray-600 bg-transparent"
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-strong bg-transparent"
                               title="Not sent to employer"
                             >
-                              <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                              <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-muted" />
                             </span>
                           )}
                         </td>
@@ -4891,25 +5236,25 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         badge = {
                           text: 'Verified',
                           icon: IconName.CheckCircle,
-                          className: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300/60',
+                          className: 'bg-success-bg text-success ring-1 ring-emerald-300/60',
                         };
                       } else if (status === 'mismatch') {
                         badge = {
                           text: 'Mismatch',
                           icon: IconName.Warning,
-                          className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60',
+                          className: 'bg-danger-bg text-danger ring-1 ring-red-300/60',
                         };
                       } else if (hasDoc) {
                         badge = {
                           text: 'Pending',
                           icon: IconName.Eye,
-                          className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60',
+                          className: 'bg-warning-bg text-warning ring-1 ring-amber-300/60',
                         };
                       } else {
                         badge = {
                           text: 'No Doc',
                           icon: IconName.Upload,
-                          className: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 ring-1 ring-gray-300/60',
+                          className: 'bg-surface-elevated text-muted ring-1 ring-gray-300/60',
                         };
                       }
                       const inner = (
@@ -4955,11 +5300,11 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         return (
                           <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap align-middle">
                             <div className="flex flex-col items-start gap-0.5">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-danger-bg text-danger">
                                 <Icon name={IconName.Warning} className="w-3 h-3" />
                                 Unavailable
                               </span>
-                              <span className="text-[9px] text-gray-500 dark:text-gray-400">Document may have been deleted</span>
+                              <span className="text-[9px] text-muted">Document may have been deleted</span>
                             </div>
                           </td>
                         );
@@ -4974,7 +5319,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                           return (
                             <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap align-middle">
                               <span
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-on-surface-secondary dark:bg-slate-800"
                                 title="Added to an existing invoice in QuickBooks by hand — the LMS will never invoice this learner."
                               >
                                 In QuickBooks
@@ -4982,12 +5327,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             </td>
                           );
                         }
-                        return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-gray-400 align-middle">-</td>;
+                        return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-muted align-middle">-</td>;
                       }
 
                       const colorClass = isGrant
-                        ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40'
-                        : 'bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40';
+                        ? 'bg-info-bg text-primary hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                        : 'bg-success-bg text-success hover:bg-green-100 dark:hover:bg-green-900/40';
                       const isChecking = verifyingDocumentKey === key;
 
                       return (
@@ -5034,7 +5379,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                                     void clearManualBilling(String(row.id || ''));
                                   }
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-on-surface-secondary hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
                                 title={manualRef
                                   ? `Billed by hand on invoice ${manualRef}. Click to un-mark.`
                                   : 'Billed by hand in QuickBooks. Click to un-mark.'}
@@ -5044,13 +5389,29 @@ export const ViewCompanyApplicationView: React.FC = () => {
                             </td>
                           );
                         }
-                        return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-gray-400 align-middle">-</td>;
+                        if (row._invoice_removed === '1') {
+                          // Remove Invoice was used and nothing has replaced it.
+                          // Never re-created automatically (the admin may be
+                          // waiting to add a late joiner) — so say so loudly.
+                          return (
+                            <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap align-middle">
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-danger-bg text-danger"
+                                title="The tax invoice was removed and has not been re-raised. The company is not billed for this learner. Select the learners and click Generate Invoice when ready (or mark Billed by hand)."
+                              >
+                                <Icon name={IconName.Warning} className="w-3 h-3" />
+                                Invoice removed — re-raise
+                              </span>
+                            </td>
+                          );
+                        }
+                        return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-muted align-middle">-</td>;
                       }
                       return (
                         <td
                           key={column}
                           rowSpan={rowSpan}
-                          className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300 align-middle"
+                          className="px-2 py-1.5 whitespace-nowrap font-mono text-muted align-middle"
                           title={docNumber ? `DocNumber: ${docNumber}${invoiceId ? ` · QBO Invoice ID: ${invoiceId}` : ''}` : `QBO Invoice ID: ${invoiceId}`}
                         >
                           {display}
@@ -5074,7 +5435,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                               {status}
                             </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-muted">-</span>
                           )}
                         </td>
                       );
@@ -5082,7 +5443,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     return (
                       <td
                         key={column}
-                        className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[220px] truncate"
+                        className="px-2 py-1.5 whitespace-nowrap text-muted max-w-[220px] truncate"
                         title={row[column] || '-'}
                       >
                         {row[column] || '-'}
@@ -5092,8 +5453,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 </tr>
               ); }) : (
                 <tr>
-                  <td colSpan={VISIBLE_COLUMNS.length + 5} className="p-12 text-center text-gray-500 dark:text-gray-400">
-                    <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                  <td colSpan={VISIBLE_COLUMNS.length + 5} className="p-12 text-center text-muted">
+                    <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-muted" />
                     <p>No company application records yet.</p>
                   </td>
                 </tr>
@@ -5103,12 +5464,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
         </div>
         {totalPages > 1 && (
           <div className="p-4 border-t flex items-center justify-between dark:border-gray-700">
-            <div className="text-sm text-gray-500 dark:text-gray-400">Page {safePage} of {totalPages}</div>
+            <div className="text-sm text-muted">Page {safePage} of {totalPages}</div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600"
+                className="px-3 py-1 text-sm border rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600"
               >Previous</button>
               {(() => {
                 const pages: (number | string)[] = [];
@@ -5120,14 +5481,14 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   <button
                     key={idx}
                     onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 text-sm border rounded ${safePage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600'}`}
+                    className={`px-3 py-1 text-sm border rounded ${safePage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-surface-hover dark:border-gray-600'}`}
                   >{page}</button>
-                ) : <span key={idx} className="px-2 text-gray-400">...</span>);
+                ) : <span key={idx} className="px-2 text-muted">...</span>);
               })()}
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600"
+                className="px-3 py-1 text-sm border rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600"
               >Next</button>
             </div>
           </div>
@@ -5154,7 +5515,12 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
   // recovered and went on to invoice still announced a failure. Say that only
   // when the pipeline actually gave up.
   const hasFailed = row._failed === '1';
-  const title = hasFailed ? 'Auto-enrol failed' : 'Warnings from earlier attempts';
+  const invoiceRemoved = row._invoice_removed === '1';
+  const title = hasFailed
+    ? 'Auto-enrol failed'
+    : invoiceRemoved
+      ? 'Invoice removed — not re-raised'
+      : 'Warnings from earlier attempts';
   const traineeName = String(row['Trainee FULL Name as on government ID*'] || '').trim() || '(no name)';
   const courseTitle = String(row['Course Title*'] || '').trim() || '(no course title)';
   const employerOrg = String(row['Employer Organization Name*'] || '').trim();
@@ -5162,15 +5528,15 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
-        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-default">
           <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${hasFailed ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
-              <Icon name={IconName.Warning} className={`w-5 h-5 ${hasFailed ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${hasFailed ? 'bg-danger-bg' : 'bg-warning-bg'}`}>
+              <Icon name={IconName.Warning} className={`w-5 h-5 ${hasFailed ? 'text-danger' : 'text-warning'}`} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              <h2 className="text-lg font-bold text-on-surface">{title}</h2>
+              <p className="text-sm text-muted mt-0.5">
                 {traineeName}
                 {employerOrg ? ` · ${employerOrg}` : ''}
                 {courseTitle ? ` · ${courseTitle}` : ''}
@@ -5181,27 +5547,39 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0"
+            className="w-8 h-8 rounded-lg hover:bg-surface-hover flex items-center justify-center flex-shrink-0"
             aria-label="Close"
           >
-            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            <Icon name={IconName.Close} className="w-4 h-4 text-on-surface-secondary" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {invoiceRemoved && (
+            <div className="rounded-xl p-4 bg-danger-bg">
+              <h3 className="text-sm font-semibold text-danger mb-2">The company is not being billed for this learner</h3>
+              <p className="text-sm text-danger">
+                The tax invoice was removed and nothing has replaced it. The LMS will not create a new one on
+                its own, in case you are waiting to add a late joiner. When ready, select everyone for this
+                company and course run and click <span className="font-semibold">Generate Invoice</span> — or
+                mark the learner <span className="font-semibold">Billed by hand</span> if Finance is handling it
+                in QuickBooks.
+              </p>
+            </div>
+          )}
           {autoEnrolError && (
             <div className="border border-red-200 dark:border-red-900/40 rounded-xl p-4 bg-red-50/50 dark:bg-red-900/10">
-              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">Enrolment error</h3>
-              <p className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap break-words">{autoEnrolError}</p>
+              <h3 className="text-sm font-semibold text-danger mb-2">Enrolment error</h3>
+              <p className="text-sm text-danger whitespace-pre-wrap break-words">{autoEnrolError}</p>
             </div>
           )}
           {warnings.length > 0 && (
             <div className="border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 bg-amber-50/50 dark:bg-amber-900/10">
-              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">
+              <h3 className="text-sm font-semibold text-warning mb-2">
                 Pipeline warnings ({warnings.length})
               </h3>
               <ul className="space-y-2">
                 {warnings.map((w, i) => (
-                  <li key={i} className="text-sm text-amber-800 dark:text-amber-200">
+                  <li key={i} className="text-sm text-warning">
                     <span className="font-medium">[{w.step}]</span>{' '}
                     <span className="whitespace-pre-wrap break-words">{w.error}</span>
                     {w.at && (
@@ -5215,12 +5593,12 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
             </div>
           )}
           {!autoEnrolError && warnings.length === 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+            <p className="text-sm text-muted italic">
               No specific error message was recorded. Check the server logs around the upload time for details.
             </p>
           )}
         </div>
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end gap-3 p-6 border-t border-default">
           <Button onClick={onClose}>Close</Button>
         </div>
       </div>

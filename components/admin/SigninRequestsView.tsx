@@ -86,12 +86,12 @@ const SigninRequestsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
-        <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+      <div className="border-b border-default pb-5">
+        <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
           <Icon name={IconName.Help} className="w-7 h-7" />
           Sign-in Requests
         </h3>
-        <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 max-w-4xl text-sm text-muted">
           Learners who couldn&apos;t get their OTP or see their class fill in Name, Email and Course Run ID on the login page.
           Most are enrolled automatically and emailed a welcome. The ones under <strong>Needs attention</strong> couldn&apos;t be
           fixed automatically. Correct the Course Run ID if needed, then click <strong>Enrol &amp; notify</strong>.
@@ -105,10 +105,10 @@ const SigninRequestsView: React.FC = () => {
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 rounded-full text-sm font-medium border ${tab === t.key
               ? 'bg-blue-600 border-blue-600 text-white'
-              : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              : 'bg-surface border-strong text-on-surface-secondary hover:bg-surface-hover'}`}
           >
             {t.label}
-            <span className={`ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full px-1.5 text-xs ${tab === t.key ? 'bg-white/25' : 'bg-gray-100 dark:bg-slate-700'}`}>
+            <span className={`ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full px-1.5 text-xs ${tab === t.key ? 'bg-white/25' : 'bg-surface-elevated'}`}>
               {counts[t.key] ?? 0}
             </span>
           </button>
@@ -117,7 +117,7 @@ const SigninRequestsView: React.FC = () => {
       </div>
 
       {message && (
-        <div className={`p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+        <div className={`p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
           {message.text}
         </div>
       )}
@@ -126,17 +126,17 @@ const SigninRequestsView: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-500">Loading requests...</span>
+            <span className="ml-3 text-muted">Loading requests...</span>
           </div>
         ) : requests.length === 0 ? (
-          <p className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+          <p className="py-12 text-center text-sm text-muted">
             {tab === 'open' ? 'Nothing needs attention — every learner was enrolled automatically.' : 'No requests here.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-              <thead className="bg-gray-50 dark:bg-slate-800">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <table className="min-w-full divide-y divide-default text-sm">
+              <thead className="bg-surface-elevated">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   <th className="px-4 py-3">Submitted</th>
                   <th className="px-4 py-3">Learner</th>
                   <th className="px-4 py-3">Course Run ID</th>
@@ -144,14 +144,14 @@ const SigninRequestsView: React.FC = () => {
                   {tab === 'open' && <th className="px-4 py-3 text-right">Action</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              <tbody className="divide-y divide-default">
                 {requests.map((r) => (
                   <tr key={r.id} className="align-top">
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">{formatDateTime(r.created_at)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDateTime(r.created_at)}</td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-white">{r.full_name}</div>
-                      <a href={`mailto:${r.email}`} className="text-blue-600 dark:text-blue-400 hover:underline">{r.email}</a>
-                      {r.phone && <div className="text-gray-500 dark:text-gray-400">{r.phone}</div>}
+                      <div className="font-medium text-on-surface">{r.full_name}</div>
+                      <a href={`mailto:${r.email}`} className="text-primary hover:underline">{r.email}</a>
+                      {r.phone && <div className="text-muted">{r.phone}</div>}
                     </td>
                     <td className="px-4 py-3">
                       {tab === 'open' ? (
@@ -159,18 +159,18 @@ const SigninRequestsView: React.FC = () => {
                           type="text"
                           value={runIdEdits[r.id] ?? r.course_run_id}
                           onChange={(e) => setRunIdEdits((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                          className="w-32 px-2 py-1.5 font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-32 px-2 py-1.5 font-mono text-sm border border-strong rounded-md bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                           aria-label={`Course Run ID for ${r.full_name}`}
                         />
                       ) : (
                         <span className="font-mono">{r.course_run_id}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-md">
+                    <td className="px-4 py-3 text-on-surface-secondary max-w-md">
                       {tab === 'open' ? r.reason : (
                         <>
                           {r.course_title && <div className="font-medium">{r.course_title}</div>}
-                          <div className="text-gray-500 dark:text-gray-400">
+                          <div className="text-muted">
                             {r.resolution_note || r.reason || 'Enrolled automatically'}
                             {r.resolved_by_name && ` · by ${r.resolved_by_name}`}
                           </div>

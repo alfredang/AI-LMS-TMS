@@ -20,7 +20,7 @@ const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => 
       case 'WSQ': return 'bg-blue-100 text-blue-800';
       case 'CASL': return 'bg-teal-100 text-teal-800';
       case 'IBF': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-on-surface';
     }
   }
 
@@ -44,32 +44,32 @@ const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => 
         <div className="flex items-center my-auto py-3">
           <div className="text-xs space-y-2 flex-grow">
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-gray-500 dark:text-gray-400">TGS Ref</span>
-              <span className="font-mono text-gray-800 dark:text-gray-200">{displayCourseCodes(course)}</span>
+              <span className="font-semibold text-muted">TGS Ref</span>
+              <span className="font-mono text-on-surface">{displayCourseCodes(course)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-gray-500 dark:text-gray-400">Course Duration</span>
-              <span className="font-medium text-gray-800 dark:text-gray-200 text-right">{totalHours} Hours ({course.trainingHours}T + {course.assessmentHours}A)</span>
+              <span className="font-semibold text-muted">Course Duration</span>
+              <span className="font-medium text-on-surface text-right">{totalHours} Hours ({course.trainingHours}T + {course.assessmentHours}A)</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-gray-500 dark:text-gray-400">Course Type</span>
+              <span className="font-semibold text-muted">Course Type</span>
               <span className={`font-semibold px-2 py-0.5 rounded ${getTypeColor()}`}>{course.courseType}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-gray-500 dark:text-gray-400">Mode of Training</span>
-              <span className="font-medium text-gray-800 dark:text-gray-200">{course.modeOfLearning.join(', ')}</span>
+              <span className="font-semibold text-muted">Mode of Training</span>
+              <span className="font-medium text-on-surface">{course.modeOfLearning.join(', ')}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-gray-500 dark:text-gray-400">Course Run</span>
-              {role === UserRole.Learner && (<span className="font-mono text-gray-800 dark:text-gray-200">{course.courseRunCode}</span>)}
-              {role === UserRole.Trainer && (<span className="font-mono text-gray-800 dark:text-gray-200">{course.courseRunCode}</span>)}
+              <span className="font-semibold text-muted">Course Run</span>
+              {role === UserRole.Learner && (<span className="font-mono text-on-surface">{course.courseRunCode}</span>)}
+              {role === UserRole.Trainer && (<span className="font-mono text-on-surface">{course.courseRunCode}</span>)}
             </div>
           </div>
 
         </div>
 
         {/* --- ACTION LINK --- */}
-        <div className="border-t border-gray-200 dark:border-gray-700 mt-auto pt-3 flex justify-between items-center">
+        <div className="border-t border-default mt-auto pt-3 flex justify-between items-center">
           <span className="font-semibold text-on-surface text-sm dark:text-gray-200">
             {role === UserRole.Learner ? 'View Course' : 'View Class'}
           </span>

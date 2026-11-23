@@ -1,4 +1,5 @@
 import { withAuth } from '@lib/auth/withAuth';
+import { canSeeGithubLink } from '@lib/auth/githubLinkAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import multer, { StorageEngine } from 'multer';
 import path from 'path';
@@ -95,13 +96,15 @@ interface CourseData {
   learningOutcomes: string;
   trainerSlidesUrl?: string;
   activitiesUrl?: string;
+  labSimulatorUrl?: string;
+  practiceExamUrl?: string;
+  githubUrl?: string | null; // GitHub repository (Developer-only)
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   courseLink?: string;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
-  isGamified: boolean;
   learningUnits: Array<{
     title: string;
     position: number;
@@ -208,16 +211,18 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           INSERT INTO course (
             title, image_url, course_code, tsc_title, tsc_code,
             training_hours, assessment_hours, mode_of_learning, course_type,
-            learning_outcomes, is_gamified, learner_guide_url, slides_url,
+            learning_outcomes, learner_guide_url, slides_url,
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
             written_assessment_link, practical_performance_assessment_link,
             courseware_link, assessment_record_link, assessment_summary_record_url, resource_links,
             activities_url,
+            lab_simulator_url,
+            practice_exam_url,
             -- The code in force starts equal to the registration code; a funding
             -- renewal overwrites it later. Kept populated so "current code" is
             -- never empty anywhere it is displayed.
             new_course_code
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $3)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $3)
           RETURNING id
         `;
 
@@ -232,7 +237,6 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           courseData.modeOfLearning || 'Physical',
           courseData.courseType || 'Non-WSQ',
           courseData.learningOutcomes || null,
-          courseData.isGamified || false,
           filesByFieldname?.learnerGuide ? `/uploads/guides/${filesByFieldname.learnerGuide[0].filename}` : null,
           filesByFieldname?.learnerSlides ? `/uploads/slides/${filesByFieldname.learnerSlides[0].filename}` : null,
           filesByFieldname?.lessonPlan ? `/uploads/plans/${filesByFieldname.lessonPlan[0].filename}` : null,
@@ -246,6 +250,8 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           courseData.assessmentSummaryRecordUrl || null,
           courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
           filesByFieldname?.activities ? `/uploads/plans/${filesByFieldname.activities[0].filename}` : courseData.activitiesUrl || null,
+          courseData.labSimulatorUrl?.trim() || null,
+          courseData.practiceExamUrl?.trim() || null,
         ];
 
         console.log('🔍 About to execute course insert with values:', courseValues);
@@ -254,6 +260,12 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
         const courseResult = await client.query(courseInsertQuery, courseValues);
         const courseId = courseResult.rows[0].id;
         console.log('✅ Course created with ID:', courseId);
+
+        // GitHub Link is Developer-only; anyone else's value is ignored.
+        const githubUrl = courseData.githubUrl?.trim();
+        if (githubUrl && canSeeGithubLink((req as any).authUser)) {
+          await client.query(`UPDATE course SET github_url = $2 WHERE id = $1`, [courseId, githubUrl]);
+        }
 
         if (tsc.caslSkills) {
           await client.query(`UPDATE course SET casl_skills = $2 WHERE id = $1`, [courseId, tsc.caslSkills]);

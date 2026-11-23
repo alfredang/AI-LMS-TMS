@@ -33,10 +33,10 @@ interface TicketDetail {
 const CATEGORIES = ['General', 'Course', 'Payment', 'Technical', 'LMS', 'TMS', 'Courseware', 'Certificate', 'Claim', 'Other'];
 
 const STATUS_STYLES: Record<string, string> = {
-  Open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  'In Progress': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  Resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  Closed: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  Open: 'bg-info-bg text-primary',
+  'In Progress': 'bg-warning-bg text-warning',
+  Resolved: 'bg-success-bg text-success',
+  Closed: 'bg-surface-elevated text-muted',
 };
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
@@ -87,9 +87,9 @@ const NewTicketModal: React.FC<{ onClose: () => void; onCreated: () => void; use
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in">
+      <div className="relative w-full max-w-lg bg-surface rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-600 to-indigo-600">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-default bg-gradient-to-r from-blue-600 to-indigo-600">
           <h3 className="text-lg font-bold text-white">Raise a New Ticket</h3>
           <button onClick={onClose} className="text-white/80 hover:text-white">
             <Icon name={IconName.Close} className="w-5 h-5" />
@@ -98,42 +98,42 @@ const NewTicketModal: React.FC<{ onClose: () => void; onCreated: () => void; use
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-2.5 rounded-lg text-sm">
+            <div className="bg-danger-bg border border-red-200 dark:border-red-800 text-danger px-4 py-2.5 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Subject <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-semibold text-on-surface-secondary mb-1.5">Subject <span className="text-danger">*</span></label>
             <input
               type="text"
               value={subject}
               onChange={e => setSubject(e.target.value)}
               placeholder="Brief summary of your issue"
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              className="w-full px-4 py-2.5 border border-strong rounded-lg bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
               maxLength={200}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Category</label>
+            <label className="block text-sm font-semibold text-on-surface-secondary mb-1.5">Category</label>
             <select
               value={category}
               onChange={e => setCategory(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              className="w-full px-4 py-2.5 border border-strong rounded-lg bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             >
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Description <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-semibold text-on-surface-secondary mb-1.5">Description <span className="text-danger">*</span></label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Describe your issue in detail..."
               rows={5}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
+              className="w-full px-4 py-2.5 border border-strong rounded-lg bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
             />
           </div>
 
@@ -199,14 +199,14 @@ const TicketDetailView: React.FC<{ ticketId: string; userId: string; onBack: () 
     );
   }
 
-  if (!detail) return <p className="text-gray-500 text-center py-8">Ticket not found.</p>;
+  if (!detail) return <p className="text-muted text-center py-8">Ticket not found.</p>;
 
   const { ticket, replies } = detail;
 
   return (
     <div className="space-y-6">
       {/* Back button */}
-      <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition">
+      <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary transition">
         <Icon name={IconName.Back} className="w-4 h-4" />
         Back to All Tickets
       </button>
@@ -215,28 +215,28 @@ const TicketDetailView: React.FC<{ ticketId: string; userId: string; onBack: () 
       <Card className="p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
           <div>
-            <p className="text-xs font-mono text-gray-400 dark:text-gray-500">{ticket.ticket_number}</p>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-1">{ticket.subject}</h3>
+            <p className="text-xs font-mono text-muted">{ticket.ticket_number}</p>
+            <h3 className="text-xl font-bold text-on-surface mt-1">{ticket.subject}</h3>
           </div>
           <StatusBadge status={ticket.status} />
         </div>
-        <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
+        <div className="flex flex-wrap gap-4 text-sm text-muted mb-4">
           <span>📁 {ticket.category}</span>
           <span>📅 {formatDate(ticket.created_at)}</span>
         </div>
-        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
-          <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
+        <div className="bg-surface-elevated rounded-lg p-4">
+          <p className="text-on-surface-secondary whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
         </div>
       </Card>
 
       {/* Replies thread */}
       <Card className="p-6">
-        <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-          Conversation {replies.length > 0 && <span className="text-gray-400 font-normal text-sm">({replies.length})</span>}
+        <h4 className="text-lg font-bold text-on-surface mb-4">
+          Conversation {replies.length > 0 && <span className="text-muted font-normal text-sm">({replies.length})</span>}
         </h4>
 
         {replies.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-500 text-sm text-center py-6">No replies yet. Our team will get back to you soon.</p>
+          <p className="text-muted text-sm text-center py-6">No replies yet. Our team will get back to you soon.</p>
         ) : (
           <div className="space-y-4 mb-6">
             {replies.map(reply => {
@@ -245,16 +245,16 @@ const TicketDetailView: React.FC<{ ticketId: string; userId: string; onBack: () 
                 <div key={reply.id} className={`flex ${isAdmin ? 'justify-start' : 'justify-end'}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                     isAdmin
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800'
-                      : 'bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600'
+                      ? 'bg-info-bg border border-blue-100 dark:border-blue-800'
+                      : 'bg-surface-elevated border border-default'
                   }`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-bold ${isAdmin ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                      <span className={`text-xs font-bold ${isAdmin ? 'text-primary' : 'text-on-surface-secondary'}`}>
                         {isAdmin ? '🛡️ Admin' : '👤 You'} · {reply.user_name}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{reply.message}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 text-right">{formatDate(reply.created_at)}</p>
+                    <p className="text-sm text-on-surface whitespace-pre-wrap">{reply.message}</p>
+                    <p className="text-[10px] text-muted mt-1.5 text-right">{formatDate(reply.created_at)}</p>
                   </div>
                 </div>
               );
@@ -264,13 +264,13 @@ const TicketDetailView: React.FC<{ ticketId: string; userId: string; onBack: () 
 
         {/* Reply input — only if ticket is not Closed */}
         {ticket.status !== 'Closed' && (
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div className="border-t border-default pt-4">
             <textarea
               value={replyText}
               onChange={e => setReplyText(e.target.value)}
               placeholder="Type your reply..."
               rows={3}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
+              className="w-full px-4 py-2.5 border border-strong rounded-lg bg-surface text-on-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
             />
             <div className="flex justify-end mt-2">
               <Button onClick={handleSendReply} disabled={sending || !replyText.trim()} size="sm">
@@ -353,7 +353,7 @@ const HelpAndSupportView: React.FC = () => {
                 <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
               </div>
             ) : tickets.length === 0 ? (
-              <div className="text-center py-12 px-6 bg-gray-50 dark:bg-slate-700/30 rounded-lg">
+              <div className="text-center py-12 px-6 bg-surface-elevated rounded-lg">
                 <Icon name={IconName.Chat} className="w-24 h-24 mx-auto mb-6 text-primary" />
                 <h4 className="text-xl font-bold text-on-surface">Need assistance?</h4>
                 <p className="mt-1 font-semibold text-on-surface">Go ahead and raise your first ticket</p>
@@ -368,12 +368,12 @@ const HelpAndSupportView: React.FC = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticket #</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Subject</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Category</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Date</th>
+                    <tr className="border-b border-default">
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Ticket #</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Subject</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted uppercase tracking-wider hidden sm:table-cell">Category</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted uppercase tracking-wider hidden md:table-cell">Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -381,18 +381,18 @@ const HelpAndSupportView: React.FC = () => {
                       <tr
                         key={ticket.id}
                         onClick={() => setSelectedTicketId(ticket.id)}
-                        className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/30 cursor-pointer transition"
+                        className="border-b border-default hover:bg-surface-hover cursor-pointer transition"
                       >
-                        <td className="py-3 px-3 text-sm font-mono text-blue-600 dark:text-blue-400">{ticket.ticket_number}</td>
+                        <td className="py-3 px-3 text-sm font-mono text-primary">{ticket.ticket_number}</td>
                         <td className="py-3 px-3">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[200px]">{ticket.subject}</p>
+                          <p className="text-sm font-medium text-on-surface truncate max-w-[200px]">{ticket.subject}</p>
                           {Number(ticket.reply_count) > 0 && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{ticket.reply_count} {Number(ticket.reply_count) === 1 ? 'reply' : 'replies'}</p>
+                            <p className="text-xs text-muted mt-0.5">{ticket.reply_count} {Number(ticket.reply_count) === 1 ? 'reply' : 'replies'}</p>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-sm text-gray-600 dark:text-gray-400 hidden sm:table-cell">{ticket.category}</td>
+                        <td className="py-3 px-3 text-sm text-on-surface-secondary hidden sm:table-cell">{ticket.category}</td>
                         <td className="py-3 px-3"><StatusBadge status={ticket.status} /></td>
-                        <td className="py-3 px-3 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell whitespace-nowrap">{formatDate(ticket.created_at)}</td>
+                        <td className="py-3 px-3 text-sm text-muted hidden md:table-cell whitespace-nowrap">{formatDate(ticket.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>

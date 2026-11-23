@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
 import fs from 'fs';
 import { extractOriginalFilename } from '../../../utils/fileUtils';
+import { isServablePublicPath } from '../../../lib/uploads/servable';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -21,6 +22,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     // Security check: ensure the path is within the uploads directory
     if (!cleanPath.startsWith('uploads/')) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Server-only files in the uploads volume (keys, certificates, config) are never downloadable
+    if (!isServablePublicPath(cleanPath)) {
+      return res.status(404).json({ message: 'File not found' });
     }
 
     const absolutePath = path.join(process.cwd(), 'public', cleanPath);

@@ -25,7 +25,7 @@ export default function MmsSyncOverview() {
         return null;
     const failures = (result.data || []).filter((row: any) => row.last_error || row.access_calendar_error || row.access_failures || row.target_result?.readiness === 'incomplete');
     const exceptions = result.scan?.result?.exceptions || [];
-    return <details className="rounded border border-gray-200 dark:border-gray-700 p-3 text-sm">
+    return <details className="rounded border border-default p-3 text-sm">
     <summary className="cursor-pointer font-medium">MMS non-funded synchronization · {failures.length} classes need attention · {exceptions.length} source exceptions</summary>
     <p className="mt-2 text-xs">Connection: {result.connection_configured ? 'configured' : 'needs setup'} · Source: saved Master List classes · Course codes: C*</p>
     {!result.scan && <p className="mt-2 text-xs">No completed Master List synchronization yet. Check the MMS tasks in Task Scheduler.</p>}

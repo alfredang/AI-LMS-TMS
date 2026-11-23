@@ -76,14 +76,14 @@ const BriefingOnAssessmentTemplateView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
+      <div className="border-b border-default pb-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-2xl font-bold leading-6 text-on-surface flex items-center gap-2">
               <Icon name={IconName.ClipboardCheck} className="w-7 h-7" />
               Briefing on Assessment
             </h3>
-            <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-2 max-w-4xl text-sm text-muted">
               Shown to learners and trainers in the Assessment area of every course page. Enter one point per line. Leave blank to use the standard briefing.
             </p>
           </div>
@@ -99,7 +99,7 @@ const BriefingOnAssessmentTemplateView: React.FC = () => {
       </div>
 
       {saveMessage && (
-        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+        <div className={`p-3 rounded-md text-sm ${saveMessage.type === 'success' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
           {saveMessage.text}
         </div>
       )}
@@ -114,14 +114,14 @@ const BriefingOnAssessmentTemplateView: React.FC = () => {
           ) : (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Briefing points (one per line)</label>
+                <label className="block text-sm font-medium text-on-surface-secondary">Briefing points (one per line)</label>
                 <span className="text-xs text-gray-400">{hasChanges ? 'Unsaved changes' : 'Up to date'}</span>
               </div>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={10}
-                className="block w-full px-4 py-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-relaxed resize-y"
+                className="block w-full px-4 py-3 text-sm text-on-surface bg-surface border border-strong rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-relaxed resize-y"
                 placeholder={DEFAULT_BRIEFING}
               />
             </div>
@@ -131,9 +131,9 @@ const BriefingOnAssessmentTemplateView: React.FC = () => {
 
       <Card>
         <div className="p-6">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview (learner &amp; trainer view)</h4>
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-5">
-            <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300 list-disc pl-5">
+          <h4 className="text-sm font-semibold text-on-surface-secondary mb-3">Preview (learner &amp; trainer view)</h4>
+          <div className="border border-default rounded-lg bg-surface px-6 py-5">
+            <ul className="space-y-2 text-sm text-on-surface-secondary list-disc pl-5">
               {previewPoints.map((point, idx) => (
                 <li key={idx}>{point}</li>
               ))}

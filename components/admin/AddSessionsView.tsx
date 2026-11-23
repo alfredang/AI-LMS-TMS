@@ -127,8 +127,8 @@ const buildAutoSessions = (
 const AddSessionsView: React.FC = () => {
   const { setAdminPage, selectedCourseRunId, setSelectedCourseRunId } = useLms();
 
-  const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500';
-  const readonlyClasses = 'block w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 cursor-not-allowed';
+  const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-surface border border-strong rounded-md shadow-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white';
+  const readonlyClasses = 'block w-full px-3 py-2 bg-surface-elevated border border-default rounded-md text-on-surface-secondary cursor-not-allowed';
 
   // ── Course Run ID input ────────────────────────────────────────────────────
   const [courseRunId, setCourseRunId] = useState(selectedCourseRunId || '');
@@ -442,36 +442,36 @@ const AddSessionsView: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-6">
             {submissionResult.success ? (
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-success-bg rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
             ) : (
-              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-danger-bg rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </div>
             )}
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Add Sessions Result</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <h2 className="text-2xl font-bold text-on-surface">Add Sessions Result</h2>
+              <p className="text-sm text-muted">
                 {submissionResult.success ? 'Sessions added successfully' : 'Failed to add sessions'}
               </p>
             </div>
           </div>
 
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6 space-y-2 text-sm">
-            <div><span className="font-medium text-gray-600 dark:text-gray-400">Course Run ID: </span><span className="font-mono text-gray-900 dark:text-white">{courseRunId}</span></div>
-            <div><span className="font-medium text-gray-600 dark:text-gray-400">Course: </span><span className="text-gray-900 dark:text-white">{courseTitle}</span></div>
-            <div><span className="font-medium text-gray-600 dark:text-gray-400">Status: </span>
-              <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${submissionResult.success ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
+          <div className="bg-surface-elevated rounded-lg p-4 mb-6 space-y-2 text-sm">
+            <div><span className="font-medium text-on-surface-secondary">Course Run ID: </span><span className="font-mono text-on-surface">{courseRunId}</span></div>
+            <div><span className="font-medium text-on-surface-secondary">Course: </span><span className="text-on-surface">{courseTitle}</span></div>
+            <div><span className="font-medium text-on-surface-secondary">Status: </span>
+              <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${submissionResult.success ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
                 {submissionResult.success ? 'Success' : 'Error'}
               </span>
             </div>
             {submissionResult.message && (
-              <div className={`mt-2 ${submissionResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+              <div className={`mt-2 ${submissionResult.success ? 'text-success' : 'text-danger'}`}>
                 {submissionResult.message.split('\n').map((line, i) => (
                   <p key={i}>{line}</p>
                 ))}
@@ -502,10 +502,10 @@ const AddSessionsView: React.FC = () => {
 
       {/* Step 1 — Course Run ID Lookup */}
       <Card className="p-6 mb-6">
-        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Lookup</h3>
+        <h3 className="text-lg font-bold text-on-surface-secondary mb-4">Course Run Lookup</h3>
         <div className="flex gap-3 items-end">
           <div className="flex-1">
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-bold text-on-surface-secondary mb-1">
               * Course Run ID
             </label>
             <input
@@ -527,9 +527,9 @@ const AddSessionsView: React.FC = () => {
             ) : 'Fetch Data'}
           </Button>
         </div>
-        {fetchError && <p className="text-red-500 text-sm mt-3">{fetchError}</p>}
+        {fetchError && <p className="text-danger text-sm mt-3">{fetchError}</p>}
         {isDataLoaded && (
-          <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-300">
+          <div className="mt-3 p-3 bg-success-bg border border-green-200 dark:border-green-700 rounded-lg text-sm text-success">
             ✓ Data loaded for <strong>{courseTitle || courseReferenceNumber}</strong>
           </div>
         )}
@@ -543,19 +543,19 @@ const AddSessionsView: React.FC = () => {
             <h3 className="text-xl font-bold mb-4 dark:text-white">Course Run Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Reference Number</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Reference Number</label>
                 <input type="text" value={courseReferenceNumber} readOnly className={readonlyClasses} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Title</label>
                 <input type="text" value={courseTitle} readOnly className={readonlyClasses} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Start Date</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course Start Date</label>
                 <input type="text" value={courseStartDate} readOnly className={readonlyClasses} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course End Date</label>
+                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Course End Date</label>
                 <input type="text" value={courseEndDate} readOnly className={readonlyClasses} />
               </div>
             </div>
@@ -579,8 +579,8 @@ const AddSessionsView: React.FC = () => {
                       onClick={() => handleSessionTypeChange('day')}
                       className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold text-sm transition-colors ${
                         sessionType === 'day'
-                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500'
+                          ? 'border-blue-500 bg-info-bg text-primary dark:border-blue-500'
+                          : 'border-default bg-surface text-on-surface-secondary hover:border-gray-300 dark:hover:border-gray-500'
                       }`}
                     >
                       ☀️ Day ({dayStart} – {dayEnd})
@@ -591,7 +591,7 @@ const AddSessionsView: React.FC = () => {
                       className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold text-sm transition-colors ${
                         sessionType === 'evening'
                           ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-500'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500'
+                          : 'border-default bg-surface text-on-surface-secondary hover:border-gray-300 dark:hover:border-gray-500'
                       }`}
                     >
                       🌙 Evening ({eveStart} – {eveEnd})
@@ -614,11 +614,11 @@ const AddSessionsView: React.FC = () => {
 
               // Day only (or no timing configured — fall back to day defaults)
               return (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 p-3 bg-surface-elevated rounded-lg border border-default">
                   <span className="text-lg">☀️</span>
                   <div>
-                    <p className="font-semibold text-gray-800 dark:text-gray-200">Day ({dayStart} – {dayEnd})</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">This course only offers day sessions</p>
+                    <p className="font-semibold text-on-surface">Day ({dayStart} – {dayEnd})</p>
+                    <p className="text-xs text-muted mt-0.5">This course only offers day sessions</p>
                   </div>
                 </div>
               );
@@ -627,14 +627,14 @@ const AddSessionsView: React.FC = () => {
 
           {/* Timing template indicator */}
           {sessionTiming ? (
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg text-sm text-blue-800 dark:text-blue-300">
+            <div className="flex items-center gap-2 px-4 py-2 bg-info-bg border border-blue-200 dark:border-blue-700 rounded-lg text-sm text-info">
               <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Session timings are pre-filled from the course timing template. You can adjust them per session if needed.
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg text-sm text-yellow-800 dark:text-yellow-300">
+            <div className="flex items-center gap-2 px-4 py-2 bg-warning-bg border border-yellow-200 dark:border-yellow-700 rounded-lg text-sm text-warning">
               <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
@@ -647,12 +647,12 @@ const AddSessionsView: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold dark:text-white">Sessions</h3>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Count:</span>
+                <span className="text-sm font-medium text-on-surface-secondary">Count:</span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => updateSessionCount(sessionCount - 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 font-bold"
+                    className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-on-surface-secondary hover:bg-gray-300 dark:hover:bg-gray-600 font-bold"
                   >
                     −
                   </button>
@@ -660,7 +660,7 @@ const AddSessionsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => updateSessionCount(sessionCount + 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 font-bold"
+                    className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-on-surface-secondary hover:bg-gray-300 dark:hover:bg-gray-600 font-bold"
                   >
                     +
                   </button>
@@ -669,7 +669,7 @@ const AddSessionsView: React.FC = () => {
             </div>
 
             {sessionCount === 0 && (
-              <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
+              <div className="text-center py-8 text-muted text-sm">
                 Click <strong>+</strong> to add sessions
               </div>
             )}
@@ -678,12 +678,12 @@ const AddSessionsView: React.FC = () => {
               {sessions.map((session, idx) => (
                 <Card key={idx} className="p-4 border dark:border-gray-700">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-gray-800 dark:text-white">Session {idx + 1}</h4>
+                    <h4 className="font-semibold text-on-surface">Session {idx + 1}</h4>
                     <div className="flex items-center gap-2">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
                         sessionType === 'evening'
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                          : 'bg-info-bg text-primary'
                       }`}>
                         {sessionType === 'evening' ? '🌙 Evening' : '☀️ Day'}
                       </span>
@@ -699,7 +699,7 @@ const AddSessionsView: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">* Date</label>
+                      <label className="block text-xs font-medium text-on-surface-secondary mb-1">* Date</label>
                       <input
                         type="date"
                         value={session.startDate}
@@ -708,7 +708,7 @@ const AddSessionsView: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">* Start Time</label>
+                      <label className="block text-xs font-medium text-on-surface-secondary mb-1">* Start Time</label>
                       <input
                         type="time"
                         value={session.startTime}
@@ -717,7 +717,7 @@ const AddSessionsView: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">* End Time</label>
+                      <label className="block text-xs font-medium text-on-surface-secondary mb-1">* End Time</label>
                       <input
                         type="time"
                         value={session.endTime}
@@ -726,7 +726,7 @@ const AddSessionsView: React.FC = () => {
                       />
                     </div>
                     <div className="md:col-span-2 lg:col-span-2">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mode of Training</label>
+                      <label className="block text-xs font-medium text-on-surface-secondary mb-1">Mode of Training</label>
                       <select
                         value={session.modeOfTraining}
                         onChange={e => updateSession(idx, 'modeOfTraining', e.target.value)}

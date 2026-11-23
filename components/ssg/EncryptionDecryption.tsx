@@ -91,11 +91,11 @@ const EncryptionDecryption: React.FC<EncryptionDecryptionProps> = ({ config, upd
       <CardContent className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-2">Training Provider</label>
-          <p className="text-sm text-gray-600 p-2 bg-gray-50 rounded">
+          <p className="text-sm text-on-surface-secondary p-2 bg-gray-50 rounded">
             {provider ? `${provider.name || 'N/A'} (${provider.uen})` : 'Loading training provider...'}
           </p>
           {!provider && (
-            <p className="text-sm text-red-600 mt-1">Please wait for training provider to load</p>
+            <p className="text-sm text-danger mt-1">Please wait for training provider to load</p>
           )}
         </div>
 
@@ -105,7 +105,7 @@ const EncryptionDecryption: React.FC<EncryptionDecryptionProps> = ({ config, upd
             <textarea
               value={plaintext}
               onChange={(e) => setPlaintext(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={4}
               placeholder="Enter text to encrypt"
               disabled={!provider}
@@ -124,7 +124,7 @@ const EncryptionDecryption: React.FC<EncryptionDecryptionProps> = ({ config, upd
             <textarea
               value={ciphertext}
               onChange={(e) => setCiphertext(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-strong rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={4}
               placeholder="Enter encrypted text to decrypt"
               disabled={!provider}

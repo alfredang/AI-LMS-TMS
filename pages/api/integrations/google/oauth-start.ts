@@ -44,7 +44,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     access_type: 'offline',
     // prompt=consent forces Google to issue a NEW refresh token even when the
     // account previously consented (a plain re-auth returns no refresh_token).
-    prompt: 'consent',
+    prompt: 'select_account consent', // pick the Google account every time
     state,
   });
   if (tp.rows[0]?.email_user) params.set('login_hint', tp.rows[0].email_user);
