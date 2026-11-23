@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
-import { computeOverdueBreakdown, LiveEnrolmentStatus, OverdueBreakdown } from './overdueBreakdown';
+import { attachAttendance, cancelledEnrolmentIds, computeOverdueBreakdown, LiveEnrolmentStatus, OverdueBreakdown } from './overdueBreakdown';
+import { fetchTpgAttendance, TpgAttendance } from './tpgAttendance';
 import { refreshClaimStatuses, refreshGrantStatuses } from '@/lib/services/tpgStatusRefresh';
 import { createSSGEnrolmentAPI } from '@/lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '@/lib/ssg/services/credentials-service';
@@ -139,9 +140,23 @@ export function startReconJob(kind: ReconJobKind, userId: string | null): boolea
   void (async () => {
     try {
       await ensureReceivablesReconSchema();
-      const live =
-        kind === 'tpg' ? await refreshTpgForOverdue(setMessage) : ((await getLatestSnapshot())?.result.liveEnrolmentStatus ?? {});
+      const previous = (await getLatestSnapshot())?.result;
+      const live = kind === 'tpg' ? await refreshTpgForOverdue(setMessage) : previous?.liveEnrolmentStatus ?? {};
       const result = await computeOverdueBreakdown(setMessage, live);
+
+      // TPG attendance for the cancelled rows: a TPG check re-reads all of them; a plain refresh
+      // only reads enrolments that were never checked, so it stays quick.
+      const attendance: Record<string, TpgAttendance> = { ...(previous?.tpgAttendance ?? {}) };
+      const cancelled = cancelledEnrolmentIds(result);
+      const toCheck = kind === 'tpg' ? cancelled : cancelled.filter((e) => !attendance[e]);
+      if (toCheck.length) {
+        try {
+          Object.assign(attendance, await fetchTpgAttendance(toCheck, (d, t) => setMessage(`Checking TPG attendance… ${d} / ${t} cancelled enrolments`)));
+        } catch (e) {
+          console.warn('[receivables-recon] TPG attendance check failed:', e instanceof Error ? e.message : e);
+        }
+      }
+      attachAttendance(result, attendance);
       setMessage('Saving…');
       await saveSnapshot(result, kind, userId);
       s.message = 'Done';
