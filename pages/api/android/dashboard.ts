@@ -10,6 +10,6 @@ export default withAuth(async (req: AuthedApiRequest,res: NextApiResponse) => {
   try {
     const explicitRole=await pool.query('SELECT 1 FROM user_role_map WHERE user_id=$1 AND lower(role::text)=$2',[user.id,role]);
     if(!explicitRole.rowCount)return res.status(403).json({error:'Learner or trainer access required'});
-    res.setHeader('Cache-Control','no-store'); return res.json(await mobileData(user.id,role)); }
+    res.setHeader('Cache-Control','no-store'); return res.json(await mobileData(user.id,role,{includeCancelled:req.query.includeCancelled==='1'})); }
   catch { return res.status(500).json({error:'Unable to load your classes. Please try again.'}); }
 },{roles:['learner','trainer']});

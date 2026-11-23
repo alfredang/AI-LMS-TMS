@@ -2,7 +2,9 @@ import pool from '../db';
 import { VENUE_COLUMNS, providerAddress, withVenue } from './venue';
 
 // Caller identity comes exclusively from the verified session, never query parameters.
-export async function mobileData(userId: string, role: string) {
+// includeCancelled: newer apps show cancelled classes in the class list with a status chip;
+// older app versions (and the reminder sender) keep the list without them.
+export async function mobileData(userId: string, role: string, opts: { includeCancelled?: boolean } = {}) {
   const trainer = role === 'trainer';
   const assignment = `(cr.assigned_trainer_id = $1 OR cr.tpg_assigned_trainer_id = $1 OR EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id=cr.id AND crt.trainer_id=$1))`;
   const enrollment = `EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id=cr.id AND e.user_id=$1 AND lower(coalesce(e.enrolment_status,'')) NOT IN ('cancelled','canceled','withdrawn'))`;
@@ -14,7 +16,8 @@ export async function mobileData(userId: string, role: string) {
     CASE WHEN $2::boolean THEN c.trainer_slides_url ELSE NULL END AS "trainerSlidesURL",
     cr.course_run_id AS "runCode", cr.class_status::text AS "classStatus"
     FROM course_run cr JOIN course c ON c.id=cr.course_id
-    WHERE NOT coalesce(cr.is_deleted,false) AND lower(coalesce(cr.class_status::text,'')) NOT IN ('cancelled','canceled') AND ${access}
+    WHERE NOT coalesce(cr.is_deleted,false)
+      AND (${opts.includeCancelled ? 'TRUE' : `lower(coalesce(cr.class_status::text,'')) NOT IN ('cancelled','canceled')`}) AND ${access}
     ORDER BY cr.start_date DESC NULLS LAST`,[userId,trainer]);
   const sessions = await pool.query(`SELECT cs.id::text, cr.id::text AS "courseID", c.title,
     cs.start_date AS "startDate", cs.end_date AS "endDate", cs.start_time AS "startTime", cs.end_time AS "endTime",
