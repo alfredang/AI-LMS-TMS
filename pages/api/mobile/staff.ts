@@ -2,12 +2,15 @@ import type { NextApiResponse } from 'next';
 import { withAuth, AuthedApiRequest } from '../../../lib/auth/withAuth';
 import pool from '../../../lib/db';
 import { VENUE_COLUMNS, providerAddress, withVenue } from '../../../lib/mobile/venue';
+import { normalizeSgPhone } from '../../../lib/trainerWhatsapp';
 
 // Staff views for the TIA TMS apps (read-only).
 //   GET ?view=classes&from=YYYY-MM-DD&to=YYYY-MM-DD   admin: every class run overlapping the dates,
 //                                                     with trainers, learner count and status
 //                                                     (Current, Upcoming and the admin calendar)
 //   GET ?view=courses                                 admin / developer: the course catalogue
+//   GET ?view=trainers                                admin: trainers with a WhatsApp number, so
+//                                                     the admin can message one about a class
 // Writes (class status, trainer assignment) stay on the website, where SSG is updated.
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -74,6 +77,20 @@ export default withAuth(async (req: AuthedApiRequest, res: NextApiResponse) => {
           LIMIT 3000`
       )).rows;
       return res.json({ courses: rows });
+    }
+
+    if (view === 'trainers') {
+      if (!isAdmin) return res.status(403).json({ error: 'Admin only' });
+      const rows = (await pool.query(
+        `SELECT au.full_name AS name, au.email, tp.tel
+           FROM trainer_profile tp JOIN app_user au ON au.id = tp.user_id
+          WHERE nullif(btrim(au.full_name),'') IS NOT NULL
+            AND (au.account_status IS NULL OR lower(au.account_status) = 'active')
+          ORDER BY au.full_name`
+      )).rows;
+      return res.json({
+        trainers: rows.map((r: any) => ({ name: r.name, email: r.email || null, phone: normalizeSgPhone(r.tel) })),
+      });
     }
 
     return res.status(400).json({ error: 'Unknown view' });
