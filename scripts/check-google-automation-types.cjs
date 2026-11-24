@@ -8,7 +8,7 @@ const config=ts.readConfigFile('tsconfig.json',ts.sys.readFile);
 const parsed=ts.parseJsonConfigFileContent(config.config,ts.sys,root);
 const changed=cp.execFileSync('git',['diff','HEAD','--name-only','--diff-filter=M'],{encoding:'utf8'}).trim().split(/\r?\n/).filter(f=>/\.tsx?$/.test(f));
 const originals=new Map(changed.map(f=>[path.resolve(f),cp.execFileSync('git',['show',`HEAD:${f}`],{encoding:'utf8'})]));
-const isFeature=f=>/^(components\/admin\/GoogleAutomation[^/]*\.tsx|pages\/api\/admin\/google-automations\.ts|tests\/google-automations[^/]*\.ts)$/.test(path.relative(root,f).replace(/\\/g,'/')) || path.relative(root,f).replace(/\\/g,'/').startsWith('lib/googleAutomations/');
+const isFeature=f=>/^(components\/admin\/GoogleAutomation[^/]*\.tsx|pages\/api\/admin\/google-automations\.ts|pages\/api\/external\/sync-google-automation-sources\.ts|tests\/google-automation[^/]*\.ts)$/.test(path.relative(root,f).replace(/\\/g,'/')) || path.relative(root,f).replace(/\\/g,'/').startsWith('lib/googleAutomations/');
 function diagnostics(baseline){
   const host=ts.createCompilerHost({...parsed.options,incremental:false});
   const read=host.readFile;
@@ -19,5 +19,8 @@ function diagnostics(baseline){
 const current=diagnostics(false);if(global.gc)global.gc();
 const baseline=diagnostics(true);
 const added=[...current].filter(d=>!baseline.has(d));
-console.log(JSON.stringify({baselineDiagnostics:baseline.size,currentDiagnostics:current.size,newDiagnostics:added},null,2));
-process.exitCode=added.length?1:0;
+// Imported feature modules can also appear in the baseline graph. Never let that
+// hide a diagnostic in a Google Automations implementation or test file.
+const featureDiagnostics=[...current].filter(d=>isFeature(path.resolve(root,d.split(' TS')[0])));
+console.log(JSON.stringify({baselineDiagnostics:baseline.size,currentDiagnostics:current.size,newDiagnostics:added,featureDiagnostics},null,2));
+process.exitCode=added.length||featureDiagnostics.length?1:0;

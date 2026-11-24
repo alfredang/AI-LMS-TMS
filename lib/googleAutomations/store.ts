@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { randomUUID } from 'node:crypto';
 import { AutomationError, type Project } from './model';
 
 // Kept in code for Next standalone deployments (which do not ship migration SQL).
@@ -16,7 +17,19 @@ CREATE TABLE IF NOT EXISTS google_automation_draft (
  status TEXT NOT NULL DEFAULT 'draft', created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  attempted_at TIMESTAMPTZ, applied_at TIMESTAMPTZ, published_by TEXT,
  FOREIGN KEY(connection_id,script_id) REFERENCES google_automation_project(connection_id,script_id));
-CREATE INDEX IF NOT EXISTS google_automation_draft_project_idx ON google_automation_draft(connection_id,script_id,created_at DESC);`;
+CREATE INDEX IF NOT EXISTS google_automation_draft_project_idx ON google_automation_draft(connection_id,script_id,created_at DESC);
+ALTER TABLE google_automation_project ADD COLUMN IF NOT EXISTS last_source_attempt_at TIMESTAMPTZ;
+ALTER TABLE google_automation_project ADD COLUMN IF NOT EXISTS last_source_error TEXT;
+CREATE TABLE IF NOT EXISTS google_automation_source_revision (
+ id UUID PRIMARY KEY,connection_id TEXT NOT NULL,script_id TEXT NOT NULL,source_hash TEXT NOT NULL,
+ source_ciphertext TEXT NOT NULL,captured_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ FOREIGN KEY(connection_id,script_id) REFERENCES google_automation_project(connection_id,script_id));
+CREATE INDEX IF NOT EXISTS google_automation_source_revision_project_idx
+ ON google_automation_source_revision(connection_id,script_id,captured_at DESC,id DESC);
+INSERT INTO google_automation_source_revision(id,connection_id,script_id,source_hash,source_ciphertext,captured_at)
+ SELECT gen_random_uuid(),p.connection_id,p.script_id,p.source_hash,p.source_ciphertext,COALESCE(p.refreshed_at,now())
+ FROM google_automation_project p WHERE p.source_ciphertext IS NOT NULL AND p.source_hash IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM google_automation_source_revision r WHERE r.connection_id=p.connection_id AND r.script_id=p.script_id);`;
 
 export type Draft = { id: string; script_id: string; actor_id: string; reason: string; base_hash: string; target_hash: string; source_ciphertext: string; changed_files: string[]; status: string; created_at: string; applied_at: string | null; published_by: string | null };
 export interface AutomationStore {
@@ -46,7 +59,7 @@ export class PgAutomationStore implements AutomationStore {
     }
   }
   async projects() {
-    return (await this.query(`SELECT script_id AS "scriptId",name,purpose,category,schedule,dependencies,refreshed_at AS "refreshedAt",source_hash AS "sourceHash",access_status AS "accessStatus" FROM google_automation_project WHERE connection_id=$1 ORDER BY name,script_id`, [this.connection])).rows;
+    return (await this.query(`SELECT script_id AS "scriptId",name,purpose,category,schedule,dependencies,refreshed_at AS "refreshedAt",source_hash AS "sourceHash",access_status AS "accessStatus",source_ciphertext IS NOT NULL AS "hasStoredSource",last_source_attempt_at AS "lastSourceAttemptAt",last_source_error AS "lastSourceError" FROM google_automation_project WHERE connection_id=$1 ORDER BY name,script_id`, [this.connection])).rows;
   }
   async register(p: Partial<Project> & Pick<Project, 'scriptId' | 'name'>) {
     await this.query(`INSERT INTO google_automation_project(connection_id,script_id,name,purpose,category,schedule,dependencies) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(connection_id,script_id) DO NOTHING`, [this.connection,p.scriptId,p.name,p.purpose || '',p.category || 'Unclassified',p.schedule || 'Not verified',p.dependencies || '']);
@@ -60,7 +73,28 @@ export class PgAutomationStore implements AutomationStore {
     await this.query(`UPDATE google_automation_project SET purpose=$3,category=$4,schedule=$5,dependencies=$6 WHERE connection_id=$1 AND script_id=$2`, [this.connection,id,p.purpose,p.category,p.schedule,p.dependencies]);
   }
   async snapshot(id: string, hash: string, ciphertext: string) {
-    await this.query(`UPDATE google_automation_project SET source_hash=$3,source_ciphertext=$4,refreshed_at=now(),access_status='Readable' WHERE connection_id=$1 AND script_id=$2`, [this.connection,id,hash,ciphertext]);
+    const client = this.client || await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const previous = (await client.query('SELECT source_hash FROM google_automation_project WHERE connection_id=$1 AND script_id=$2 FOR UPDATE',[this.connection,id])).rows[0];
+      if (!previous) throw new AutomationError(404,'This script is not registered with this connection.');
+      if (previous.source_hash !== hash) await client.query(`INSERT INTO google_automation_source_revision(id,connection_id,script_id,source_hash,source_ciphertext) VALUES($1,$2,$3,$4,$5)`,[randomUUID(),this.connection,id,hash,ciphertext]);
+      await client.query(`UPDATE google_automation_project SET source_hash=$3,source_ciphertext=$4,refreshed_at=now(),last_source_attempt_at=now(),last_source_error=NULL,access_status='Readable' WHERE connection_id=$1 AND script_id=$2`,[this.connection,id,hash,ciphertext]);
+      await client.query('COMMIT');
+    } catch(error) { await client.query('ROLLBACK').catch(()=>{});throw error; }
+    finally { if (!this.client) client.release(); }
+  }
+  async sourceFailure(id: string) {
+    // Google exceptions may include credentials and source. Store only this fixed message.
+    await this.query(`UPDATE google_automation_project SET last_source_attempt_at=now(),last_source_error='Google source refresh failed; last saved source retained.' WHERE connection_id=$1 AND script_id=$2`,[this.connection,id]);
+  }
+  async revisions(id: string) {
+    return (await this.query(`SELECT id,source_hash AS hash,captured_at AS "capturedAt" FROM google_automation_source_revision WHERE connection_id=$1 AND script_id=$2 ORDER BY captured_at DESC,id DESC LIMIT 100`,[this.connection,id])).rows;
+  }
+  async revision(id: string, revisionId: string) {
+    const row=(await this.query(`SELECT id,source_hash AS hash,source_ciphertext,captured_at AS "capturedAt" FROM google_automation_source_revision WHERE connection_id=$1 AND script_id=$2 AND id=$3`,[this.connection,id,revisionId])).rows[0];
+    if (!row) throw new AutomationError(404,'Source revision not found.');
+    return row;
   }
   async saveDraft(d: Pick<Draft, 'id' | 'script_id' | 'actor_id' | 'reason' | 'base_hash' | 'target_hash' | 'source_ciphertext' | 'changed_files'>) {
     await this.query(`INSERT INTO google_automation_draft(id,connection_id,script_id,actor_id,reason,base_hash,target_hash,source_ciphertext,changed_files) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`, [d.id,this.connection,d.script_id,d.actor_id,d.reason,d.base_hash,d.target_hash,d.source_ciphertext,JSON.stringify(d.changed_files)]);

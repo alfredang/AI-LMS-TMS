@@ -39,6 +39,22 @@ test('source reads and saved drafts never write Google; source and history hide 
   const stored=await f.store.draft(d.id,scriptId);assert.doesNotMatch(stored.source_ciphertext,/synthetic-secret-value/);
   assert.equal(unseal<any>(stored.source_ciphertext,key).before[0].source,fixture()[0].source);
 });
+
+test('saved source can be decrypted and read offline without refreshing Google or replacing the snapshot',async()=>{
+  const f=await setup();
+  await assert.rejects(f.service.storedSource(scriptId),/No saved source/);
+  const original=await f.service.source(scriptId);
+  const ciphertext=(await f.store.project(scriptId)).source_ciphertext;
+  f.files=f.files.map(file=>file.name==='Code'?{...file,source:file.source+'\n// Google-only external change'}:file);
+  const offline=await f.service.storedSource(scriptId);
+  assert.equal(offline.origin,'database');assert.equal(offline.currentGoogleVerified,false);
+  assert.deepEqual(offline.files,original.files);assert.equal(offline.hash,original.hash);
+  assert.equal((await f.store.project(scriptId)).source_ciphertext,ciphertext);
+  assert.doesNotMatch(JSON.stringify(offline),/synthetic-secret-value|Google-only/);
+  assert.equal(f.writes,0);
+  await f.service.source(scriptId);
+  assert.match((await f.service.storedSource(scriptId)).files.find(file=>file.name==='Code')!.source,/Google-only/);
+});
 test('publishing preserves all project files and credentials, verifies and is idempotent',async()=>{
   const f=await setup();const d=await f.edit();
   await assert.rejects(f.service.publish(scriptId,d.id,'publisher',false),/Acknowledge/);assert.equal(f.writes,0);

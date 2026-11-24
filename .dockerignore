@@ -9,3 +9,5 @@ config/google-automations.private.json
 config/google-automations-review.private.json
 config/google-automations*.private.json
 .codex-tmp/google-automation-browser/
+scratch/
+.codex-tmp/google-automation-tools/

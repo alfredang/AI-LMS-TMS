@@ -7,11 +7,20 @@ type DraftSource = { before: ScriptFile[]; after: ScriptFile[] };
 export class AutomationService {
   constructor(private store: AutomationStore, private google: ScriptGateway, private key: string) {}
   async source(scriptId: string) {
-    await this.store.project(scriptId);
-    const files = await this.google.read(scriptId);
-    const hash = sourceHash(files);
-    await this.store.snapshot(scriptId, hash, seal(files,this.key));
-    return { files: publicFiles(files), hash, refreshedAt: new Date().toISOString() };
+    return this.store.locked(scriptId,async store=>{
+      await store.project(scriptId);
+      const files = await this.google.read(scriptId);
+      const hash = sourceHash(files);
+      await store.snapshot(scriptId, hash, seal(files,this.key));
+      return { files: publicFiles(files), hash, refreshedAt: new Date().toISOString() };
+    });
+  }
+  async storedSource(scriptId: string) {
+    const project=await this.store.project(scriptId);
+    if (!project.source_ciphertext) throw new AutomationError(404,'No saved source for this project. Refresh its Google source first.');
+    const files=normalizeFiles(unseal<ScriptFile[]>(project.source_ciphertext,this.key));
+    if (sourceHash(files)!==project.sourceHash) throw new AutomationError(503,'Saved source integrity check failed.');
+    return {files:publicFiles(files),hash:project.sourceHash,refreshedAt:project.refreshedAt,origin:'database',currentGoogleVerified:false};
   }
   async draft(scriptId: string, baseHash: unknown, files: unknown, reason: unknown, actor: string) {
     await this.store.project(scriptId);

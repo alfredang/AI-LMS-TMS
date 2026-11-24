@@ -4,6 +4,7 @@ import type { Project, ScriptFile } from '../../lib/googleAutomations/model';
 import { SourceEditor, SourceComparison } from './GoogleAutomationSource';
 import GoogleAutomationTriggers from './GoogleAutomationTriggers';
 import GoogleAutomationSetup from './GoogleAutomationSetup';
+import GoogleAutomationAgentAccess from './GoogleAutomationAgentAccess';
 
 type Access = { canView: boolean; canEdit: boolean; canPublish: boolean };
 type Change = { id: string; script_id: string; actor_id: string; reason: string; status: string; changed_files: string[]; created_at: string; applied_at: string | null; published_by: string | null };
@@ -94,6 +95,7 @@ export default function GoogleAutomationsView() {
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-success-bg p-4 text-sm text-emerald-800 dark:border-emerald-800 dark:text-emerald-200">{notice}</div>}
     {initialLoading && <p role="status">Loading automation registry…</p>}
     {enabled===false && <GoogleAutomationSetup canEdit={access.canEdit} onConnected={loadRegistry}/>}
+    {enabled&&access.canEdit&&<GoogleAutomationAgentAccess accountEmail={account}/>}
     {enabled && <div className="grid items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
       <aside className="min-w-0 rounded-xl border border-slate-200 bg-surface dark:border-slate-700">
         <div className="border-b border-slate-200 p-4 dark:border-slate-700"><label className="mb-2 flex items-center gap-2 text-sm font-medium" htmlFor="automation-search"><Search size={16}/>Search {projects.length} projects</label><input id="automation-search" className={field} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, purpose or project ID"/></div>

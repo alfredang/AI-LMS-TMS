@@ -5,6 +5,7 @@ export type ScriptFile = { name: string; type: 'SERVER_JS' | 'HTML' | 'JSON'; so
 export type Project = {
   scriptId: string; name: string; purpose: string; category: string; schedule: string;
   dependencies: string; refreshedAt: string | null; sourceHash: string | null; accessStatus: string;
+  hasStoredSource?: boolean; lastSourceAttemptAt?: string | null; lastSourceError?: string | null;
 };
 export class AutomationError extends Error {
   constructor(public status: number, message: string) { super(message); }
