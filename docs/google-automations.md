@@ -5,7 +5,7 @@ search, encrypted source revisions, scoped AI agent access and a daily source-on
 refresh job extend the original module. See [tool setup and rollout](google-automation-tools.md),
 the [process inspection map](automation-process-map.md), and the reusable
 `.claude/skills/tms-automation-inspection/SKILL.md`. These code changes require
-deployment and runtime configuration; their existence is not proof of production
+deployment and TMS access/task settings; their existence is not proof of production
 activation. The original phase descriptions below document the earlier rollout.
 
 **Local review update (5 November 2026):** the localhost module now includes a

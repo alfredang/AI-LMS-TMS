@@ -8,8 +8,9 @@ import { AutomationService } from '@lib/googleAutomations/service';
 import { TriggerService } from '@lib/googleAutomations/triggers';
 import { connectionStorageAvailable,normalizeImportedConnection,saveInitialConnection } from '@lib/googleAutomations/connectionStore';
 import { withAutomationAgent, type AutomationRequest } from '@lib/googleAutomations/agentAuth';
-import { agentAllowsProject, assertAgentOperation } from '@lib/googleAutomations/agentAccess';
+import { agentAllowsProject, assertAgentOperation, parseAgentConfiguration } from '@lib/googleAutomations/agentAccess';
 import { AutomationInspection } from '@lib/googleAutomations/inspection';
+import { AutomationAgentStore } from '@lib/googleAutomations/agentStore';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' }, responseLimit: '12mb' } };
 const str = (v: unknown, max: number) => {
@@ -55,6 +56,17 @@ async function handler(req: AutomationRequest, res: NextApiResponse) {
     const store = new PgAutomationStore(pool,connectionId(connection));
     await store.init();
     for (const p of connection.projects) { assertScriptId(p.scriptId); await store.register(p); }
+    if((req.method==='GET'&&req.query.view==='agentAccess')||(req.method==='POST'&&['installAgentGrant','revokeAgentGrant'].includes(action))){
+      if(agent||!access.canEdit)throw new AutomationError(403,'Managing agent access requires a human Admin or Developer session.');
+      const grants=new AutomationAgentStore(pool,connectionId(connection),connection.accountEmail);
+      await grants.init();
+      if(req.method==='GET'){
+        const runtimeGrants=parseAgentConfiguration(process.env.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON||'[]').filter(g=>g.accountEmail===connection.accountEmail).map(({tokenSha256,...grant})=>grant);
+        return res.json({success:true,grants:await grants.list(),runtimeGrants,syncServerDisabled:process.env.GOOGLE_AUTOMATIONS_SYNC_ENABLED==='false'});
+      }
+      const list=action==='installAgentGrant'?await grants.install(req.body.grant,user.id,req.body.acknowledged,canPublish):await grants.revoke(req.body.id,user.id);
+      return res.json({success:true,grants:list});
+    }
     const gateway = googleGateway(connection);
     const service = new AutomationService(store,gateway,connection.encryptionKey);
     const inspection=new AutomationInspection(store,service,connection.encryptionKey);

@@ -17,26 +17,42 @@ Admin/Developer `sessionToken`. Existing private password-login configurations
 containing `email`, `password` and `loginType` also work. Tokens/passwords must not
 be passed as command-line arguments, committed or printed in logs.
 
-Generate a dedicated expiring credential without printing its raw token:
+Generate a dedicated expiring credential and a separate grant file without
+printing its raw token:
 
 ```powershell
-node scripts/google-automations.cjs keygen --id codex-inspection --account owner@example.com --base-url https://tms.example.com --projects '*' --expires 2027-02-01T00:00:00Z --out config/google-automations-agent.private.json
+node scripts/google-automations.cjs keygen --id codex-inspection --account owner@example.com --base-url https://tms.example.com --projects '*' --expires 2027-02-01T00:00:00Z --out config/google-automations-agent.private.json --grant-out config/google-automations-grant.private.json
 ```
 
-The command writes the private client file exclusively and prints a server entry
-containing only the token's SHA-256 digest and grants. Install an array of such
-entries as the server-only runtime variable `GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON`.
-Do not prefix it with `NEXT_PUBLIC_`. Each entry specifies an ID, Google account,
-project allowlist (`['*']` explicitly grants all registered projects), expiration
-and operation scopes. Missing/invalid/expired credentials fail closed.
-Use the dedicated `x-google-automation-key` header; query-string keys and generic
-scheduler/service keys cannot inspect or edit source. Remove the entry to revoke.
+The client file contains the actual credential and stays on the agent's computer.
+The separate grant file contains only its SHA-256 digest and permissions. Sign in
+to TMS as Admin or Developer, open Google Automations → AI agent access, select
+the **grant file**, review its account, permissions, project scope and expiry, and
+authorize access. No Coolify login or new server environment variable is required.
+Use Revoke access in the same panel to stop a TMS-managed credential immediately.
+Only a human Admin/Developer session can manage grants; an agent cannot authorize
+or expand its own access. The database stores token digests, never raw credentials.
+
+Each grant specifies an ID, Google account, project allowlist (`['*']` explicitly
+includes future registered projects), expiration and independent operation scopes.
+Missing/invalid/expired/revoked credentials fail closed. The dedicated
+`x-google-automation-key` header is required; query-string keys and generic
+scheduler/service keys cannot inspect or edit source.
+
+Optional legacy runtime grants in `GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON` remain
+supported and are shown separately in the panel. Those grants remain managed by
+the server administrator; revoking a database grant does not remove a runtime
+grant for the same credential. Normal setup uses only TMS-managed grants.
 
 Scopes are independent: `read`, `refresh`, `draft`, `publish`. Every credential
 must have `read`; the generator defaults to `read,refresh,draft`. Add `publish`
 only for an authorized publisher. Server `allowPublish` must also be enabled,
 and publishing requires explicit acknowledgement. Agents cannot configure the
 Google connection, modify metadata, manage triggers or deploy web apps.
+
+With a human Admin/Developer client configuration, grant management also supports
+`agents`, `authorize-agent --grant GRANT_JSON --acknowledge-agent-access` and
+`revoke-agent --agent ID`. Agent credentials themselves cannot use these commands.
 
 ## Inspect and edit
 
@@ -98,10 +114,12 @@ an empty Drive result does not prove that no other scripts exist.
 
 The scheduler task `google_automation_source_sync` runs daily at **03:15 SGT**
 when enabled, calling POST `/api/external/sync-google-automation-sources` through
-the existing scheduler authentication. Set server runtime
-`GOOGLE_AUTOMATIONS_SYNC_ENABLED=true`; a newly seeded task is enabled only when
-this flag is true. If the task already exists disabled, enable it in Task Scheduler.
-The endpoint also checks the flag. It returns counts/status, never source code.
+the existing scheduler authentication. Enable Google Apps Script Source Inventory
+in TMS Task Scheduler. No new host variable is required. The endpoint checks the
+enabled task record before refreshing. New tasks default to disabled, unless an
+existing deployment already opts in with `GOOGLE_AUTOMATIONS_SYNC_ENABLED=true`.
+An explicit server value `false` remains an emergency override and is reported in
+the agent-access panel. The endpoint returns counts/status, never source code.
 Existing Google execution schedules and native business jobs are unaffected.
 
 ## API additions
@@ -113,6 +131,10 @@ Authenticated `/api/admin/google-automations` supports:
 - GET `view=sourceRevisions&scriptId=...` and `view=sourceRevision&scriptId=...&revisionId=...`.
 - POST `action=refresh,scriptId=...` to observe Google source.
 - Existing draft/review/history/restore/publish operations, with separate agent scopes.
+- Human Admin/Developer only: GET `view=agentAccess`, POST `action=installAgentGrant`
+  with `grant` and `acknowledged:true`, and POST `action=revokeAgentGrant` with `id`.
+  The additive `create_google_automation_agent_grants.sql` schema is also initialized
+  lazily after human authorization. Authentication lookup itself performs no DDL.
 
 Human Admin/Developer and Training Provider permissions remain in force. Agents
 are separately account/project scoped. Source responses are private and no-store;
@@ -124,7 +146,7 @@ Before deployment, run focused Google Automations tests, the isolated PostgreSQL
 migration/revision tests, API authentication coverage, feature type checks and the
 production build. Validate agent project/scope isolation with synthetic credentials
 and source; never publish test edits to a production Google project.
-After deployment, install runtime agent grants and the source-sync flag, confirm
+After deployment, authorize the grant file in TMS and enable the source task, confirm
 coverage, read saved source through TMS, refresh a project, and verify unchanged
 refreshes do not create duplicate revisions. Test actual Google writes only on a
 disposable project; publish business changes only within their separate authorization.

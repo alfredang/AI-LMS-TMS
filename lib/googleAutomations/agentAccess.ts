@@ -3,24 +3,28 @@ import { AutomationError, assertScriptId } from './model';
 
 export type AgentScope = 'read' | 'refresh' | 'draft' | 'publish';
 export type AutomationAgent = {id:string;accountEmail:string;scopes:AgentScope[];scriptIds:string[];expiresAt:string};
-type ConfiguredAgent = AutomationAgent & {tokenSha256:string};
+export type ConfiguredAgent = AutomationAgent & {tokenSha256:string};
 const scopes: AgentScope[]=['read','refresh','draft','publish'];
 
-export function authenticateAutomationAgent(token: unknown, configuration=process.env.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON, now=Date.now()): AutomationAgent {
-  if(typeof token!=='string'||token.length<32||token.length>1024)throw new AutomationError(401,'Invalid Google Automations agent credential.');
+export function parseAgentConfiguration(configuration: string): ConfiguredAgent[] {
   let keys: ConfiguredAgent[];
   try {
-    keys=JSON.parse(configuration||'[]');
+    keys=JSON.parse(configuration);
     if(!Array.isArray(keys)||keys.length>100)throw new Error();
     const hashes=new Set<string>(),ids=new Set<string>();
     for(const key of keys){
-      if(!key||!/^[-\w]{1,64}$/.test(key.id)||ids.has(key.id)||!/^\S+@\S+\.\S+$/.test(key.accountEmail)||!/^([a-f0-9]{64})$/.test(key.tokenSha256)||hashes.has(key.tokenSha256)
+      if(!key||typeof key.id!=='string'||!/^[-\w]{1,64}$/.test(key.id)||ids.has(key.id)||typeof key.accountEmail!=='string'||!/^\S+@\S+\.\S+$/.test(key.accountEmail)||typeof key.tokenSha256!=='string'||!/^([a-f0-9]{64})$/.test(key.tokenSha256)||hashes.has(key.tokenSha256)
         ||!Array.isArray(key.scopes)||!key.scopes.includes('read')||key.scopes.some(s=>!scopes.includes(s))
-        ||!Array.isArray(key.scriptIds)||!key.scriptIds.length||key.scriptIds.length>1000||!Number.isFinite(Date.parse(key.expiresAt)))throw new Error();
+        ||!Array.isArray(key.scriptIds)||!key.scriptIds.length||key.scriptIds.length>1000||typeof key.expiresAt!=='string'||!Number.isFinite(Date.parse(key.expiresAt)))throw new Error();
       for(const id of key.scriptIds)if(id!=='*')assertScriptId(id);
       hashes.add(key.tokenSha256);ids.add(key.id);
     }
   } catch {throw new AutomationError(503,'Google Automations agent access is not configured correctly.');}
+  return keys.map(key=>({id:key.id,tokenSha256:key.tokenSha256,accountEmail:key.accountEmail.toLowerCase(),scopes:[...key.scopes],scriptIds:[...key.scriptIds],expiresAt:new Date(key.expiresAt).toISOString()}));
+}
+export function authenticateAutomationAgent(token: unknown, configuration=process.env.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON, now=Date.now()): AutomationAgent {
+  if(typeof token!=='string'||token.length<32||token.length>1024)throw new AutomationError(401,'Invalid Google Automations agent credential.');
+  const keys=parseAgentConfiguration(configuration||'[]');
   const digest=createHash('sha256').update(token).digest();
   const key=keys.find(k=>timingSafeEqual(digest,Buffer.from(k.tokenSha256,'hex')));
   if(!key||Date.parse(key.expiresAt)<=now)throw new AutomationError(401,'Invalid or expired Google Automations agent credential.');

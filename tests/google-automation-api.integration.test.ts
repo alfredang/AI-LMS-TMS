@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { Pool } from 'pg';
@@ -13,10 +14,10 @@ test('CLI and actual TMS route retrieve encrypted saved source over HTTP and enf
   {skip:!process.env.GOOGLE_AUTOMATIONS_API_TEST_DATABASE_URL},async()=>{
   const databaseUrl=process.env.GOOGLE_AUTOMATIONS_API_TEST_DATABASE_URL!;
   const url=new URL(databaseUrl);
-  assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'15447');assert.equal(url.pathname,'/google_automation_api_test');
+  assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'15447');assert.ok(['/google_automation_api_test','/google_automation_api_utf8_test'].includes(url.pathname));
   const saved={DATABASE_URL:process.env.DATABASE_URL,GOOGLE_AUTOMATIONS_CONFIG_B64:process.env.GOOGLE_AUTOMATIONS_CONFIG_B64,
     GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON:process.env.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON,GOOGLE_AUTOMATIONS_ENABLED:process.env.GOOGLE_AUTOMATIONS_ENABLED,
-    SCHEDULER_SECRET:process.env.SCHEDULER_SECRET,EXTERNAL_API_KEY_FOR_CLAWDBOT:process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT};
+    SCHEDULER_SECRET:process.env.SCHEDULER_SECRET,EXTERNAL_API_KEY_FOR_CLAWDBOT:process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT,GOOGLE_AUTOMATIONS_SYNC_ENABLED:process.env.GOOGLE_AUTOMATIONS_SYNC_ENABLED};
   const scriptId='synthetic-api-allowed-project',hidden='synthetic-api-hidden-project',key=randomBytes(32).toString('base64');
   const config:AutomationConfig={enabled:true,allowPublish:false,accountEmail:'api-fixture@example.test',encryptionKey:key,
     credentials:{client_id:'synthetic',client_secret:'synthetic',refresh_token:'synthetic'},projects:[]};
@@ -29,6 +30,7 @@ test('CLI and actual TMS route retrieve encrypted saved source over HTTP and enf
   const pool=new Pool({connectionString:databaseUrl,max:3}),store=new PgAutomationStore(pool,connectionId(config));
   let applicationPool:Pool|undefined;
   let server:ReturnType<typeof createServer>|undefined;
+  const adminId=randomUUID(),providerId=randomUUID();
   try{
     await store.init();
     const files=normalizeFiles([{name:'Code',type:'SERVER_JS',source:'const API_TOKEN="synthetic-api-sensitive-token";\nfunction createEvent() { return 1; }'},
@@ -68,9 +70,51 @@ test('CLI and actual TMS route retrieve encrypted saved source over HTTP and enf
     assert.equal(generic.status,403);assert.equal(generic.headers.get('cache-control'),'no-store, private');
     const anonymous=await fetch(origin+'/api/admin/google-automations');assert.equal(anonymous.status,401);
     assert.equal((await store.revisions(scriptId)).length,1,'Offline inspections and rejected actions do not refresh or alter source.');
+    // Bootstrap and revoke dedicated access through genuine local human sessions,
+    // with no environment-managed agent grants at all.
+    await pool.query(await readFile('database/migrations/create_user_session.sql','utf8'));
+    for(const [id,role] of [[adminId,'Admin'],[providerId,'Training Provider']]){
+      await pool.query('INSERT INTO app_user(id,email,full_name) VALUES($1,$2,$3)',[id,id+'@example.test','Synthetic authorization fixture']);
+      await pool.query('INSERT INTO user_role_map(user_id,role) VALUES($1,$2)',[id,role]);
+    }
+    const {createSession}=require('../lib/auth/session.ts');
+    const admin=await createClient({baseUrl:origin,sessionToken:await createSession(adminId)});
+    const provider=await createClient({baseUrl:origin,sessionToken:await createSession(providerId)});
+    delete process.env.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON;
+    const databaseToken=randomBytes(32).toString('base64url'),databaseGrant=grant('database-agent',databaseToken,config.accountEmail,['read','draft']);
+    assert.equal((await admin({view:'agentAccess'})).grants.length,0);
+    await assert.rejects(provider({view:'agentAccess'}),/HTTP 403/);
+    await assert.rejects(provider({},{action:'installAgentGrant',grant:databaseGrant,acknowledged:true}),/HTTP 403/);
+    await assert.rejects(admin({},{action:'installAgentGrant',grant:databaseGrant}),/HTTP 400/);
+    const authorized=await admin({},{action:'installAgentGrant',grant:databaseGrant,acknowledged:true});
+    assert.equal(authorized.grants.length,1);assert.doesNotMatch(JSON.stringify(authorized),new RegExp(databaseToken));
+    const databaseClient=await createClient({baseUrl:origin,agentToken:databaseToken});
+    assert.equal((await run('read',{script:scriptId},databaseClient)).hash,source.hash);
+    await assert.rejects(databaseClient({view:'agentAccess'}),/HTTP 403/);
+    await assert.rejects(databaseClient({},{action:'installAgentGrant',grant:{...databaseGrant,id:'escalation',scopes:['read','publish']},acknowledged:true}),/HTTP 403/);
+    await assert.rejects(databaseClient({},{action:'revokeAgentGrant',id:databaseGrant.id}),/HTTP 403/);
+    await admin({},{action:'revokeAgentGrant',id:databaseGrant.id});
+    await assert.rejects(run('read',{script:scriptId},databaseClient),/HTTP 401/);
+    // Daily refresh is governed by the TMS task setting without a new host variable.
+    await require('../lib/scheduler/scheduler.ts').getSchedulerTasks();
+    await pool.query('UPDATE scheduler_config SET enabled=false WHERE id=$1',['google_automation_source_sync']);
+    const syncHandler=require('../pages/api/external/sync-google-automation-sources.ts').default;
+    const syncResponse=()=>({statusCode:200,body:null as any,setHeader(){},status(code:number){this.statusCode=code;return this;},json(body:any){this.body=body;return this;}});
+    delete process.env.GOOGLE_AUTOMATIONS_SYNC_ENABLED;
+    let sync=syncResponse();await syncHandler({method:'POST',headers:{'x-api-key':process.env.SCHEDULER_SECRET},query:{}} as any,sync as any);
+    assert.equal(sync.body.skipped,true);assert.match(sync.body.reason,/Task Scheduler/);
+    process.env.GOOGLE_AUTOMATIONS_SYNC_ENABLED='false';
+    await pool.query('UPDATE scheduler_config SET enabled=true WHERE id=$1',['google_automation_source_sync']);
+    sync=syncResponse();await syncHandler({method:'POST',headers:{'x-api-key':process.env.SCHEDULER_SECRET},query:{}} as any,sync as any);
+    assert.equal(sync.body.skipped,true);assert.match(sync.body.reason,/disabled on this server/);
+    await pool.query('UPDATE scheduler_config SET enabled=false WHERE id=$1',['google_automation_source_sync']);
   }finally{
     if(server){server.closeAllConnections();await new Promise<void>(resolve=>server!.close(()=>resolve()));}
+    await pool.query('DELETE FROM user_session WHERE user_id IN ($1,$2)',[adminId,providerId]).catch(()=>{});
+    await pool.query('DELETE FROM user_role_map WHERE user_id IN ($1,$2)',[adminId,providerId]).catch(()=>{});
+    await pool.query('DELETE FROM app_user WHERE id IN ($1,$2)',[adminId,providerId]).catch(()=>{});
     await applicationPool?.end();
+    await pool.query('DELETE FROM google_automation_agent_grant WHERE connection_id=$1',[connectionId(config)]).catch(()=>{});
     await pool.query('DELETE FROM google_automation_source_revision WHERE connection_id=$1',[connectionId(config)]).catch(()=>{});
     await pool.query('DELETE FROM google_automation_project WHERE connection_id=$1',[connectionId(config)]).catch(()=>{});
     await pool.end();

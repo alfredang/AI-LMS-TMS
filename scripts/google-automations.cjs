@@ -77,6 +77,15 @@ async function run(command,options,request){
     return result;
   }
   if(command==='coverage')return request({view:'coverage'});
+  if(command==='agents')return request({view:'agentAccess'});
+  if(command==='authorize-agent'){
+    if(options['acknowledge-agent-access']!==true)throw Error('Authorizing access requires --acknowledge-agent-access and a human Admin/Developer session.');
+    let grant;
+    try{const json=JSON.parse(fs.readFileSync(required(options,'grant'),'utf8'));grant=json.serverEntry||(json.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON?.length===1?json.GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON[0]:json);if(typeof grant.tokenSha256!=='string'||grant.agentToken)throw Error();}
+    catch{throw Error('Choose the agent grant JSON, not the private client credential file.');}
+    return request({},{action:'installAgentGrant',grant,acknowledged:true});
+  }
+  if(command==='revoke-agent')return request({},{action:'revokeAgentGrant',id:required(options,'agent')});
   if(command==='search')return request({view:'search',q:required(options,'query')});
   if(command==='sync'){
     const registry=await request(),results=[];
@@ -114,8 +123,11 @@ function keygen(options){
   const expiresAt=required(options,'expires');
   if(!/^[-\w]{1,64}$/.test(id)||!/^\S+@\S+\.\S+$/.test(accountEmail)||!scopes.includes('read')||scopes.some(s=>!['read','refresh','draft','publish'].includes(s))||!scriptIds.every(s=>s==='*'||/^[A-Za-z0-9_-]{20,200}$/.test(s))||!(Date.parse(expiresAt)>Date.now()))throw Error('Invalid agent ID, account, scopes, projects or expiration.');
   const agentToken='ga_'+randomBytes(32).toString('base64url');
+  const serverEntry={id,accountEmail:accountEmail.toLowerCase(),scopes,scriptIds,expiresAt,tokenSha256:createHash('sha256').update(agentToken).digest('hex')};
+  if(options['grant-out']&&fs.existsSync(required(options,'grant-out')))throw Error('EEXIST: grant file already exists.');
   fs.writeFileSync(required(options,'out'),JSON.stringify({baseUrl,agentToken},null,2)+'\n',{flag:'wx',mode:0o600});
-  return {clientConfig:options.out,serverVariable:'GOOGLE_AUTOMATIONS_AGENT_KEYS_JSON',serverEntry:{id,accountEmail:accountEmail.toLowerCase(),scopes,scriptIds,expiresAt,tokenSha256:createHash('sha256').update(agentToken).digest('hex')}};
+  if(options['grant-out'])fs.writeFileSync(required(options,'grant-out'),JSON.stringify(serverEntry,null,2)+'\n',{flag:'wx',mode:0o600});
+  return {clientConfig:options.out,grantFile:options['grant-out'],nextStep:'Authorize the grant in TMS Google Automations → AI agent access.',serverEntry};
 }
 const help=`Google Apps Script tool for TMS
 Usage: node scripts/google-automations.cjs <command> [--config <private.json>] [options]
@@ -127,7 +139,8 @@ Commands: list [--query text], coverage, search --query text, sync [--missing-on
   review --script ID --draft UUID
   publish --script ID --draft UUID --acknowledge-live-code
   restore --script ID --draft UUID --reason TEXT  (creates a draft only)
-  keygen --id NAME --account GOOGLE_EMAIL --base-url ORIGIN --projects ID,ID|* --expires ISO_DATE --out PRIVATE_JSON [--scopes read,refresh,draft]
+  keygen --id NAME --account GOOGLE_EMAIL --base-url ORIGIN --projects ID,ID|* --expires ISO_DATE --out PRIVATE_JSON [--grant-out GRANT_JSON] [--scopes read,refresh,draft]
+  agents | authorize-agent --grant GRANT_JSON --acknowledge-agent-access | revoke-agent --agent ID (human Admin/Developer session)
 Client config: --config, GOOGLE_AUTOMATIONS_CLIENT_CONFIG, or config/google-automations-agent.private.json.
 Use scratch/ for source checkouts. --legacy-source on sync uses the existing GET source route during rollout.
 Saved reads/search never refresh Google. Refresh/sync never write Google source or execute scripts.`;

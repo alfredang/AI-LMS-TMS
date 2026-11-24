@@ -45,9 +45,11 @@ test('source checkout round-trips the complete project, preserves names and refu
     manifest.files[0].path='../outside.gs';fs.writeFileSync(path.join(directory,'checkout.json'),JSON.stringify(manifest));
     assert.throws(()=>readCheckout(directory),/Invalid checkout file path/);
     const config=path.join(root,'agent.private.json');
-    const generated=keygen({id:'test-agent',account:'owner@example.test','base-url':'https://tms.example.test',projects:'*',expires:'2099-01-01T00:00:00Z',out:config});
+    const grantFile=path.join(root,'grant.private.json');
+    const generated=keygen({id:'test-agent',account:'owner@example.test','base-url':'https://tms.example.test',projects:'*',expires:'2099-01-01T00:00:00Z',out:config,'grant-out':grantFile});
     const privateConfig=JSON.parse(fs.readFileSync(config,'utf8'));
     assert.doesNotMatch(JSON.stringify(generated),new RegExp(privateConfig.agentToken));
+    assert.doesNotMatch(fs.readFileSync(grantFile,'utf8'),new RegExp(privateConfig.agentToken));
     assert.deepEqual(generated.serverEntry.scopes,['read','refresh','draft']);
     assert.throws(()=>keygen({id:'test-agent',account:'owner@example.test','base-url':'https://tms.example.test',projects:'*',expires:'2099-01-01T00:00:00Z',out:config}),/EEXIST/);
   }finally{fs.rmSync(root,{recursive:true,force:true});}
