@@ -1,5 +1,13 @@
 # Google Automations: registry and source editor
 
+**Source tools extension (24 November 2026):** saved-source reads, redacted code
+search, encrypted source revisions, scoped AI agent access and a daily source-only
+refresh job extend the original module. See [tool setup and rollout](google-automation-tools.md),
+the [process inspection map](automation-process-map.md), and the reusable
+`.claude/skills/tms-automation-inspection/SKILL.md`. These code changes require
+deployment and runtime configuration; their existence is not proof of production
+activation. The original phase descriptions below document the earlier rollout.
+
 **Local review update (5 November 2026):** the localhost module now includes a
 Triggers tab with dated Google inventory, editable schedule drafts and persisted
 local review application. Live trigger application requires a separately authorized

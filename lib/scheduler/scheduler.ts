@@ -135,6 +135,7 @@ async function seedDefaults() {
         days_in_advance?: number;
         default_enabled?: boolean;
     }> = [
+        {id:'google_automation_source_sync',name:'Google Apps Script Source Inventory',description:'Refresh encrypted Google Script source snapshots and preserve changed revisions. Does not execute scripts or change Google triggers.',cron_expression:'15 3 * * *',api_endpoint:'/api/external/sync-google-automation-sources',default_enabled:process.env.GOOGLE_AUTOMATIONS_SYNC_ENABLED==='true'},
         {id:'mms_nonfunded_discovery',name:'MMS Non-funded Master List Sync',description:'Queue existing C-code Master List classes for MMS at 10 pm SGT, including pending, ongoing and future classes. Calendar does not discover classes.',cron_expression:'0 22 * * *',api_endpoint:'/api/external/mms-sync',default_enabled:false},
         {id:'mms_nonfunded_reconcile',name:'MMS Non-funded Class Reconciliation',description:'Synchronize existing non-funded Master List classes and reconcile MMS registrations every two minutes. TGS courses are excluded.',cron_expression:'*/2 * * * *',api_endpoint:'/api/external/mms-sync?mode=reconcile',default_enabled:false},
         {id:'mms_nonfunded_worker',name:'MMS Non-funded Sync Worker',description:'Deliver committed non-funded changes and retry failures every minute. Requires the configured pilot allowlist and integration credentials.',cron_expression:'* * * * *',api_endpoint:'/api/external/mms-sync?mode=worker',default_enabled:false},
