@@ -19,5 +19,8 @@ function diagnostics(baseline){
 const current=diagnostics(false);if(global.gc)global.gc();
 const baseline=diagnostics(true);
 const added=[...current].filter(d=>!baseline.has(d));
-console.log(JSON.stringify({baselineDiagnostics:baseline.size,currentDiagnostics:current.size,newDiagnostics:added},null,2));
-process.exitCode=added.length?1:0;
+// Imported feature modules can also appear in the baseline graph. Never let that
+// hide a diagnostic in a Google Automations implementation or test file.
+const featureDiagnostics=[...current].filter(d=>isFeature(path.resolve(root,d.split(' TS')[0])));
+console.log(JSON.stringify({baselineDiagnostics:baseline.size,currentDiagnostics:current.size,newDiagnostics:added,featureDiagnostics},null,2));
+process.exitCode=added.length||featureDiagnostics.length?1:0;
