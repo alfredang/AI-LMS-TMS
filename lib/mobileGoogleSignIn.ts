@@ -24,10 +24,19 @@ export const MOBILE_STATE_PREFIX = 'm_';
 const APP_SCHEME = 'tiatms';
 const APP_CALLBACK = `${APP_SCHEME}://auth`;
 
-/** Who may use admin sign-in. Env MOBILE_ADMIN_GOOGLE_EMAILS (comma separated) overrides. */
+/** The academy's admins who may use admin sign-in in the apps (each also holds Admin on the website). */
+export const MOBILE_ADMIN_GOOGLE_EMAILS = [
+  'angch@tertiaryinfotech.com',
+  'danny@tertiaryinfotech.com',
+  'deepa@tertiaryinfotech.com',
+  'angss@tertiaryinfotech.com',
+  'tansc@tertiaryinfotech.com',
+];
+
+/** Who may use admin sign-in: the list above plus any in env MOBILE_ADMIN_GOOGLE_EMAILS (comma separated). */
 export function mobileAdminEmails(): string[] {
-  const raw = process.env.MOBILE_ADMIN_GOOGLE_EMAILS || 'angch@tertiaryinfotech.com';
-  return raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const extra = (process.env.MOBILE_ADMIN_GOOGLE_EMAILS || '').split(',');
+  return [...new Set([...MOBILE_ADMIN_GOOGLE_EMAILS, ...extra].map(s => s.trim().toLowerCase()).filter(Boolean))];
 }
 
 let schema: Promise<unknown> | undefined;

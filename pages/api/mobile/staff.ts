@@ -9,6 +9,8 @@ import { normalizeSgPhone } from '../../../lib/trainerWhatsapp';
 //                                                     with trainers, learner count and status
 //                                                     (Current, Upcoming and the admin calendar)
 //   GET ?view=courses                                 admin / developer: the course catalogue
+//   GET ?view=runs&courseId=<id>                      admin: every run of one course (newest
+//                                                     first) with its status and trainers
 //   GET ?view=trainers                                admin: trainers with a WhatsApp number, so
 //                                                     the admin can message one about a class
 // Writes (class status, trainer assignment) stay on the website, where SSG is updated.
@@ -73,12 +75,54 @@ export default withAuth(async (req: AuthedApiRequest, res: NextApiResponse) => {
                 (SELECT min(cr.start_date)::text FROM course_run cr
                   WHERE cr.course_id = c.id AND NOT coalesce(cr.is_deleted,false)
                     AND cr.start_date >= current_date
-                    AND lower(coalesce(cr.class_status::text,'')) NOT IN ('cancelled','canceled')) AS "nextRun"
+                    AND lower(coalesce(cr.class_status::text,'')) NOT IN ('cancelled','canceled')) AS "nextRun",
+                coalesce(rc.total, 0) AS "totalRuns", coalesce(rc.confirmed, 0) AS "confirmedRuns",
+                coalesce(rc.pending, 0) AS "pendingRuns", coalesce(rc.cancelled, 0) AS "cancelledRuns"
            FROM course c
+           LEFT JOIN (
+             SELECT cr.course_id,
+                    count(*)::int AS total,
+                    (count(*) FILTER (WHERE lower(cr.class_status::text) = 'confirmed'))::int AS confirmed,
+                    (count(*) FILTER (WHERE lower(cr.class_status::text) LIKE 'cancel%'))::int AS cancelled,
+                    (count(*) FILTER (WHERE lower(coalesce(cr.class_status::text,'')) <> 'confirmed'
+                                        AND lower(coalesce(cr.class_status::text,'')) NOT LIKE 'cancel%'))::int AS pending
+               FROM course_run cr WHERE NOT coalesce(cr.is_deleted,false) GROUP BY cr.course_id
+           ) rc ON rc.course_id = c.id
           ORDER BY c.title
           LIMIT 3000`
       )).rows;
       return res.json({ courses: rows });
+    }
+
+    if (view === 'runs') {
+      if (!isAdmin) return res.status(403).json({ error: 'Admin only' });
+      const courseId = String(req.query.courseId || '');
+      if (!/^[0-9a-f-]{36}$/i.test(courseId)) return res.status(400).json({ error: 'Choose a course.' });
+      const rows = (await pool.query(
+        `SELECT cr.id::text, cr.course_run_id AS "runCode", c.title,
+                coalesce(nullif(c.new_course_code,''), c.course_code) AS code,
+                cr.start_date::text AS "startDate", cr.end_date::text AS "endDate",
+                cr.class_type AS format, cr.class_status::text AS "classStatus",
+                (cr.virtual_meeting_link IS NOT NULL AND cr.virtual_meeting_link <> '') AS "hasMeetingLink",
+                coalesce(
+                  (SELECT array_agg(DISTINCT crt.trainer_name ORDER BY crt.trainer_name)
+                     FROM course_run_trainer crt
+                    WHERE crt.course_run_id = cr.id AND nullif(crt.trainer_name,'') IS NOT NULL),
+                  CASE WHEN nullif(cr.assigned_trainer_name,'') IS NOT NULL THEN ARRAY[cr.assigned_trainer_name] END,
+                  CASE WHEN nullif(cr.tpg_assigned_trainer_name,'') IS NOT NULL THEN ARRAY[cr.tpg_assigned_trainer_name] END,
+                  ARRAY[]::text[]
+                ) AS trainers,
+                (SELECT count(*)::int FROM enrollment e
+                  WHERE e.course_run_id = cr.id
+                    AND lower(coalesce(e.enrolment_status,'')) NOT IN ('cancelled','canceled','withdrawn')) AS learners,
+                ${VENUE_COLUMNS}
+           FROM course_run cr JOIN course c ON c.id = cr.course_id
+          WHERE cr.course_id = $1::uuid AND NOT coalesce(cr.is_deleted,false)
+          ORDER BY cr.start_date DESC NULLS LAST, cr.course_run_id DESC
+          LIMIT 500`,
+        [courseId]
+      )).rows;
+      return res.json({ classes: withVenue(rows, await providerAddress()) });
     }
 
     if (view === 'trainers') {
