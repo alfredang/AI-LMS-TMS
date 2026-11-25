@@ -8,6 +8,7 @@ import { useSessionReschedule } from '@/hooks/useSessionReschedule';
 import { useScheduleChangeConfirm } from '@/hooks/useScheduleChangeConfirm';
 import SessionRescheduleModal from './SessionRescheduleModal';
 import SearchableSelect from '../ui/SearchableSelect';
+import { maskNricFirstDigits } from '@utils/index';
 import { extractCourseRun, normalizeCourseRunResponse } from '@/lib/ssg/course-run-response';
 
 // Helper to safely extract local YYYY-MM-DD from a date string (avoids timezone shift bugs from .slice(0, 10) on UTC strings)
@@ -3757,7 +3758,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     }
                                                 };
                                                 showConfirmPopup(
-                                                    `Assign trainer ${localName} (NRIC: ${nric}) to TPG via SSG API?`,
+                                                    `Assign trainer ${localName} (NRIC: ${maskNricFirstDigits(nric)}) to TPG via SSG API?`,
                                                     async () => {
                                                         setLoading(true);
                                                         try {
@@ -3891,7 +3892,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         <div>
                                                             <span className="font-bold text-on-surface-secondary">NRIC:</span>{' '}
                                                             {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
-                                                                <span className="text-on-surface font-mono">{trainerDetail.nric}</span>
+                                                                <span className="text-on-surface font-mono">{maskNricFirstDigits(trainerDetail.nric)}</span>
                                                             ) : (
                                                                 <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
                                                             )}
@@ -3938,7 +3939,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <div>
                                                 <span className="font-bold text-on-surface-secondary">NRIC:</span>{' '}
                                                 {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
-                                                    <span className="text-on-surface font-mono">{trainerDetail.nric}</span>
+                                                    <span className="text-on-surface font-mono">{maskNricFirstDigits(trainerDetail.nric)}</span>
                                                 ) : (
                                                     <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
                                                 )}
@@ -4191,7 +4192,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         >
                                             <option value="">-- Reassign TPG Trainer --</option>
                                             {availableTrainers.filter((t: any) => t.nric && t.nric !== 'NA').map((t: any) => (
-                                                <option key={t.user_id} value={t.user_id}>{t.trainer_name} (NRIC: {t.nric})</option>
+                                                <option key={t.user_id} value={t.user_id}>{t.trainer_name} (NRIC: {maskNricFirstDigits(t.nric)})</option>
                                             ))}
                                         </select>
                                         <Button
@@ -4220,7 +4221,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     return;
                                                 }
 
-                                                showConfirmPopup(`Assign ${trainerName} (NRIC: ${nric}) as TPG trainer via SSG?`, async () => {
+                                                showConfirmPopup(`Assign ${trainerName} (NRIC: ${maskNricFirstDigits(nric)}) as TPG trainer via SSG?`, async () => {
                                                     setLoading(true);
                                                     try {
                                                         const requestBody = {
@@ -4287,7 +4288,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                 {tpgId && (
                                                     <div>
                                                         <span className="font-bold text-on-surface-secondary">NRIC:</span>{' '}
-                                                        <span className="text-on-surface font-mono">{tpgId}</span>
+                                                        <span className="text-on-surface font-mono">{maskNricFirstDigits(tpgId)}</span>
                                                     </div>
                                                 )}
                                             </div>

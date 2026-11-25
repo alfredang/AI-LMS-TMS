@@ -45,6 +45,18 @@ export function maskNric(nric: string): string {
 }
 
 /**
+ * Mask the first 4 digits of an NRIC/FIN for display, keeping the prefix letter
+ * and the tail: S1712205C → S****205C. Display only — never send the result to SSG.
+ */
+export function maskNricFirstDigits(nric: string | null | undefined): string {
+  const raw = String(nric || '').trim();
+  if (!raw) return '';
+  const start = /^[A-Za-z]/.test(raw) ? 1 : 0;
+  const end = Math.min(start + 4, raw.length);
+  return raw.slice(0, start) + '*'.repeat(end - start) + raw.slice(end);
+}
+
+/**
  * Format phone number for display
  */
 export function formatPhoneNumber(phone: string): string {
