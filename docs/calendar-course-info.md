@@ -37,7 +37,7 @@ Calendar write guards, with `sendUpdates: 'none'`. It retains compatibility with
 the separate, unfinished operational writer's ownership fence without deploying
 or enabling that work.
 
-The pass is scoped to TGS classes and writes only real numeric run IDs. A mapped
+The funded path is scoped to TGS classes and writes only real numeric run IDs. A mapped
 class can receive title/code first and its run ID later; staged/internal IDs are
 never emitted by this pass. C-code/MMS classes are not assigned SSG IDs.
 Course-code history is recognised, and the run's code uses the
@@ -71,6 +71,77 @@ failure in this pass does not block the existing enrolment processing. The pass
 runs before the SSG enrolment request so an upstream enrolment timeout does not
 prevent description enrichment; its results are logged even if that later request
 fails.
+
+## Non-funded C-code classes (26 November 2026)
+
+The same description refresh also reads existing C-code Calendar events over the
+same Singapore-time window: today through today + 365 days, inclusive. It uses
+`GET /courses/api_schedule?sku=C1097` on the configured tenant website, with the
+existing Company Settings `tertiary_courses_sg_url` (or `magento_backend_url`)
+and `tertiary_courses_sg_api_key`. The separate MMS handover credential is not used.
+Credentials stay on the server. No scheduler record, cron expression, endpoint,
+Google Apps Script project, trigger or deployment is added or changed.
+
+The existing formatter adds `Course Title`, `Course Code` and `MMS Class ID`.
+The MMS human class label is never placed in the SSG `Course Run ID` field, and
+no numeric MMS database ID is invented. A uniquely matched schedule without an
+MMS class ID may receive its title/code first, with the ID completed later. All
+existing notes/HTML, valid populated values, attendees, RSVP state, times, links,
+locations and ownership guards retain the existing preservation policy.
+
+Matching requires a labelled code or standalone legacy code in the description
+or location, a unique compatible MMS class, explicit teaching dates and matching
+Singapore start/end times. Labels such as `27/30 Nov 2026 (Fri/Mon)` identify two
+teaching days; they never imply sessions on 28/29 November. Same-month day lists,
+explicit cross-month/year day lists, ISO day lists and verified single-day bounds
+are supported. Ranges and unparseable/absent multi-day labels are deferred. A
+recurring series must contain exactly the expected teaching dates in the observed
+window, with compatible code/ID/time evidence on every instance. Title similarity
+alone, incomplete series, conflicting codes/IDs and ambiguous classes never suffice.
+Targeted SSG post-import refreshes retain their existing TGS-only scope.
+
+Per-SKU responses are cached within one invocation, with up to four initial
+requests in flight and a six-second timeout per HTTP request. One additional
+cached source read validates each course before its first proposed write. HTTP
+redirects are refused; missing settings, API/auth failures, invalid JSON and
+malformed data produce credential-free event outcomes without stopping funded
+updates or the existing enrolment job. The MMS API currently excludes already
+started classes and caps materialized runs at 50; a potentially capped response
+is deferred rather than treated as complete. This extension does not change MMS
+API coverage, create classes, synchronize registrations or send messages.
+
+Existing totals include the new C-code outcomes, with a `nonFunded` subtotal and
+up to 100 shared event-level details. Missing IDs, unavailable teaching dates,
+unmatched classes, conflicts and API failures have explicit reasons. Updates use
+the existing lock, description-only conditional patch, silent notification policy
+and readback. An unchanged check never advances the footer timestamp.
+
+`syncExistingCalendarCourseInfo({ dryRun: true })` uses the existing read client
+and returns `would_update` details with `proposedDescription`; it never calls
+the Calendar patch function. Proposals count as skipped, not verified updates.
+No public route or extra task is introduced for this preview.
+
+Local verification: 38 focused Calendar/Meet tests passed, the focused TypeScript
+comparison reported zero diagnostics, API auth coverage passed (662 routes), and
+the direct production webpack build completed with exit 0. The standard build
+wrapper encounters an existing Windows path-separator mismatch in the design-token
+guard; running that guard with portable path keys in memory passes without changing
+the baseline or repository guard. A read-only preview of the two observed C1097
+occurrences proposed `MMS Class ID: C004124` with zero conflicts/errors and zero writes.
+
+Read-only evidence on 26 November 2026: the live MMS schedule API returned
+`C004124` for C1097 on 27/30 November, 09:30–17:30; both Calendar occurrences
+still had only `C1097`. The 23 registered Google projects had saved source with
+no coverage gaps. Add Orders to Calendar (script
+`1asgHHBNg9nyJqtLavNdzVuUP2pkjKvbzhcmOKq6NnQj8btHBvSPMOFTY`) was refreshed at
+03:42:23 UTC, hash `2bdffbcafcdcac81123a6754799e2d3617515a14aa989e98a3a9d45d276d1440`.
+Its `Code.gs:250` / `createNewEvent` writes only the course code in a new series
+description; `Code.gs:126–129` / `detectNewOrders` only adds the guest to an existing
+match. Those source observations do not establish current trigger activation.
+The last dated scheduler evidence (11 November) had the existing enrolment task
+enabled every three hours. The current TMS operational API credential returned
+401 on 26 November, so current scheduler state and live TMS-to-MMS mapping remain
+unverified. This local extension is not evidence of production deployment.
 
 ## Verification and existing automation scope
 

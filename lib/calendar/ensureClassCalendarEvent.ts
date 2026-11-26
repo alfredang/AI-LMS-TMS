@@ -1,6 +1,6 @@
 import type { calendar_v3 } from 'googleapis';
 import pool from '../db';
-import { getCalendarClient } from './calendarClient';
+import { getCalendarClient, getCalendarReadClient } from './calendarClient';
 import { findEventOnDate, stripPrefixes, eventBelongsToRun } from './eventMatch';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 import { RUN_COURSE_CODE_SQL } from '../courseCode';
@@ -221,8 +221,8 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
  * Fully mapped/ongoing classes and classes without learners or local sessions
  * can be enriched. This path never creates/adopts events or modifies participants.
  */
-export async function syncExistingCalendarCourseInfo(options: { courseRunId?: string; daysAhead?: number; now?: Date } = {}): Promise<CourseInfoRefreshResult> {
-  const client = await getCalendarClient();
+export async function syncExistingCalendarCourseInfo(options: { courseRunId?: string; daysAhead?: number; now?: Date; dryRun?: boolean } = {}): Promise<CourseInfoRefreshResult> {
+  const client = await (options.dryRun ? getCalendarReadClient() : getCalendarClient());
   if (!client) return { ...emptyCourseInfoRefresh(), status: 'skipped', reason: 'calendar sync disabled' };
   const now = options.now || new Date();
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: SGT, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
@@ -252,9 +252,29 @@ export async function syncExistingCalendarCourseInfo(options: { courseRunId?: st
       courseCodeAliases: row.aliases, active: row.active, startDate: row.start_date, endDate: row.end_date,
       sessionDates: (row.dates as string[]).map(value => sessionIso(value)!).filter(Boolean), mappings: row.mappings }));
   };
+  // Same Company Settings connection used by the existing website schedule reader.
+  // Resolve lazily: tenants/events without C-code classes do not need MMS credentials.
+  let mmsConnection: Promise<{ baseUrl: string; apiKey: string }> | undefined;
   const { calendar, calendarId } = client;
   return refreshExistingCalendarCourseInfo({
     runs: readRuns,
+    mmsCourse: async code => {
+      mmsConnection ||= pool.query(`SELECT tertiary_courses_sg_url, tertiary_courses_sg_api_key, magento_backend_url FROM training_provider LIMIT 1`)
+        .then(result => ({ baseUrl: result.rows[0]?.tertiary_courses_sg_url || result.rows[0]?.magento_backend_url || '',
+          apiKey: result.rows[0]?.tertiary_courses_sg_api_key || '' }));
+      const { baseUrl, apiKey } = await mmsConnection;
+      if (!baseUrl || !apiKey) throw new Error('mms_api_unconfigured');
+      try {
+        const url = new URL(baseUrl.replace(/\/+$/, '') + '/courses/api_schedule');
+        if (url.username || url.password || url.hash || url.search || (url.protocol !== 'https:'
+          && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error('invalid_connection');
+        url.searchParams.set('sku', code);
+        const response = await fetch(url, { headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
+          cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(6000) });
+        if (!response.ok) throw new Error('mms_api_unavailable');
+        return await response.json();
+      } catch { throw new Error('mms_api_unavailable'); } // Never expose keys, URLs or upstream response bodies.
+    },
     events: async () => {
       const events: calendar_v3.Schema$Event[] = [], seen = new Set<string>();
       let pageToken: string | undefined;
@@ -273,7 +293,7 @@ export async function syncExistingCalendarCourseInfo(options: { courseRunId?: st
       await calendar.events.patch({ calendarId, eventId, requestBody: { description }, sendUpdates: 'none' }, { headers: { 'If-Match': etag } });
     },
     lock: withRunLock,
-  }, { courseRunId: options.courseRunId, now: options.now });
+  }, { courseRunId: options.courseRunId, now: options.now, dryRun: options.dryRun });
 }
 
 /** Existing sync/import callers notify this helper after committing their source data.

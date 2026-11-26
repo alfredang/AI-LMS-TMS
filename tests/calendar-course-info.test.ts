@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { calendar_v3 } from 'googleapis';
 import { enrichCalendarCourseDescription, calendarUpdatedFooter } from '../lib/calendar/courseInfoDescription';
-import { refreshExistingCalendarCourseInfo, type CourseInfoRun, type CourseInfoRefreshDependencies } from '../lib/calendar/courseInfoRefresh';
+import { mmsTeachingDates, refreshExistingCalendarCourseInfo, type CourseInfoRun, type CourseInfoRefreshDependencies } from '../lib/calendar/courseInfoRefresh';
 
 const now = new Date('2026-11-23T07:00:00Z');
 const info = { title: 'Business Innovation with Agentic AI and AI Agents', courseCode: 'TGS-2023037472', courseRunId: '1449949' };
@@ -202,4 +202,135 @@ test('local HTTP transport sends only a conditional description patch and preser
     assert.equal(result.updated, 1); assert.equal(requests, 1);
     assert.deepEqual(remote.attendees, event().attendees); assert.deepEqual(remote.start, event().start);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+const mmsNow = new Date('2026-11-26T03:00:00Z');
+const mmsClass = { class_id: 'C004124', raw: '27/30 Nov 2026 (Fri/Mon)', start_date: '2026-11-27', end_date: '2026-11-30',
+  time: '09:30-17:30', status: 'Pending', trainer: null, venue: null, mode: 'Classroom' };
+const mmsPayload = (classes: unknown[] = [mmsClass]) => ({ data: { course_code: 'C1097',
+  course_title: 'Excel Power Query and Power Pivot Masterclass', classes_count: classes.length, classes } });
+function mmsFixture(classes: unknown[] = [mmsClass]) {
+  const entries = [27, 30].map(day => event({ id: `mms-${day}`, recurringEventId: 'mms-series', description: 'C1097',
+    summary: day === 30 ? 'Day 2 - Excel Power Query and Power Pivot Masterclass' : 'Excel Power Query and Power Pivot Masterclass',
+    start: { dateTime: `2026-11-${day}T09:30:00+08:00` }, end: { dateTime: `2026-11-${day}T17:30:00+08:00` } }));
+  const f = fixture([], entries);
+  let reads = 0;
+  f.deps.mmsCourse = async code => { assert.equal(code, 'C1097'); reads++; return structuredClone(mmsPayload(classes)); };
+  return { ...f, reads: () => reads };
+}
+
+test('MMS dates retain explicit scattered teaching days and reject inferred ranges or invalid dates', () => {
+  assert.deepEqual(mmsTeachingDates('27/30 Nov 2026 (Fri/Mon)', '2026-11-27', '2026-11-30'), ['2026-11-27', '2026-11-30']);
+  assert.deepEqual(mmsTeachingDates('29 Jan / 1 Feb 2027 (Fri/Mon)', '2027-01-29', '2027-02-01'), ['2027-01-29', '2027-02-01']);
+  assert.deepEqual(mmsTeachingDates('30 Dec 2026 / 2 Jan 2027', '2026-12-30', '2027-01-02'), ['2026-12-30', '2027-01-02']);
+  assert.deepEqual(mmsTeachingDates(null, '2026-11-27', '2026-11-27'), ['2026-11-27']);
+  assert.deepEqual(mmsTeachingDates('2026-11-27,2026-11-30', '2026-11-27', '2026-11-30'), ['2026-11-27', '2026-11-30']);
+  for (const raw of [null, '27-30 Nov 2026', '27/28 Nov 2026', '27/27/30 Nov 2026', '30/27 Nov 2026', '27/31 Nov 2026', '27 Nov 2026, pending']) {
+    assert.equal(mmsTeachingDates(raw, '2026-11-27', '2026-11-30'), null);
+  }
+});
+
+test('existing refresh enriches both C1097 instances, keeps the legacy text and uses a separate MMS ID', async () => {
+  const f = mmsFixture();
+  const before = structuredClone(f.remote.get('mms-27'));
+  const result = await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow });
+  assert.equal(result.updated, 2); assert.equal(f.reads(), 2); // initial + one cached pre-write source read
+  assert.deepEqual(result.nonFunded, { scanned: 2, updated: 2, unchanged: 0, conflicts: 0, skipped: 0, errors: 0 });
+  const { description, etag, ...after } = f.remote.get('mms-27')!;
+  const { description: oldDescription, etag: oldEtag, ...original } = before!;
+  assert.deepEqual(after, original);
+  assert.ok(description!.startsWith('C1097\n\nCourse Title: Excel Power Query'));
+  assert.match(description!, /Course Code: C1097\nMMS Class ID: C004124/);
+  assert.doesNotMatch(description!, /Course Run ID|Trainer:|Status:|Venue:/);
+  f.deps.events = async () => [...f.remote.values()];
+  const again = await refreshExistingCalendarCourseInfo(f.deps, { now: new Date('2026-11-26T06:00:00Z') });
+  assert.equal(again.unchanged, 2); assert.equal(f.patches.length, 2);
+  assert.equal(f.remote.get('mms-27')!.description, description);
+});
+
+test('missing MMS class IDs allow title/code only, with the class ID added after it becomes available', async () => {
+  const f = mmsFixture([{ ...mmsClass, class_id: null }]);
+  const first = await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow });
+  assert.equal(first.updated, 2);
+  assert.ok(first.details.every(d => d.reason === 'mms_class_id_unavailable'));
+  assert.doesNotMatch(f.remote.get('mms-27')!.description!, /MMS Class ID|Course Run ID|N\/A/);
+  f.deps.events = async () => [...f.remote.values()];
+  f.deps.mmsCourse = async () => mmsPayload();
+  assert.equal((await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow })).updated, 2);
+  assert.equal((f.remote.get('mms-27')!.description!.match(/Course Title:/g) || []).length, 1);
+  assert.match(f.remote.get('mms-27')!.description!, /MMS Class ID: C004124/);
+});
+
+test('MMS series matching rejects incorrect/missing/extra days, times and conflicting IDs on any instance', async () => {
+  for (const change of [
+    { start: { dateTime: '2026-11-28T09:30:00+08:00' }, end: { dateTime: '2026-11-28T17:30:00+08:00' } },
+    { end: { dateTime: '2026-11-30T18:30:00+08:00' } },
+    { end: { dateTime: '2026-11-30T17:30:59+08:00' } },
+    { end: { dateTime: '2026-12-01T17:30:00+08:00' } },
+    { description: 'C1097\nMMS Class ID: C999999' },
+    { description: 'C1097\nCourse Run ID: 1449949' },
+    { description: 'C1097\nCourse Code: C9999' },
+  ]) {
+    const f = mmsFixture(); const changed = { ...f.remote.get('mms-30'), ...change };
+    f.remote.set('mms-30', changed); f.deps.events = async () => [...f.remote.values()];
+    await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow });
+    assert.equal(f.patches.length, 0, JSON.stringify(change));
+  }
+  const missing = mmsFixture(); missing.remote.delete('mms-30'); missing.deps.events = async () => [...missing.remote.values()];
+  assert.equal((await refreshExistingCalendarCourseInfo(missing.deps, { now: mmsNow })).updated, 0);
+  const extra = mmsFixture(); extra.remote.set('extra', { ...extra.remote.get('mms-27'), id: 'extra' }); extra.deps.events = async () => [...extra.remote.values()];
+  assert.equal((await refreshExistingCalendarCourseInfo(extra.deps, { now: mmsNow })).updated, 0);
+});
+
+test('MMS ambiguities, malformed responses and incomplete source schedules never produce an ID', async () => {
+  for (const classes of [[mmsClass, { ...mmsClass, class_id: 'SG009999' }], [{ ...mmsClass, raw: null }],
+    [{ ...mmsClass, time: 'bad' }], Array.from({ length: 50 }, () => mmsClass)]) {
+    const f = mmsFixture(classes);
+    const result = await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow });
+    assert.equal(f.patches.length, 0); assert.ok(result.conflicts + result.skipped + result.errors > 0);
+  }
+  const wrong = mmsFixture(); wrong.deps.mmsCourse = async () => ({ data: { ...mmsPayload().data, course_code: 'C1098' } });
+  assert.equal((await refreshExistingCalendarCourseInfo(wrong.deps, { now: mmsNow })).errors, 2);
+});
+
+test('MMS failures are isolated from funded updates and never expose upstream secrets', async () => {
+  const f = mmsFixture();
+  f.remote.set('event-one', event()); f.deps.events = async () => [...f.remote.values()]; f.deps.runs = async () => [run()];
+  f.deps.mmsCourse = async () => { throw new Error('https://secret.example?apiKey=do-not-log'); };
+  const result = await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow });
+  assert.equal(result.updated, 1); assert.equal(result.nonFunded!.errors, 2);
+  assert.doesNotMatch(JSON.stringify(result), /secret|do-not-log/);
+  assert.ok(result.details.some(d => d.reason === 'mms_api_unavailable'));
+});
+
+test('MMS fresh source/event changes, ownership and conditional write conflicts defer the update', async () => {
+  const changed = mmsFixture(); let reads = 0;
+  changed.deps.mmsCourse = async () => mmsPayload([{ ...mmsClass, class_id: ++reads === 1 ? 'C004124' : 'C004125' }]);
+  assert.equal((await refreshExistingCalendarCourseInfo(changed.deps, { now: mmsNow })).conflicts, 2);
+  assert.equal(changed.patches.length, 0);
+  const remote = mmsFixture(); remote.remote.get('mms-27')!.description = 'C1097\nMMS Class ID: C999999';
+  assert.equal((await refreshExistingCalendarCourseInfo(remote.deps, { now: mmsNow })).conflicts, 1);
+  for (const error of [Object.assign(new Error('version'), { code: 412 }), Object.assign(new Error('owned'), { name: 'LegacyCalendarWriteQueuedError' })]) {
+    const f = mmsFixture(); let attempts = 0; f.deps.patch = async () => { attempts++; throw error; };
+    const result = await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow });
+    assert.equal(result.updated, 0); assert.equal(attempts, 2);
+  }
+});
+
+test('MMS HTML placeholders preserve markup; existing IDs and managed blocks are protected', () => {
+  const fields = { title: 'Power Query & Pivot', courseCode: 'C1097', mmsClassId: 'C004124' };
+  const result = enrichCalendarCourseDescription('<p>Keep notes</p><b>MMS Class ID:</b> Pending', fields, mmsNow);
+  assert.equal(result.status, 'updated'); assert.match(result.description, /<b>MMS Class ID:<\/b>\s*C004124/);
+  assert.match(result.description, /Power Query &amp; Pivot/);
+  for (const previous of ['MMS Class ID: C999999', '<!-- TMS CLASS v1 BEGIN -->']) {
+    assert.equal(enrichCalendarCourseDescription(previous, fields, mmsNow).status, 'conflict');
+  }
+});
+
+test('dry-run previews the same C1097 proposals and performs zero Calendar patches', async () => {
+  const f = mmsFixture();
+  const result = await refreshExistingCalendarCourseInfo(f.deps, { now: mmsNow, dryRun: true });
+  assert.equal(result.updated, 0); assert.equal(f.patches.length, 0);
+  assert.equal(result.details.filter(d => d.status === 'would_update').length, 2);
+  assert.ok(result.details.every(d => d.proposedDescription!.includes('MMS Class ID: C004124')));
 });
