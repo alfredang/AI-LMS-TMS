@@ -118,8 +118,16 @@ async function ensureReviewColumns(): Promise<void> {
 /** Posts each not-yet-posted response of an ended, confirmed class to the storefront as a review. */
 async function postPendingReviews(): Promise<{ posted: number; held: number; skipped: number; failed: number }> {
   const stats = { posted: 0, held: 0, skipped: 0, failed: 0 };
+  // One review per learner per class: the latest submission wins, and a learner
+  // who already has a review (or a legacy row) for the class is not posted again.
   const { rows } = await pool.query(`
-    SELECT fr.id, fr.answers, fr.learner_name, fr.course_run_id
+    SELECT fr.id, fr.answers, fr.learner_name, fr.course_run_id,
+           (ROW_NUMBER() OVER (PARTITION BY fr.course_run_id, lower(trim(coalesce(fr.learner_name, fr.id::text)))
+                               ORDER BY fr.submitted_at DESC) > 1
+            OR EXISTS (SELECT 1 FROM feedback_form_response o
+                        WHERE o.course_run_id = fr.course_run_id AND o.id <> fr.id
+                          AND lower(trim(o.learner_name)) = lower(trim(fr.learner_name))
+                          AND o.storefront_review_status IN ('approved', 'pending', 'legacy'))) AS duplicate_learner
     FROM feedback_form_response fr
     JOIN course_run cr ON cr.id = fr.course_run_id
     WHERE (fr.storefront_review_status IS NULL OR fr.storefront_review_status = 'error')
@@ -128,6 +136,11 @@ async function postPendingReviews(): Promise<{ posted: number; held: number; ski
     ORDER BY fr.submitted_at ASC
   `);
   for (const r of rows) {
+    if (r.duplicate_learner) {
+      await pool.query(`UPDATE feedback_form_response SET storefront_review_status = 'skipped:duplicate_learner' WHERE id = $1`, [r.id]);
+      stats.skipped++;
+      continue;
+    }
     const result = await postFeedbackReview({
       responseId: r.id,
       courseRunId: r.course_run_id,
