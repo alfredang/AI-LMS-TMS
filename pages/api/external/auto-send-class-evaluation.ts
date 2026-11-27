@@ -26,7 +26,7 @@ if (g.__classEvaluationEmailRunning === undefined) g.__classEvaluationEmailRunni
  *
  * PURPOSE:
  *   Compiles the learner feedback (Course Feedback form responses) for every
- *   CONFIRMED course run that has ENDED, and emails the compiled evaluation to
+ *   CONFIRMED course run that ENDED TODAY (SGT), and emails the compiled evaluation to
  *   the run's trainer(s) — one email per course run, learners anonymised as
  *   "Learner 1", "Learner 2", …:
  *
@@ -44,7 +44,9 @@ if (g.__classEvaluationEmailRunning === undefined) g.__classEvaluationEmailRunni
  *
  *   Each response is emailed once: after a successful send its
  *   trainer_emailed_at is stamped, so tomorrow's run only picks up new
- *   responses. Runs whose class has not ended yet are left for a later day.
+ *   responses. Only classes that ended today are emailed (user rule
+ *   2026-11-28): a class that ended on an earlier day is never emailed,
+ *   including feedback that arrives after its 6:30 PM run.
  *
  * RECIPIENTS (user rule 2026-11-27): To = the class trainer(s); Cc = this
  *   task's CC list (scheduler_config.alert_recipients, edited in Scheduler),
@@ -273,7 +275,8 @@ async function _runAutomationInner() {
       return { success: true, stats: { runsEmailed: 0, responsesEmailed: 0, runsSkipped: 0, errors: 0 } };
     }
 
-    // Un-emailed responses for CONFIRMED runs whose class has ended (SGT).
+    // Un-emailed responses for CONFIRMED runs whose class ended TODAY (SGT).
+    // Classes that ended on an earlier day are never emailed (user rule 2026-11-28).
     const responsesResult = await pool.query(`
       SELECT fr.id, fr.answers, fr.submitted_at,
              cr.id AS run_uuid, cr.course_run_id AS run_code,
@@ -283,7 +286,7 @@ async function _runAutomationInner() {
       JOIN course c ON c.id = cr.course_id
       WHERE fr.trainer_emailed_at IS NULL
         AND cr.class_status = 'Confirmed'
-        AND cr.end_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+        AND cr.end_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
       ORDER BY cr.id, fr.submitted_at ASC
     `);
 
@@ -294,7 +297,7 @@ async function _runAutomationInner() {
       byRun.set(row.run_uuid, list);
     }
 
-    console.log(`[auto-send-class-evaluation] ${responsesResult.rows.length} pending response(s) across ${byRun.size} ended run(s)`);
+    console.log(`[auto-send-class-evaluation] ${responsesResult.rows.length} pending response(s) across ${byRun.size} run(s) that ended today`);
 
     let runsEmailed = 0;
     let responsesEmailed = 0;
