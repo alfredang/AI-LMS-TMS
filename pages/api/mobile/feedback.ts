@@ -2,7 +2,6 @@ import type { NextApiResponse } from 'next';
 import { withAuth, AuthedApiRequest } from '../../../lib/auth/withAuth';
 import pool from '../../../lib/db';
 import { DEFAULT_FEEDBACK_FORM_SECTIONS } from '../../../lib/feedbackFormDefaults';
-import { postFeedbackReview } from '../../../lib/feedback/postReview';
 import { isEnrolled, UUID_RE } from '../../../lib/mobile/app';
 
 // Course feedback for the learner app: the academy's own form for one of the learner's classes.
@@ -52,12 +51,11 @@ export default withAuth(async (req: AuthedApiRequest, res: NextApiResponse) => {
       if (!text && field.required) return res.status(400).json({ error: `Please answer: ${field.label}` });
       if (text) answers[field.id] = text;
     }
-    const saved = (await pool.query(
+    await pool.query(
       `INSERT INTO feedback_form_response (template_id, course_run_id, user_id, learner_email, learner_name, answers)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING id`,
-      [tmpl?.id || null, runId, user.id, me.email, me.full_name, JSON.stringify(answers)])).rows[0];
-    // Same follow-on as the web form; a storefront problem never fails the learner's submission.
-    await postFeedbackReview({ responseId: saved.id, courseRunId: runId, courseCode: run.code, learnerName: me.full_name || null, answers }).catch(() => null);
+      [tmpl?.id || null, runId, user.id, me.email, me.full_name, JSON.stringify(answers)]);
+    // The storefront review is posted by the daily 6:30 PM class-evaluation job.
     return res.status(201).json({ success: true });
   } catch {
     return res.status(500).json({ error: 'Your feedback could not be sent. Please try again.' });

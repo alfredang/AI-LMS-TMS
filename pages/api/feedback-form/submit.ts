@@ -77,19 +77,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ]
     );
 
-    // Publish to the storefront as a product review. Deliberately awaited but
-    // never allowed to fail the submission: the learner's feedback is already
-    // saved above, and the storefront is a separate system that may be slow or
-    // down. The call is idempotent on the response id, so it is safe to replay.
-    const review = await postFeedbackReview({
-      responseId: result.rows[0].id,
-      courseRunId: resolvedRunId,
-      courseCode,
-      learnerName: learner_name || null,
-      answers,
-    }).catch(err => ({ posted: false, error: String(err) }));
+    // Storefront review. A class in the LMS gets its reviews from the daily
+    // 6:30 PM class-evaluation job (pages/api/external/auto-send-class-evaluation.ts),
+    // posted with its evaluation email. A calendar-only class has no course run
+    // for that job to find, so its review is posted here. Never allowed to fail
+    // the submission; idempotent on the response id.
+    const review = resolvedRunId
+      ? { posted: false as const, skipped: 'posted_by_evaluation_job' }
+      : await postFeedbackReview({
+          responseId: result.rows[0].id,
+          courseRunId: null,
+          courseCode,
+          learnerName: learner_name || null,
+          answers,
+        }).catch(err => ({ posted: false, error: String(err) }));
 
-    if (!review.posted && review.error) {
+    if (!review.posted && 'error' in review && review.error) {
       console.error('[feedback] storefront review post failed', {
         response_id: result.rows[0].id,
         error: review.error,

@@ -302,7 +302,7 @@ async function seedDefaults() {
         {
             id: 'auto_send_class_evaluation',
             name: 'Auto Send Class Evaluation to Trainers',
-            description: 'Compiles learner Course Feedback responses for confirmed course runs that have ended and emails the compiled class evaluation to the trainer(s), anonymised as Learner 1, Learner 2, etc. Each response is emailed once.',
+            description: 'Daily at 6:30 PM SGT: compiles learner Course Feedback responses for confirmed course runs that have ended and emails the class evaluation to the trainer(s), anonymised as Learner 1, Learner 2, etc., copying the CC Recipients below (blank = the Feedback Email CC). A class with no trainer on record goes to the CC list. Each response is also posted to the storefront as a course review (needs STOREFRONT_REVIEW_API_URL/KEY). Each response is emailed and posted once.',
             cron_expression: '30 18 * * *', // 6:30 PM SGT daily
             api_endpoint: '/api/external/auto-send-class-evaluation',
         },

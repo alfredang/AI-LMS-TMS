@@ -28,8 +28,24 @@ const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_
 // Tasks that support days-in-advance setting
 const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'sync_google_calendar', 'auto_send_trainer_invitations'];
 
-// Tasks that email an alert to a configurable list (blank = the company email)
-const ALERT_RECIPIENT_TASKS = ['detect_duplicate_course_runs'];
+// Tasks that email a configurable list of addresses (scheduler_config.alert_recipients)
+const ALERT_RECIPIENT_TASKS = ['detect_duplicate_course_runs', 'auto_send_class_evaluation'];
+
+// Per-task wording for that list; tasks not named here use the alert wording.
+const RECIPIENT_FIELD_COPY: Record<string, { label: string; placeholder: string; saved: string; cleared: string }> = {
+    auto_send_class_evaluation: {
+        label: 'CC Recipients',
+        placeholder: 'Copied on every class evaluation. Blank = Feedback Email CC. Separate with commas.',
+        saved: 'Class evaluations will be copied to',
+        cleared: 'CC recipients cleared - class evaluations copy the Feedback Email CC list',
+    },
+};
+const DEFAULT_RECIPIENT_FIELD_COPY = {
+    label: 'Alert Recipients',
+    placeholder: 'Blank = company email. Separate several with commas.',
+    saved: 'Alerts will be sent to',
+    cleared: 'Alert recipients cleared - alerts go to the company email',
+};
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
@@ -174,6 +190,7 @@ const AlertRecipientsField: React.FC<{
     const [saving, setSaving] = useState(false);
     useEffect(() => { setValue(task.alert_recipients ?? ''); }, [task.alert_recipients]);
     const dirty = value.trim() !== (task.alert_recipients ?? '');
+    const copy = RECIPIENT_FIELD_COPY[task.id] ?? DEFAULT_RECIPIENT_FIELD_COPY;
 
     const save = async () => {
         setSaving(true);
@@ -187,8 +204,8 @@ const AlertRecipientsField: React.FC<{
             if (data.success) {
                 onSaved(data.task);
                 onMessage({ type: 'success', text: data.task.alert_recipients
-                    ? `Alerts will be sent to ${data.task.alert_recipients}`
-                    : 'Alert recipients cleared - alerts go to the company email' });
+                    ? `${copy.saved} ${data.task.alert_recipients}`
+                    : copy.cleared });
             } else {
                 onMessage({ type: 'error', text: data.error || 'Failed to save alert recipients' });
             }
@@ -201,14 +218,14 @@ const AlertRecipientsField: React.FC<{
 
     return (
         <div className="mb-4">
-            <label className="font-medium text-muted text-xs uppercase tracking-wider block mb-1.5">Alert Recipients</label>
+            <label className="font-medium text-muted text-xs uppercase tracking-wider block mb-1.5">{copy.label}</label>
             <div className="flex flex-wrap items-center gap-2">
                 <input
                     type="text"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && dirty && !saving) save(); }}
-                    placeholder="Blank = company email. Separate several with commas."
+                    placeholder={copy.placeholder}
                     className="w-full sm:w-96 px-3 py-2 text-sm text-on-surface bg-surface border border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <Button onClick={save} disabled={!dirty || saving} size="sm">
